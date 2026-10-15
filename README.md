@@ -50,7 +50,7 @@
 推荐直接部署在**运行 ITC 服务端的主机**或内网常开的服务器上。 借助轻量级服务器 `dufs` 同时实现页面托管。
 
 1. 从本项目 [发布页面](https://github.com/lihaoyun6/ITC-BellControl/releases/latest) 下载压缩包并将下载好的压缩包整个解压到某目录中 (例如 `D:\ITC-BellControl`)  
-2. 访问 [dufs v0.46 发布页](https://github.com/sigoden/dufs/releases#release-v0.46.0)，下载对应版本并将其中的 `dufs.exe` 或 `dufs` 文件解压到刚刚的文件夹中。  
+2. 访问 [dufs v0.40 发布页](https://github.com/sigoden/dufs/releases#release-v0.40.0)，下载对应版本并将其中的 `dufs.exe` 或 `dufs` 文件解压到刚刚的文件夹中。  
 3. 执行对应平台的运行脚本：  
 	
 	> Windows双击`run_win.bat`; Linux执行`./run_linux.sh`  
