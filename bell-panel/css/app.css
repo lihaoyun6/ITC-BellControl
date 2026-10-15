@@ -844,7 +844,7 @@ td .sub{font-size:12px;color:var(--fg-3)}
 .rm-row .ri svg.ic{width:16px;height:16px}
 .rm-row.danger,.rm-row.danger .ri{color:var(--crit)}
 .rm-row.danger:hover{background:var(--crit-soft)}
-.rowmenu-scrim{position:fixed;inset:0;z-index:69}
+.rowmenu-scrim{position:fixed;top:0;right:0;bottom:0;left:0;z-index:69}
 /* 时间列：设了全局偏移时，下面补一行服务器上原样的时刻。
    前面挂一只小时钟，不写「真」字 —— 「真 11:59:30」得先解释「真」是什么意思，
    图标不用解释（鼠标放上去有 title 说明）。
@@ -862,7 +862,15 @@ td .sub{font-size:12px;color:var(--fg-3)}
 .shift .ic{width:11px;height:11px;flex:none}
 
 /* drawer */
-.scrim{position:fixed;inset:0;background:rgba(27,24,21,.42);backdrop-filter:blur(2px);z-index:40;animation:fade .16s ease}
+/* 浮层一律写 top/right/bottom/left 四条，**不许写 `inset` 简写** —— 那要 Chrome 87
+   （2020-11）才有，学校里那台 Win10 的浏览器内核比它老，简写被整条丢掉的后果不是
+   「位置偏一点」而是「固定定位退回静态位置」：`.modal-host` 的静态位置在 #root 之后、
+   也就是屏幕下沿之外，人点「注销」「终端」看着就是**完全没反应**；`.scrim` 是个空
+   div，四边 auto 时缩小成 0×0，连黑幕都没有 —— 所以那台机器上所有弹窗都点不出来，
+   而 toast（.toasts 本来就写的 right/bottom）和换页照旧正常。
+   用户在真机上验过：`CSS.supports('inset','0')` 返回 false。凡是浮层（.rowmenu-scrim /
+   .scrim / .modal-host / .busy-veil / 窄屏那两条 .tp-scrim .dp-scrim）都照这四边写。 */
+.scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(27,24,21,.42);backdrop-filter:blur(2px);z-index:40;animation:fade .16s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes slidein{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
 @keyframes pop{from{transform:translateY(10px) scale(.985);opacity:0}to{transform:none;opacity:1}}
@@ -902,7 +910,7 @@ td .sub{font-size:12px;color:var(--fg-3)}
 .kv dd{margin:0;font-family:"IBM Plex Mono",monospace}
 
 /* modal */
-.modal-host{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-host{position:fixed;top:0;right:0;bottom:0;left:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
 .modal{
   background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);width:100%;max-width:var(--mw,560px);
   max-height:min(88vh,900px);display:flex;flex-direction:column;animation:pop .18s ease;border:1px solid var(--border);
@@ -1109,7 +1117,7 @@ td .sub{font-size:12px;color:var(--fg-3)}
    左边是标题和读数、右边是页签和提交，中间那个 .spacer 只负责吃掉余量。
    11px 是照顶栏量的：.topbar-inner 高 54px，这枚胶囊约 33px，两边各余 10 左右。 */
 .busy-veil{display:none}
-body.busy .busy-veil{display:block;position:fixed;inset:0;z-index:90;cursor:progress}
+body.busy .busy-veil{display:block;position:fixed;top:0;right:0;bottom:0;left:0;z-index:90;cursor:progress}
 .busy-tip{position:absolute;left:50%;top:calc(11px + env(safe-area-inset-top,0px));
   transform:translateX(-50%);padding:7px 15px;border-radius:999px;
   background:var(--surface);border:1px solid var(--border-strong);box-shadow:var(--shadow-md);
@@ -1679,7 +1687,7 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
      位置是 JS 按锚点算好写在 inline style 上的（left/top），这里用 !important
      盖掉；宽屏上这几条不生效，那边照旧是 popover。 */
   .tp-scrim{
-    display:block;position:fixed;inset:0;z-index:69;
+    display:block;position:fixed;top:0;right:0;bottom:0;left:0;z-index:69;
     background:rgba(27,24,21,.42);backdrop-filter:blur(2px);animation:fade .16s ease;
   }
   .tp{
@@ -1694,7 +1702,7 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
      那格在竖屏上只有一行宽，贴在它边上弹一块 280px 的日历会顶到屏幕外，
      手指也按不准 30px 的格子。居中之后格子放大到 38px。 */
   .dp-scrim{
-    display:block;position:fixed;inset:0;z-index:69;
+    display:block;position:fixed;top:0;right:0;bottom:0;left:0;z-index:69;
     background:rgba(27,24,21,.42);backdrop-filter:blur(2px);animation:fade .16s ease;
   }
   .dp{
