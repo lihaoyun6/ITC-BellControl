@@ -1,0 +1,1705 @@
+/* ── tokens ───────────────────────────────────────────────────────── */
+:root{
+  --bg:#FAF8F4; --surface:#FFFFFF; --surface-2:#F2EEE7; --surface-3:#EAE5DB;
+  /* 长名单的**隔行底**（见下面「隔行换底」那几条）。是一层极浅的重点色，
+     比 --accent-soft（选中用的那档）还浅一头 —— 两个色各有各的活：
+     这个只管「一行一行分开」，选中那档要在一堆交替底里跳出来。 */
+  --row-alt:#FEF9F5;
+  --fg:#1B1815; --fg-2:#57534E; --fg-3:#8A8177;
+  --border:#E6E0D6; --border-strong:#D3CABB;
+  --accent:#B84A0C; --accent-fill:#C2410C; --accent-soft:#FCEFE5; --accent-line:#E8A87C;
+  --cool:#0E7490; --cool-fill:#0891B2; --cool-soft:#E4F5F9;
+  --good:#15803D; --good-soft:#E7F3EA;
+  --crit:#B3261E; --crit-soft:#FBEAE8;
+  --warn:#92640A; --warn-soft:#FBF3E0;
+  /* 分组胶囊前面那个黄点单独一个值。--warn 是照**文字**挑的深赭黄（要压在浅底上
+     当字读），涂到 9px 的实心圆点上就发暗，看着像颗脏点。圆点是色块不是文字，
+     该往亮里走 —— 偏橙的琥珀色。只给圆点用，不跟着 --warn 走，
+     拿 --warn 当文字色的那些地方一个都不受影响。 */
+  --warn-dot:#F59E0B;
+  --grp:#2563EB; --grp-soft:#E7EEFE;   /* 蓝 = 「这是一个组」，不是在线状态 */
+  --on-accent:#FFFFFF;
+  --shadow-sm:0 1px 2px rgba(27,24,21,.06), 0 1px 3px rgba(27,24,21,.04);
+  --shadow-md:0 6px 16px rgba(27,24,21,.09), 0 2px 5px rgba(27,24,21,.05);
+  --shadow-lg:0 24px 60px rgba(27,24,21,.20), 0 4px 12px rgba(27,24,21,.08);
+  /* 滚动条（见 base）。拇指原来是最深的那个灰（#57534E、hover 到近黑 #1B1815），
+     和轨道对比 6.1:1 —— 比正文还抢眼，一条竖杠杵在每张表右边。用户说太深。
+     现在钉在「看得见、但不抢戏」那一档：#9C9385 与轨道 2.4:1（约等于 --fg-3 再浅一档），
+     hover 才落到 --fg-3 那么深。这一对**不跟着 --fg-* 走** ——
+     滚动条是装饰不是信息，按文字那套灰阶取就会一路偏深。 */
+  --sb-thumb:#9C9385; --sb-thumb-h:#8A8177; --sb-track:#EAE5DB;
+  --r-sm:6px; --r-md:10px; --r-lg:16px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1A1713; --surface:#232019; --surface-2:#2C2822; --surface-3:#37322A;
+    --row-alt:#2A211A;
+    --fg:#EDE8E0; --fg-2:#B3ABA0; --fg-3:#8A8177;
+    --border:#3A342B; --border-strong:#4C4438;
+    --accent:#E8894A; --accent-fill:#DC7209; --accent-soft:#3A2416; --accent-line:#8A5327;
+    --cool:#4DD0E1; --cool-fill:#12A5C6; --cool-soft:#123039;
+    --good:#5CC98A; --good-soft:#16301F;
+    --crit:#F08A82; --crit-soft:#381B19;
+    --warn:#D9A441; --warn-soft:#33280F; --warn-dot:#FBBF24;
+    --grp:#7BA7F5; --grp-soft:#152238;
+    --on-accent:#1A1713;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    --shadow-md:0 6px 16px rgba(0,0,0,.45);
+    --shadow-lg:0 24px 60px rgba(0,0,0,.6);
+    /* 暗色下拇指要比轨道**亮**才看得见，所以这两个值跟浅色那套正好反过来 */
+    --sb-thumb:#5A544A; --sb-thumb-h:#8A8177; --sb-track:#2C2822;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1A1713; --surface:#232019; --surface-2:#2C2822; --surface-3:#37322A;
+  --row-alt:#2A211A;
+  --fg:#EDE8E0; --fg-2:#B3ABA0; --fg-3:#8A8177;
+  --border:#3A342B; --border-strong:#4C4438;
+  --accent:#E8894A; --accent-fill:#DC7209; --accent-soft:#3A2416; --accent-line:#8A5327;
+  --cool:#4DD0E1; --cool-fill:#12A5C6; --cool-soft:#123039;
+  --good:#5CC98A; --good-soft:#16301F;
+  --crit:#F08A82; --crit-soft:#381B19;
+  --warn:#D9A441; --warn-soft:#33280F; --warn-dot:#FBBF24;
+  --grp:#7BA7F5; --grp-soft:#152238;
+  --on-accent:#1A1713;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45);
+  --shadow-lg:0 24px 60px rgba(0,0,0,.6);
+  --sb-thumb:#5A544A; --sb-thumb-h:#8A8177; --sb-track:#2C2822;
+  color-scheme:dark;
+}
+
+/* ── base ─────────────────────────────────────────────────────────── */
+*{box-sizing:border-box}
+/* 整页**不许被拉动**。手机上这一条是必须的：手势一划（iOS 的橡皮筋、Android 的
+   下拉刷新），整个页面会跟着上下弹一段、露出底下的空白 —— 用户报的就是这个，
+   「整个页面都可以被上下滚动拉伸超出页面范围」。
+
+   这一页本来就是固定高度的壳子（.app 高 100%），要滚的内容都在里面各自那一块滚
+   （见下面那条 overscroll-behavior:contain），整页从来没有该滚的时候。
+   所以根元素上直接关掉，两个轴一起：自己不过卷，也不把越界那一下接力出去。
+
+   只写 overscroll-behavior，**不加 body{overflow:hidden}** —— 那是另一回事：
+   键盘弹起时可视高度变矮，登录页那种居中卡片还能靠整页挪一挪够到，
+   拿 overflow 一刀切掉，代价比收益大。 */
+html,body{height:100%;overscroll-behavior:none}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  /* 正文字体：**只用系统自带的，不引任何外部字体**（见 index.html 那条注释）。
+     苹方（mac / iOS）、雅黑（Windows）、Noto Sans CJK（多数 Linux）本来就是这一档
+     该用的字；原来这儿排第一的是 Google 那支 Noto Sans SC，国内常下不来。 */
+  font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+a{color:var(--accent);text-decoration:none}
+:focus-visible{outline:2px solid var(--accent-fill);outline-offset:2px;border-radius:4px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+/* 大标题那一档用衬线：中文吃系统衬线（mac / iOS 的宋体-简 Songti SC、Windows 的宋体
+   SimSun），拉丁字母那半交给 Georgia。原来排第一的是 Google 那支 Noto Serif SC。 */
+.serif{font-family:"Songti SC","Songti TC",SimSun,Georgia,serif}
+[hidden]{display:none !important}
+/* 滚动条：**深色、粗**。原来那版是 10px 宽、拇指用 `--border-strong`（浅卡其），
+   在浅色底上基本看不见 —— 一屏几十条铃声，滚到哪儿了完全没数。现在固定 14px，
+   拇指深色、轨道铺一层比底色深的灰，滚动条本身是个看得见的控件，不是装饰。
+   只写 ::-webkit-scrollbar，**不写 scrollbar-width**：Chromium 一旦看到
+   `scrollbar-width` 不是 auto，整套 ::-webkit-scrollbar 就被忽略，那 14px 白写。
+   `scrollbar-color` 同理，所以它只发给不认 webkit 伪元素的 Firefox。 */
+::-webkit-scrollbar{width:14px;height:14px}
+::-webkit-scrollbar-track{background:var(--sb-track)}
+::-webkit-scrollbar-thumb{background:var(--sb-thumb);border-radius:8px;border:3px solid var(--sb-track)}
+::-webkit-scrollbar-thumb:hover{background:var(--sb-thumb-h)}
+::-webkit-scrollbar-corner{background:var(--sb-track)}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-color:var(--sb-thumb) var(--sb-track)}
+}
+/* 里面这些滚动块：滚到头就**停住**，不要把剩下那一段手势接力给整页去弹。
+   列的是手指真会拖到的那些 —— 窄屏上整页不滚，滚的全是它们；滑到底再往上拽
+   那一下，原来是接力给整页弹的，就是用户说的「整个页面被拉伸」。
+   （时间选择器那三列 .tp-col 早就各自写了这一条，见上面。）
+
+   **.tbl-wrap 从这个名单里撤掉了**（它原来在）。它是 `overflow-x:auto` —— 本意
+   只是「表太宽就横着滚」，可是 overflow-x 一写，overflow-y 的计算值就跟着变成
+   auto，它于是成了一个正儿八经的滚动容器；而 overscroll-behavior 认的是「滚动
+   容器」，**不管这个轴上到底有没有得滚**。后果就是鼠标一进表格，滚轮和触摸板
+   纵向上完全失效：它自己没得滚，按 contain 又不许把这一下接力给外面那个真正在滚的
+   .page-body。考试模式那页最刺眼 —— 科目表和「计算改动」出来的那张表都是 .tbl-wrap，
+   两块地方鼠标一进去就冻住（用户报的）。
+   撤掉之后接力上去也弹不起来：上面还有 .wb-main / .main-inner，都在这个名单里，
+   各自 contain 住；再往上 html/body 那条 overscroll-behavior:none 兜着底。
+   唯一一处 .tbl-wrap 自己就是滚动容器的地方（`.panel.grow > .tbl-wrap`，铃声计划
+   和定时任务那张表）行为没变：它滚到头之后接力给 .wb-main，那一位照样 contain，
+   停在原地。 */
+.main-inner,.page-body,.rail-list,.wb-main,.term-list,.pick,.modal-body,.drawer-body{
+  overscroll-behavior:contain;
+}
+
+/* ── controls ─────────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+  padding:7px 13px;border-radius:var(--r-sm);border:1px solid var(--border-strong);
+  background:var(--surface);color:var(--fg);font-size:13px;font-weight:500;
+  transition:background .12s,border-color .12s,transform .06s;
+}
+.btn:hover{background:var(--surface-2)}
+.btn:active{transform:translateY(1px)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn-primary{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}
+.btn-primary:hover{background:var(--accent);border-color:var(--accent)}
+.btn-quiet{border-color:transparent;background:transparent;color:var(--fg-2)}
+.btn-quiet:hover{background:var(--surface-2);color:var(--fg)}
+/* 危险操作统一样式：**白底、红框、红字**。和 .btn-crit（红底白字）分工不同 ——
+   .btn-crit 是「按下去就发生」的那一下（确认框里的确定、下发），.btn-danger 是
+   「这个键本身是危险的」的常驻标记（清空、删除）。底色写成 var(--surface) 而不是
+   transparent：按钮多数落在 --surface 上，但侧栏头和抽屉头底下不是，写死才真的是白底。 */
+.btn-danger{border-color:var(--crit);color:var(--crit);background:var(--surface)}
+.btn-danger:hover{background:var(--crit-soft)}
+.btn-crit{background:var(--crit);border-color:var(--crit);color:#fff}
+.btn-crit:hover{background:var(--crit);border-color:var(--crit);filter:brightness(1.12)}
+.btn-crit[disabled]:hover{filter:none}
+.btn-sm{padding:4px 9px;font-size:12px}
+.btn-icon{padding:6px;border-radius:var(--r-sm)}
+/* 图标一律是内联 SVG（lucide.dev），跟着 currentColor 走，不引字体图标。
+   .ic 兜底尺寸很重要：没有 width 属性的 <svg> 默认撑成 300×150，漏一个就炸版。 */
+.ic{width:15px;height:15px;flex:none;display:block}
+.btn>svg.ic{width:14px;height:14px}
+.btn-sm>svg.ic{width:13px;height:13px}
+.btn-icon>svg.ic{width:16px;height:16px}
+.input,.select,textarea.input{
+  width:100%;padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--r-sm);
+  background:var(--surface);font-size:13px;
+}
+.input:focus,.select:focus{outline:none;border-color:var(--accent-fill);box-shadow:0 0 0 3px var(--accent-soft)}
+/* 密码框里那一排黑点是**浏览器自己拿字体画的**，不是页面里的字符 —— 它要的是那个
+   字体里的实心圆点（U+2022）。整页原先用的那支中文 webfont（Google 的 Noto Sans SC）
+   在这一格上没有可用字形，而 Safari 认死这个框的字体、不逐字去别的字体里找，于是每个
+   点都画成那个字体的缺字框（一个方框里带个叉）。Chrome 会逐字回退，所以在 Chrome 上
+   看不出来。给密码框单独钉一套系统字体 —— 每个系统的界面字体都带实心圆点。框里除了
+   圆点没有别的字，换字体不影响任何东西。
+   （这条不是猜的：用 WebKit（Safari 的引擎）离屏渲染同一个登录卡比过，只有这一个
+   字体声明不同 —— 带中文 webfont 的那格全是方框叉，钉了系统字体那格是正常圆点。）
+   现在那支 webfont 已经不再加载了（正文字体全是系统自带的，见 body 那条），这颗雷
+   暂时拆了；这一钉留着 —— 它不值一行字，而谁哪天再把 webfont 加回来就用得上。 */
+input[type=password]{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+.select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--fg-3) 50%),linear-gradient(135deg,var(--fg-3) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:28px}
+/* 长得像下拉、点下去开二级选择器的按钮（考试模式的听力音频）。
+   它不是 <select>：可选的东西不在选项列表里，而在媒体库里。 */
+.select-btn{display:flex;align-items:center;gap:6px;width:100%;text-align:left;cursor:pointer;
+  padding:4px 8px;font:inherit;font-size:13px;color:var(--fg);background:var(--surface);
+  border:1px solid var(--border-strong);border-radius:var(--r-sm)}
+.select-btn:hover{border-color:var(--accent-line);background:var(--surface-2)}
+.select-btn:focus-visible{outline:none;border-color:var(--accent-fill);box-shadow:0 0 0 3px var(--accent-soft)}
+.select-btn .v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.select-btn .v.ph{color:var(--fg-3)}
+.select-btn .chev{flex:none;display:flex;color:var(--fg-3)}
+.select-btn .chev .ic{width:14px;height:14px}
+/* 校验没过的那一格：里面的控件套一圈红（考试模式启用前的拦截，见 examRowBad）。
+   必须排在 .input / .select-btn 那几条**之后** —— 和 :focus 同权重，靠后覆盖，
+   否则人一点进去改，红就被焦点态的强调色顶掉了，反而看不见哪儿没填。 */
+/* 边框同时加粗一档（1px → 2px）：红在这种浅底上单靠颜色不够跳，粗一圈才一眼看得见。
+   全局是 box-sizing:border-box，粗出来的那 1px 从内边距里让，格子宽度不跳。 */
+.is-err .input,.is-err .select,.is-err .select-btn{border-color:var(--crit);border-width:2px}
+.is-err .input:focus,.is-err .select-btn:focus-visible{box-shadow:0 0 0 3px var(--crit-soft)}
+/* 没有控件可套的那种必填格（执行区域那一类 chips 盒子）里的控件本来就没有边框，
+   所以整格改成给盒子自己套一圈。用 outline 不是 border：它不占地方，红圈出现
+   和消失时周围的字一个像素都不挪（border 会把整个模态顶下去 4px）。offset 3px
+   是让圈离盒子有一点缝，别和里面 chip 自己的边框糊成一道。 */
+.is-err.area-chips,.is-err .area-chips{
+  outline:2px solid var(--crit);outline-offset:3px;border-radius:var(--r-sm);
+}
+/* 全局设置里的「铃声预设」：一行 = 名称 + 绑定的文件 + 行尾的删除按钮。 */
+.pre-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.pre-row .input{flex:0 0 128px;padding:4px 9px;font-size:13px}
+.pre-row .sel-file{flex:1;min-width:0;justify-content:flex-start;text-align:left;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--fg-2)}
+.pre-row .sel-file .fn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 行尾那一格宽度给死：删除按钮是个 28px 的图标按钮，`flex:0 0 44px` + 居中，
+   一列下来右边才对得齐。 */
+.pre-row>.btn-icon{flex:0 0 44px;justify-content:center}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field>label{font-size:12px;color:var(--fg-2);font-weight:500;letter-spacing:.02em}
+
+/* ══ 时刻输入框（.tfield）═══════════════════════════════════════════
+   一个文本框 + 右边一枚「▾」。按钮**叠在框里**（absolute），不并排占宽度：
+   考试模式那两个格只有 108px 宽，并排一个按钮进去「09:30:00」就放不下了。
+   框里相应留 26px 右边距，字不会跑到按钮底下。 */
+.tfield{position:relative;display:block;width:100%;min-width:0}
+.tfield .t-in{padding-right:26px}
+.t-drop{
+  position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  width:20px;height:20px;padding:0;border:0;border-radius:var(--r-sm);
+  display:inline-flex;align-items:center;justify-content:center;
+  background:transparent;color:var(--fg-3);cursor:pointer;
+}
+.t-drop:hover{background:var(--surface-3);color:var(--fg)}
+.t-drop svg.ic{width:14px;height:14px}
+
+/* 时 / 分 / 秒 三列。挂在 #layers 下、position:fixed，所以不会被
+   .modal-body 或 .tbl-wrap 的 overflow 裁掉。 */
+.tp{
+  position:fixed;z-index:70;width:216px;padding:8px;
+  background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:var(--r-md);box-shadow:var(--shadow-md);
+}
+/* 宽屏上是个 popover，遮罩用不着（display:none）；≤640px 那份把它当模态用 */
+.tp-scrim{display:none}
+/* 考试日期那一格点开的日历浮层。和上面的 .tp 一套路子：挂 #layers、fixed 定位
+   （不然会被 .tbl-wrap 的 overflow 裁掉），按那一格定位。日历本体是 .cal，
+   基线里它是给整块面板用的（宽 280 的那份），这里只当浮层里的一块，所以
+   把它的边框去掉 —— 外面这层壳已经有边了，两层边看着像套娃。 */
+.dp{
+  position:fixed;z-index:70;width:280px;padding:10px;
+  background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:var(--r-md);box-shadow:var(--shadow-md);
+}
+.dp-scrim{display:none}
+.dp .cal{border:0;padding:0;background:none}
+.tp-head,.tp-cols{display:flex;gap:6px}
+.tp-head{margin-bottom:5px;font-size:11px;color:var(--fg-3);letter-spacing:.1em}
+.tp-head span{flex:1;text-align:center}
+/* 三列数字转轮。每列是个「观察窗」：**六格高**，前后各垫 2.5 格，所以任何一格都能
+   停在正中；停在正中的那一格就是当前值，也只有它高亮（`.on`）。
+   转动靠原生滚动 + scroll-snap 吸附（滚轮、触屏拖动都吃），点某一格也能把它转到
+   中间来。窗口上下两道渐变遮罩把两头的半格压暗 —— 「上下各露半格」这件事得看得
+   出来，不然跟一个普通的滚动列表没区别。
+   滚动条按住不显示：这个控件是靠滚和点的，边上再挂一条 14px 的深色条只会碍事。 */
+.tp-col{
+  --tp-row:32px;
+  position:relative;flex:1;min-width:0;
+  height:calc(6 * var(--tp-row));overflow-y:auto;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-2);
+  scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(to bottom,rgba(0,0,0,.22) 0,#000 8.34%,#000 91.66%,rgba(0,0,0,.22) 100%);
+          mask-image:linear-gradient(to bottom,rgba(0,0,0,.22) 0,#000 8.34%,#000 91.66%,rgba(0,0,0,.22) 100%);
+}
+.tp-col::-webkit-scrollbar{display:none}
+.tp-pad{height:calc(2.5 * var(--tp-row))}
+.tp-cell{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:var(--tp-row);padding:0;border:0;background:transparent;cursor:pointer;
+  scroll-snap-align:center;
+  font-family:"IBM Plex Mono",monospace;font-size:13px;line-height:1;color:var(--fg-2);
+}
+.tp-cell:hover{background:var(--surface-3)}
+.tp-cell.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.tp-foot{display:flex;justify-content:flex-end;margin-top:7px}
+.hint{font-size:12px;color:var(--fg-3);line-height:1.5}
+.chk{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.chk input{width:15px;height:15px;accent-color:var(--accent-fill);cursor:pointer;margin:0}
+.switch{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.switch input{position:absolute;opacity:0;width:0;height:0}
+.switch .track{width:36px;height:20px;border-radius:20px;background:var(--border-strong);transition:background .15s;flex:none;position:relative}
+.switch .track::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+/* 用 `~`（同辈）而不是 `+`（紧挨着的下一个）：顶栏那个开关的**字样排在滑块前面**
+   （`草稿/模式 ▐●`，见 .topbar .switch > .dimmer），滑块不再是 input 的下一个兄弟。
+   写成 `+` 的话，点这个开关状态照切、滑块却一直停在「关」那一边 —— 看着像开关坏了。
+   别的几个开关（调试模式、含预备铃）都还是 input 紧跟 track，`~` 一样命中。 */
+.switch input:checked ~ .track{background:var(--accent-fill)}
+.switch input:checked ~ .track::after{transform:translateX(16px)}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:500;letter-spacing:.02em;white-space:nowrap}
+.badge-inherit{background:var(--surface-3);color:var(--fg-2)}
+.badge-override{background:var(--accent-soft);color:var(--accent)}
+.badge-on{background:var(--good-soft);color:var(--good)}
+.badge-off{background:var(--surface-3);color:var(--fg-3)}
+/* 表格里那枚「特例」胶囊：点开看这条铃声自己的执行区域。
+   底色字号完全照 .badge，只补上 <button> 默认没有的那几样（字体继承、无内边距差、
+   无 UA 边框），否则它和旁边那枚「默认」并排会差一两个像素、看着像没对齐。
+   hover 用 currentColor 描一圈边 —— 不描的话两枚胶囊长得一样，看不出哪个能点。 */
+button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1px solid transparent;cursor:pointer}
+.badge-btn:hover{border-color:currentColor}
+.badge-btn:disabled{cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:20px;background:var(--surface-2);
+  border:1px solid var(--border);font-size:12px;color:var(--fg-2);max-width:100%}
+.chip .dot{width:6px;height:6px;border-radius:50%;flex:none}
+/* 点位 chip 里的点已经换成在线状态点（.tdot），不再有装饰性的 .dot */
+.chip-group .dot{background:var(--grp)}   /* 蓝点 = 组 */
+.chip.tone-override{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+/* 「已选区域 / 已选铃音」箱子里那行空态提示（「还没有选任何点位或分组」这种）。
+   它**故意也套上 .chip** —— 字号、内边距、1px 边框因此和真胶囊逐字对齐，高度天然
+   相等，从 0 个选到 1 个时箱子的高度一个像素都不动。
+   原来它是个 .hint：一行 18px 的字比一个胶囊矮 6.59px，一选中整个面板就往下跳一下
+   （用户实测反馈的抖动）。这里只把颜色全摘掉，看起来仍然是一句话，不是一颗胶囊。 */
+.chip-ph{background:transparent;border-color:transparent;color:var(--fg-3)}
+
+/* ── 分组胶囊 ───────────────────────────────────────────────────────
+   一颗胶囊 = 一个分组：前面一个状态点，中间名字，后面条数，尾巴一枚铅笔。
+   整颗就是一个按钮 —— 点哪儿都进分组详情，所以那枚铅笔是**提示**，不是第二个热区
+   （两个热区挨这么近，谁也猜不准摸到哪个会怎样，不如就一个）。 */
+.grp-chips{display:flex;flex-wrap:wrap;gap:8px}
+.grp-chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;
+  padding:5px 9px 5px 10px;border-radius:20px;cursor:pointer;
+  background:var(--surface-2);border:1px solid var(--border);
+  font:inherit;font-size:12.5px;color:var(--fg);
+  transition:border-color .15s,background .15s}
+.grp-chip:hover{border-color:var(--border-strong);background:var(--surface-3)}
+.grp-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grp-chip:disabled{cursor:not-allowed;opacity:.5}
+.grp-name{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp-n{font-size:11.5px;color:var(--fg-3);font-variant-numeric:tabular-nums}
+.grp-pen{display:inline-flex;align-items:center;opacity:.45}
+.grp-pen svg.ic{width:12px;height:12px}
+.grp-chip:hover .grp-pen{opacity:.9}
+
+/* 状态点。四种颜色全是有话说的：绿=组里全在执行，红=组里全停着，
+   黄=掺着，灰=组里一条铃声都对不上（要么还没加，要么那些铃声被删了）。
+   所以别把它统一成一个灰 —— 那等于把这一整块的信息量抹掉。 */
+.grp-dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--border-strong)}
+.grp-dot.on  {background:var(--good)}
+.grp-dot.off {background:var(--crit)}
+/* 「有的开有的停」这个黄点用的是**圆点专用**的亮琥珀（--warn-dot，见 tokens）：
+   --warn 那个深赭黄是照文字挑的，涂到 9px 的实心圆点上发暗，看着像颗脏点。
+   绿和红都是给圆点用的本色（--good / --crit），只有黄这一支需要单独一个值。 */
+.grp-dot.part{background:var(--warn-dot)}
+.grp-dot.none{background:var(--border-strong)}
+
+/* 分组详情里那份成员清单 */
+.gd-row{display:flex;align-items:center;gap:9px;padding:7px 11px;cursor:pointer;
+  border-bottom:1px solid var(--border);font-size:13px}
+.gd-row:last-child{border-bottom:0}
+/* 隔行换底。写在 :hover 前面 —— 两个选择器同权重（0,2,0），后面的悬停才盖得住它。 */
+.gd-row:nth-child(even){background:var(--row-alt)}
+.gd-row:hover{background:var(--surface-2)}
+.gd-row input{flex:none;width:15px;height:15px;margin:0;accent-color:var(--accent-fill);cursor:pointer}
+.gd-t{flex:none;font-size:12.5px;color:var(--fg-2)}
+.gd-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gd-o{margin-left:auto;flex:none;white-space:nowrap}
+
+/* ── layout ───────────────────────────────────────────────────────── */
+#root{height:100%}
+.app{display:flex;flex-direction:column;height:100%}
+/* 横条本身通栏（底部分隔线要顶到屏幕两边），内容交给 .topbar-inner 排。
+   它的左右边距和 .main-inner 用的是同一个值，所以顶栏的头和下面内容的头
+   在一条竖线上，不会「头长脚短」。 */
+.topbar{
+  flex:none;background:var(--surface);border-bottom:1px solid var(--border);
+  padding-top:env(safe-area-inset-top,0px);
+}
+.topbar-inner{
+  display:flex;align-items:center;gap:14px;height:54px;
+  width:100%;max-width:2000px;margin:0 auto;padding:0 24px;
+}
+.brand{display:flex;align-items:baseline;gap:9px;min-width:0}
+.brand h1{font-family:"Songti SC","Songti TC",SimSun,Georgia,serif;font-size:17px;letter-spacing:.04em;white-space:nowrap}
+/* 标题**一个字都不缩写**（用户否掉过「控制台」那个短版）：竖屏那一档只把字号
+   收到 15px，原文照写。竖屏那一档的宽度账见文件末尾。 */
+.topbar .spacer{flex:1}
+/* 顶栏分成两组只是为了窄屏折行：左边「标题 + 两个状态」，右边「页签 + 提交按钮 +
+   草稿开关」。桌面上 display:contents 让这两层的子元素直接参与 .topbar-inner 那一行的
+   排布 —— 分组等于不存在，和分成两组之前排出来的一模一样。 */
+.tb{display:contents}
+/* 顶栏那四格读数（已连接 / 终端 / 注销 / 设置）包成一组。和上面两层同理：
+   宽屏和 641–820 上是 display:contents，等于不存在。只有竖屏那一档它才真的成为一个
+   盒子 —— 那一档「四格整体右对齐」和「装不下时往下折、折下来仍然靠右」都只靠它，
+   见文件末尾。 */
+.tb-stats{display:contents}
+/* 「页签 + 提交」这一对再包一层（见 js/30-view-list.js 的 renderTopbar）。桌面和
+   641–820px 上它同样是 display:contents，这一层不存在，.tb-r 看到的还是原来那几个
+   直接子元素 —— 排出来和包之前一个像素都不差。只有 ≤640px 那一档它才真的成为一个
+   盒子（那条规则在文件末尾），好让这一组整体右对齐、并且不被拆到两行上去。 */
+.tb-act{display:contents}
+/* 草稿开关的字样竖排两行（草稿 / 模式）：横着排是四个字宽，手机那一行塞不下，
+   竖过来只占两个字宽，一行就装得下了（所以手机上也不用再把它藏起来）。
+   这里必须把 .dimmer 自带的 flex 让开 —— flex 容器里的 <br> 是一个独立的
+   flex 项，不会断行，只有回到 block 才真的换行。 */
+.topbar .switch > .dimmer{display:block;line-height:1.3}
+/* 即时模式（草稿开关关着）下「提交」没有存在的理由 —— 没有攒着这回事，干脆消失。
+   这一条**桌面、平板、竖屏三档通用**（≤640 那一档曾经把它改回「留着位置但看不见」，
+   已经被否掉了，见那边的注释）。按钮本身总是渲染的（见 js/30-view-list.js 的
+   renderTopbar），这里只负责收起来。 */
+.topbar #pushBtn[disabled]{display:none}
+/* 一格读数 = 一个标记 + 一行字。标记贴着它说明的那行字（2px，用户要更近一点 ——
+   原来是 6px，收过一轮到 4px，又收到这儿），两格之间才用顶栏的 14px 间距。
+   字那一边其实还各留着 2px 内边距（.chip-link 的 padding），所以图标和字看上去
+   还有 4px；那点边距是鼠标划过来时下划线的余地，不能再动了。 */
+.topbar .stat{display:inline-flex;align-items:center;gap:2px}
+/* 用户头像：图标库里那个人头（ICON.user），**不套圈** —— 就是一颗 16px 的绿图标，
+   和左边那颗显示器（.icostat .ic）同尺寸、同「一格里一个记号」的排法，看着才是一套的。
+   绿色是固定的，不跟连接状态走：它说的是「这是登录用户那一格」，不是任何状态。
+   它是个记号，动作由同一格里那行字说清楚（整格都能点，见下面那条）。 */
+.topbar .avatar{display:inline-flex;align-items:center;flex:none;color:var(--good)}
+.topbar .avatar .ic{width:16px;height:16px}
+/* 「设置」前面那枚齿轮：和左边那枚人头同一套排法、同一个绿（--good）。
+   绿在这儿说的是「这是设置那一格」，不是任何状态 —— 它本来住在页签那一排里，
+   是那一排里唯一一个光有图标没有字的项；现在搬到「注销」右边，长出了字样。 */
+.topbar .geartic{display:inline-flex;align-items:center;flex:none;color:var(--good)}
+.topbar .geartic .ic{width:16px;height:16px}
+/* 整格可点的读数（已连接 / 终端 xx/xx / 注销）。提示语挂在格子上、写着「点击…」，
+   手型就得铺满整格 —— 只让里头的字带手型的话，鼠标挪到旁边那颗图标上会变回箭头，
+   和提示语说的不是一回事。 */
+.topbar .cellbtn{cursor:pointer}
+.dimmer{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--fg-2)}
+.dotstat{width:8px;height:8px;border-radius:50%;background:var(--fg-3);flex:none}
+.dotstat.ok{background:var(--good);box-shadow:0 0 0 3px var(--good-soft)}
+.dotstat.bad{background:var(--crit);box-shadow:0 0 0 3px var(--crit-soft)}
+.dotstat.busy{background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
+/* 「终端 xx/xx」前面的标记：显示器图标，颜色还是那三档。
+   文字一栏就把状态说清楚了，所以这里不用再点一个圆点。 */
+.icostat{display:inline-flex;align-items:center;flex:none;color:var(--fg-3)}
+.icostat .ic{width:16px;height:16px}
+.icostat.ok{color:var(--good)}
+.icostat.bad{color:var(--crit)}
+.icostat.busy{color:var(--warn)}
+
+.body{display:flex;flex:1;min-height:0}
+
+/* ── 竖屏那条底部导航栏（只有 ≤640px 看得见）───────────────────────────
+   它在 .app 这一列里是**最后一块**，和 .topbar 一头一尾：`.app` 是 flex 竖排，
+   它 flex:none，一站进来中间的 .body 自己就让出那块高度 —— 不用给页面另加
+   padding-bottom，也不会有最后一行铃声被它压在底下。
+   宽屏上它整根 display:none，顶栏右上那排页签照旧（四个页签在 DOM 里各有一份，
+   不是同一份被搬来搬去）。它自己在 ≤640px 那一档里长什么样，见文件末尾。
+   这里只写基线这一条：默认不存在。 */
+.navbar{display:none}
+
+/* 工作台：「铃声计划」页自己的两栏 —— 左边是列表选择器，右边是列表内容。
+   选择器不是浮动卡片（没有圆角/边框/阴影/sticky），就是这一页里的一条侧栏。
+   滚动也只发生在两栏各自内部：整页不跟着滚，左边列表永远停在原地。 */
+.wb{flex:1;min-height:0;display:grid;grid-template-columns:236px minmax(0,1fr);gap:18px;align-items:stretch}
+/* 右栏自己也不滚：页面标题、打铃区域这些留在原地，只有最下面那张表滚。
+   哪块面板吃剩余高度，由它在 HTML 里挂的 .grow 决定。 */
+.wb-main{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:16px}
+.wb-main > *{flex:none}
+.wb-main > .grow{flex:1 1 auto;min-height:0}
+/* 正文那三块（区域 / 分组 / 铃声）收在这个盒子里 —— 页标题栏和页首那两条横幅
+   （「已锁定」「需处理」）留在它外面，竖屏上因此钉得住，只有正文自己滚
+   （见文件末尾那段）。和「全局设置」「考试模式」两页的 .headfix 是同一件事，
+   区别只是这一页的正文长在右栏里，所以挂在 .wb-main 下面而不是 .main-inner 上。
+   宽屏上这里一个像素都不动：右栏本来就是「谁挂 .grow 谁吃剩余高度」，现在吃
+   剩余高度的是这个盒子，盒子里的 .grow 再吃它剩下的那一份。 */
+.wb-main > .page-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.wb-main > .page-body > *{flex:none}
+.wb-main > .page-body > .grow{flex:1 1 auto;min-height:0}
+.rail{
+  display:flex;flex-direction:column;min-height:0;overflow:hidden;
+  border-right:1px solid var(--border);
+}
+/* 右边留 18px = 两栏之间的 gap：任务列表离分隔线的距离，和铃声列表离
+   分隔线的距离一样。左边只留 2px，因为分隔线只在右边。 */
+.rail-head{padding:2px 18px 8px 2px;font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--fg-3);text-transform:uppercase}
+.rail-list{flex:1;overflow-y:auto;padding:0 18px 8px 2px}
+/* 顶栏上那个「‹ 返回」（#tbBack，见 30-view-list 的 renderTopbar）：两栏并排时
+   左边一直看得见列表，点一下列表名就回来了，不需要它；只有窄到一次只能显示一栏
+   （≤640px，见文件末尾那段）才有意义。 */
+.rail-back{display:none}
+/* 一条 = 选中按钮（左，占满）+ 启停开关（右）。开关必须在按钮外面，
+   按钮里套按钮是非法 HTML，浏览器会把内层那个甩出去。 */
+/* 每一条**平时就带边框**（原来是 transparent，只有 hover / 选中 / 停用 / 过期
+   才看得见）。列表里一条条挨着排，没有边框就只剩名字在那儿浮着，行与行的界
+   靠 2px 的缝分，扫一眼分不出这是「五条任务」还是「一坨文字」—— 用户实测要
+   的就是这个框。选中的那条换成 --accent-line，过期换 --crit，都是在这条上面改色。 */
+.rail-item{
+  width:100%;border-radius:var(--r-sm);border:1px solid var(--border);margin-bottom:2px;
+  display:flex;align-items:center;gap:2px;padding-right:4px;
+}
+.rail-item:hover{background:var(--surface-2)}
+.rail-item.on{background:var(--accent-soft);border-color:var(--accent-line)}
+.rail-pick{
+  flex:1;min-width:0;text-align:left;padding:9px 4px 9px 10px;border-radius:var(--r-sm);
+  display:flex;flex-direction:column;gap:4px;
+}
+.rail-item .r1{display:flex;align-items:center;gap:6px;width:100%}
+.rail-item .nm{font-weight:500;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rail-item.on .nm{color:var(--accent)}
+.rail-item .r2{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg-3);font-family:"IBM Plex Mono",monospace;white-space:nowrap;overflow:hidden}
+.rail-item .r2 .sep{opacity:.5}
+/* 停用：整条灰底 + 文字压暗。开关不压 —— 它得看起来还能点。
+   :not(.on) 是为了让「当前选中的那个列表」仍然保持选中的样子，不被灰底盖掉。
+   （边框色不用再写一遍：停用那档现在就是 .rail-item 的默认色。） */
+.rail-item.is-off:not(.on){background:var(--surface-3)}
+.rail-item.is-off .rail-pick{opacity:.5}
+/* 已过期（执行年份过了）：整条标红，名字也红。它排在停用的后面，
+   所以一个又停用又过期的列表，看到的是红 —— 那才是更要紧的那件事。 */
+.rail-item.is-dead{background:var(--crit-soft);border-color:var(--crit)}
+.rail-item.is-dead .nm{color:var(--crit)}
+.rail-item.is-dead .rail-pick{opacity:1}
+.rail-item.is-dead .r2{color:var(--crit);opacity:.75}
+.pill-crit{
+  flex:none;font-size:10.5px;line-height:16px;padding:0 7px;border-radius:20px;
+  background:var(--crit);color:#fff;font-weight:600;letter-spacing:.02em;white-space:nowrap;
+}
+/* 被考试模式锁定的原件。用警告色而不是红色 —— 它不是坏了，是「考试期间别动」。
+   空心胶囊，和实心的「已过期」区分开：一个是状态，一个是一句禁令。 */
+.pill-lock{
+  flex:none;font-size:10.5px;line-height:16px;padding:0 7px;border-radius:20px;
+  background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);
+  font-weight:600;letter-spacing:.02em;white-space:nowrap;
+}
+/* 锁定横幅（「已锁定 + 已启用考试模式，…已锁定，关闭考试模式后可修改」）压扁一档：
+   里面就是一枚胶囊加一行字，.panel-body 那个 14px 的上下内边距白撑高度 ——
+   手机上一眼扫过去只是一句提醒，不该占掉半屏。 */
+.lock-banner > .panel-body{padding:8px 12px}
+/* 小而扁的开关。侧边栏每一条、列表标题栏都用它 —— 同一个控件到处一样。 */
+.sw-mini{
+  flex:none;width:30px;height:17px;border-radius:17px;background:var(--border-strong);
+  position:relative;transition:background .15s;
+}
+.sw-mini::after{
+  content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;
+  background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3);
+}
+.sw-mini.on{background:var(--accent-fill)}
+/* 锁定的原件：开关停用 —— 考试期间启停它没有意义（发声的是 _E 副本），
+   但样子还是当前的状态，只是按不动。 */
+.sw-mini:disabled{cursor:not-allowed;opacity:.45}
+.sw-mini.on::after{transform:translateX(13px)}
+.sw-mini:hover{filter:brightness(1.08)}
+.sw-mini:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* 底边距 18 → 10：这一排下面就是窗口底边（竖屏是那条底部导航栏），原来空得太多，
+   按钮像是悬在半空（用户实测）。上边距不动，那条分隔线的位置就还在这儿。 */
+.rail-foot{padding:10px 18px 10px 2px;display:flex;gap:6px;position:relative}
+/* 「新建任务」加高到 38px（.btn-sm 本来约 27px）：它是这一栏唯一的主操作，
+   手机上是第一眼要找的东西，太扁了不好按。旁边那颗刷新键是 flex 项、默认拉伸，
+   自动跟着一样高，不用另写。 */
+.rail-foot > .btn{height:38px}
+/* 「新建任务」上面那条线**左右都要留边距**，所以不能用 border-top：
+   border 画在边框盒上，会一路铺到元素右边缘 —— 而右边那 18px 是留给两栏之间
+   那道分隔线的留白（列表行、列表头都在 18px 处停住）。一条横线冲进留白里，
+   看着就像这一块没和上面的列表对齐（用户实测）。改成 ::before 自己画一条，
+   left/right 抄的就是 .rail-list 的左右内边距，两头和内容对齐。
+   绝对定位的 left/right 量的是**内边距盒**的边，所以这两个值和 padding 是同一套数。 */
+.rail-foot::before{content:"";position:absolute;left:2px;right:18px;top:0;height:1px;background:var(--border)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.main-inner{
+  flex:1;min-height:0;overflow-y:auto;
+  padding:20px 24px 80px;max-width:2000px;width:100%;margin:0 auto;
+}   /* 填满可用宽度；只有超宽屏才居中留白 */
+/* 「铃声计划」页：整页不滚，两栏各滚各的 */
+.main-inner.pane{overflow:hidden;padding-bottom:0;display:flex;flex-direction:column}
+/* 「定时任务」页：一样整页不滚 —— 顶栏 + 面板标题 + 表头都钉住，只滚任务列表 */
+.main-inner.fill{overflow:hidden;display:flex;flex-direction:column;padding-bottom:16px}
+.main-inner.fill > *{flex:none}
+.main-inner.fill > .grow{flex:1 1 auto;min-height:0}
+/* 「考试模式」和「全局设置」页：标题那一行钉住，下面整块自己滚。
+   这两页都是「一条标题 + 一摞面板」，面板高度由内容决定，所以不能像 .fill 那样
+   让某一块去吃剩余高度 —— 改成一个正文滚动区：标题留在滚动区外面，其余全进去。 */
+.main-inner.headfix{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0}
+.main-inner.headfix > .sec-head{flex:none}
+/* 锁定时那条警告横幅也是这一列的直接子元素，同样得钉住。
+   不钉的话它默认 flex:0 1 auto 可以缩，而 .panel 自带 overflow:hidden 会把
+   自动最小尺寸算成 0（规范：overflow 不是 visible 时 min-height:auto 解析为 0），
+   于是正文一撑高，比例分摊下来横幅也被压扁 —— 它自己没溢出，被裁掉的是
+   .panel-body 那 14px 的底部内边距，看着就是「底下短一截」。
+   .wb-main 那边早就有一句 .wb-main > *{flex:none} 守着，这页漏了。 */
+.main-inner.headfix > .lock-banner{flex:none}
+.main-inner.headfix > .page-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-bottom:80px}
+/* 考试模式排布下去之后，这一整块是锁着的（lockExam 挂的 .is-locked）。
+   控件都已经 disabled 了，但光靠 disabled 看不出来 —— 白底的输入框和下拉
+   在浏览器里只有光标变一下，长得和能填的一模一样。所以整块压暗一档、
+   褪一点色，让人一眼看出「这是死的」，不用去点了才知道。
+   opacity 而不是改每个控件的配色：里面控件五花八门（输入框、下拉、伪下拉、
+   红色危险按钮），逐个改一遍既容易漏、又会和它们各自的 :disabled 规则打架。 */
+.page-body.is-locked{opacity:.45;filter:grayscale(.6)}
+/* 铃声计划详情页是同一件事的另一半，但它**不能整块压 .wb-main**：被锁时页首那条
+   横幅就在 .wb-main 里面，父节点的 opacity/filter 乘在整棵子树上，子节点顶不回来
+   （考试模式页正是为这个把横幅搬到了外面，这页横幅上面还压着标题栏，也搬不出去）。
+   所以改成「指名灰横幅之后的那些兄弟」—— 横幅自己、以及它上面的标题栏，留在正常亮度。
+   横幅在锁定时**必定**渲染，所以这条选择器不会落空（见 renderMain 里那句 (lock?…)）。
+   横幅之后的兄弟就两样：「需处理」那条和装着正文三块的 .page-body，
+   所以这一灰落在 .page-body 这一个盒子上，和以前一块一块地灰是同一种灰。 */
+.wb-main.is-locked > .lock-banner ~ *{opacity:.45;filter:grayscale(.6)}
+.page-body.is-locked :is(button,input,select,label),
+.wb-main.is-locked :is(button,input,select,label){cursor:not-allowed}
+/* 这里曾经有一条 `.page-body.is-locked > .lock-banner{opacity:1;filter:none}`，
+   想让「已启用考试模式」那条横幅不跟着压暗。**它不可能生效**：opacity 和 filter
+   都是乘到整个子树上的，子节点只能决定自己再乘多少，改不了父节点已经乘下来的。
+   横幅现在挂在 .page-body 外面（见 renderExam），不需要这条规则了。 */
+.empty{padding:80px 22px;text-align:center;color:var(--fg-3)}
+.empty h3{font-size:16px;color:var(--fg-2);margin-bottom:8px}
+
+.sec-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.sec-head h2{font-size:22px;letter-spacing:-.015em}
+.sec-head .meta{font-size:12px;color:var(--fg-3);display:flex;gap:10px;align-items:center;margin-top:5px;flex-wrap:wrap}
+/* 页面级的按钮组（「启用考试模式」那一排）推到最右。用**直接子元素**选择器：
+   详情页标题旁那对编辑/删除图标也挂 .acts，但它是 .title-row 里的，是「这条
+   任务自己的」动作，不该跟着一起被推到最右、更不该跟着一起被拉成整行。 */
+.sec-head > .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+/* 任务名 + 它的编辑/删除图标。图标跟在名字后面（margin-left:0 盖掉 .acts 的
+   推到最右），因为这两个动作是**这条任务自己的**属性，不是页面级的操作 ——
+   推到屏幕最右边就变成「离名字很远的一个按钮」。 */
+.sec-head .title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* 标题这一小块（名字 + 图标 + 底下那行状态）。min-width:0 是**长任务名**的
+   关键：不加的话窄屏上它宁可把整行撑宽也不肯让名字折行。 */
+.sec-head .sec-title{min-width:0}
+/* .acts 在别处（.panel-head .acts）是靠那条**后代**选择器拿到 display:flex/gap 的，
+   这里得自己写一份：少了它，两个 icon 按钮之间没有 gap，会紧紧贴在一起 ——
+   考试模式标题旁同一对按钮有间距、这一对没有，看着像坏了。 */
+.sec-head .title-row .acts{display:flex;gap:6px;flex-wrap:wrap;margin-left:0}
+/* 过期的任务，详情标题也跟着红 —— 从侧栏点进来能一眼认出是同一个 */
+.sec-head.is-dead h2{color:var(--crit)}
+
+.panel{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
+.panel + .panel{margin-top:14px}
+/* 「只让表滚」的面板：表头那一行钉住，表格自己滚 */
+/* 「撑满、自己滚」的面板：整页不滚，只滚它里面那张表。
+   要表头（`table.tbl th` 基线里就是 position:sticky）真的钉住，**必须是这个套法** ——
+   sticky 只相对「最近的那个滚动容器」定位，而 .tbl-wrap 只有真去滚的时候才是它；
+   一旦内容跟着外面（.modal-body / 整页）滚，.tbl-wrap 就只是个 overflow-x:auto
+   的裁剪框，题头跟着行一起走。所以别把 .tbl-wrap 挪到别的层里去。 */
+.panel.grow{display:flex;flex-direction:column;overflow:hidden}
+.panel.grow > .tbl-wrap{flex:1;min-height:0;overflow:auto}
+.panel-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+.panel-head h3{font-size:13px;letter-spacing:.02em}
+.panel-head .sub{font-size:12px;color:var(--fg-3)}
+.panel-head .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+/* 考试分区标题旁边那对图标（编辑名 / 删分区）：.panel-head 的 .acts 默认被
+   margin-left:auto 推到最右边，这里要贴着标题站，和铃声计划标题旁那一对同理。 */
+.panel-head .title-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.panel-head .title-row .acts{margin-left:0}
+/* 分区名现在是这一格的正题，比下面「考试」那种小标题大一号 */
+.panel-head .title-row h3{font-size:15px}
+/* 面板头右上角的一栏两态：hdNormal（筛选+添加铃声）↔ hdBulk（批量动作）。
+   两个都是 .hd-seg，同一时刻只显示一个，所以这一行的高度不变，表格不跳。 */
+.hd-seg{display:flex;align-items:center;gap:6px;min-height:30px}
+/* 两套控件的**高度得一样**：hdNormal 里是筛选框 + .btn-sm（4px 内边距，约 28px），
+   hdBulk 里是四枚 .btn-icon（6px 内边距 + 16px 图标 + 2px 边框 = 30px）。
+   原来只有 .hd-seg 自己的高度，控件各按各的算 —— 一勾选，这一格从 28px 长到 30px，
+   面板头连着整张表一起往下挪 2px 再挪回来，看着就是「抖了一下」。
+   统一钉成 30px（正好是 .btn-icon 的自然高度），两态一样高，换的时候只有内容在换。 */
+.hd-seg > .input,.hd-seg > .btn,.hd-seg > .btn-sm,.hd-seg > .btn-icon{height:30px}
+.bulk-n{font-weight:700;color:var(--accent);font-size:13px}
+.panel-body{padding:14px}
+
+/* ── 「全局设置」页（顶栏切换组里那个齿轮）────────────────────────────
+   面板横向拉满：几行「标题 + 控件」，没有表格也没有长文本，铺多宽都读得下来。
+   正文块用 .page-body（和考试模式页同一套，见 .main-inner.headfix）。 */
+/* 一行设置：左边是标题和说明，右边是控件。控件贴着面板右边缘 ——
+   一行一个字，扫的时候是「读左边这句 → 看右边那个格子」，
+   控件跟在字后面反而要一行行找过去。
+   **永远不折行**：折行判定看的是 flex-basis，不看文字实际多宽 —— 标签原来给的是
+   `flex:1 1 320px`，于是行宽一到「320 + 18 + 控件宽」就折，可那会儿文字左边
+   明明还剩一大截空位。改成 nowrap + `flex:1 1 auto`：标签自己收缩、该换行的是
+   它里面的字（min-width:0 允许它缩到比一个字还窄），控件永远贴在右边缘。
+   640px 以下**也不放开**：手机上一行文字短、右边空一大截，却把开关顶到第二行 ——
+   那是「标签占满整行」写死的，不是在响应窄屏。控件本来就小（一个开关 / 一个
+   110px 的输入框），挤不下的时候该受委屈的是标签里的字。 */
+.set-row{display:flex;align-items:flex-start;gap:18px}
+.set-row + .set-row{margin-top:15px;padding-top:15px;border-top:1px solid var(--border)}
+.set-row .set-lab{flex:1 1 auto;min-width:0}
+.set-row .set-t{font-size:13px;color:var(--fg);margin-bottom:4px}
+.set-row .set-ctl{flex:none;display:flex;align-items:center;gap:8px;padding-top:2px}
+
+/* area strip */
+.area-chips{display:flex;flex-wrap:wrap;gap:6px}
+.area-chips .more{font-size:12px;color:var(--fg-3);align-self:center}
+
+/* timeline */
+.tl{padding:22px 14px 16px;position:relative}
+
+/* table */
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+table.tbl th{
+  text-align:left;font-size:11px;font-weight:700;letter-spacing:.09em;color:var(--fg-3);text-transform:uppercase;
+  padding:9px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;white-space:nowrap;
+}
+table.tbl td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+/* ── 隔行换底 ─────────────────────────────────────────────────────────
+   名单一长，只靠每行底下那条 1px 的线，眼睛横着扫过去容易串行（铃声表、任务表、
+   考试那几张表、反查结果都是这种长名单）。偶数行垫一层极浅的重点色，奇数行留白，
+   一行一行交替着看就踏实了。
+
+   **位置必须在这儿**：它下面那几条 —— 停用行 .off/.past 的灰底、选中 .sel、悬停
+   :hover —— 和它**同权重**（`table.tbl tbody tr.…` 都是 0,2,3），谁写在后面谁说了算。
+   排在这儿，那几件事就照旧盖得住交替：停用的行一直是灰的，跟它排在第几个无关。 */
+table.tbl tbody tr:nth-child(even){background:var(--row-alt)}
+/* 铃声表和任务表最后那两列的宽度 —— 「状态」（一个开关）和行尾那格（编辑/复制/删除）。
+   原来是写在 <th style="width:…"> 上的，挪到这里是因为竖屏要改它们（见文件末尾
+   ≤640px 那一档），而行内样式只输给 !important；放这儿一条普通规则就压得住。
+   值就是原来那几个，桌面和 641–820px 排出来一模一样。 */
+.tbl-bells .c-sw,.tbl-tasks .c-sw{width:60px}
+/* 「更多功能 → 查询结果」那张表（js/70-view-more.js）。
+   五列宽度全部钉死，不让浏览器按内容分 —— auto 那两列（名称／音源）碰到长音源名
+   （真机上有「轻音乐 - 一剪梅.mp3」这种）就会把右边的「周期」挤成一条缝，
+   用户实测反馈「列宽分配太不合理」。定宽之后每列占多少一目了然。
+   截断不丢信息：每格全文都挂在 title 上。只挂 .tbl-more，别的表一个字不动。
+   宽度写在下面这几条里、**不写行内** —— 竖屏那档要改其中三列，而行内样式只输给
+   !important（和上面 .tbl-bells .c-act 同一个理由）。值就是原来行内那几个。 */
+table.tbl-more{table-layout:fixed}
+table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl-more .c-time{width:76px}
+.tbl-more .c-name{width:24%}
+.tbl-more .c-src{width:108px}
+.tbl-more .c-media{width:26%}
+.tbl-more .c-period{width:26%}
+/* 手机上（≤640px，和文件末尾那一档同一个断点）五个列名摆不开。窄屏仍然**定宽**
+   （列宽钉死，别让浏览器按内容乱分），但两个改动：
+   1. 允许换行、不再省略号截断 —— 竖屏没有 hover，title 里的全文谁也 hover 不出来，
+      截掉就是真丢了。挤不下的字整行折下去，一个字不丢。
+   2. 「来源」「周期」各收一点，省下的全给「名称」（它不给宽度，定宽布局里自动
+      吃掉剩下的全部）。
+   **收多少是量出来的，不是估的**：竖屏字号 11.5px、左右各 7px 内边距下，这两个字段
+   最长的字（「[初中日常]」55px、「周二到周五」58px）分别要 69px 和 72px；
+   而「名称」最长的字（「晚自习第一节上课」92px）要 106px 才能排一行 ——
+   400px 的机器上表宽 366px，扣掉时刻 76px，剩下的 290px 分给
+   来源 106 + 周期 102 + 名称 82（上一轮是 112 + 108 + 70，再上一轮 107 + 95 + 88）。
+   两列原来留白偏多、名称偏紧，用户让各收 6px、12px 全给名称：收完 106/102 仍远在
+   69/72 之上，一个字都截不掉，只是把多余的留白挪过去。
+   **改这两个数之前先看这条**：这两列用户来回调过好几轮（我收狠到 72/72、再收到
+   86/84、96/90、104/100，他都嫌窄），他要的是两列**留白充足**，不是越窄越好；
+   这次是他自己开口收的，别顺着往前推。
+   选择器带 `table` 是和基线 `table.tbl td{padding:8px 12px}` 同优先级，靠位置压住它。 */
+@media (max-width:640px){
+  table.tbl-more td{overflow:visible;text-overflow:clip;white-space:normal}
+  .tbl-more .c-time{width:76px}
+  .tbl-more .c-src{width:106px}
+  .tbl-more .c-period{width:102px}
+  .tbl-more .c-name{width:auto}
+  /* 竖屏再省一列：「音源」整列不显示。四列里就数它最长、也最不影响判断
+     （要认的是哪条铃声、什么周期），去掉它剩下四列才排得开。
+     藏的是第 4 列，数着 nth-child 来的 —— 宽屏那份 <thead> 加一格记得跟着改这儿。 */
+  .tbl-more th:nth-child(4),.tbl-more td:nth-child(4){display:none}
+}
+.tbl-bells .c-act{width:106px}
+.tbl-tasks .c-act{width:74px}
+/* 停用的铃声：整行灰底 + 内容压暗。
+   灰底画在 tr 上，不画在 td 上 —— td 自己带 opacity 的时候，它的背景会跟着一起
+   被稀释，灰就不灰了；tr 的背景是从透明的 td 底下透出来的，不受影响。
+   开关那一格不压 —— 否则它看起来像点不动。
+   顺序：停用垫在最下面，hover 和选中都能盖过它（选中的行还是选中的样子）。 */
+table.tbl tbody tr.off{background:var(--surface-3)}
+/* 反查结果里**时刻已经过去**的那几行（只在查今天时才加这个类，见 js/70-view-more.js）。
+   灰底**加**字压灰：一开始只压了字，用户实测说「差别太小不明显」，所以底色补上。
+   它跟 tr.off 仍然不是一回事 —— 那些是「不会响」，整行还压暗 45%；这些是「响过了」，
+   还是这一天的安排，底色沉一档、字降一档就够了，别做得像被停用。
+   垫在 hover 前面，和 tr.off 一个待遇：划过去照样有反馈。（只在 tr 上画底，
+   不画在 td 上 —— 理由和上面 tr.off 那段一样。） */
+table.tbl tbody tr.past{background:var(--surface-3)}
+table.tbl tbody tr:hover{background:var(--surface-2)}
+table.tbl tbody tr.sel{background:var(--accent-soft)}
+table.tbl tbody tr.off td:not(.swcell):not(.selcell){opacity:.45}
+table.tbl tbody tr.past td{color:var(--fg-3)}
+table.tbl tbody tr:last-child td{border-bottom:0}
+
+/* ── 考试表：哪些格能让位、哪些一格都不许缩 ─────────────────────────
+   这张表是 width:100%，窗口一窄十列按比例一起缩 —— 实测缩到 700px 窗口时，
+   「开考时间」那个八个字符的时刻框只剩 48px，秒那两位被压得根本看不见
+   （音量那两个数字框同理）。现在给**控件**钉一个最小宽度：日期、两个时刻、
+   两个音量、行尾垃圾桶。它们缩不动了，多的那份就从科目 / 考试铃声 / 听力音频
+   三格身上拿 —— 那三格里装的是长文本，窄了有省略号兜着，本来就该它们让。
+   三格也各有一条底线，到头了就轮到 .tbl-wrap 横向滚（这是它一直以来的设计）。
+
+   选择器用 data-lab 不用 nth-child：这一格是哪一列，看它自己的标签就知道，
+   以后表里再插一列也不用回来数第几个（竖屏那份表用 nth-child 是因为它要排
+   顺序，两边是两回事）。
+   数字是这么来的：.tbl td 左右各 12px、控件自己 1+1 边框。
+   132 = 108+24 → 「09:30:00」八个等宽字符在 13px 下约 62px，本来那 108px 就是
+   照它算的（见 js/40-view-exam.js 里时刻格那段）；80 = 56+24，56 留给「100」。
+   只加在宽屏这一档：≤640px 那张表整个换成 flex 行，每格在那儿有自己的
+   flex 基准（见文件末尾），不要这一套。 */
+@media (min-width:641px){
+  table.tbl-exam td[data-lab="考试日期"] > .select-btn{min-width:124px}
+  table.tbl-exam td[data-lab="开考时间"] .t-in,
+  table.tbl-exam td[data-lab="结束时间"] .t-in{min-width:108px}
+  table.tbl-exam td[data-lab="铃声音量"] .input,
+  table.tbl-exam td[data-lab="听力音量"] .input{min-width:56px}
+  table.tbl-exam td:last-child .rowacts{min-width:28px}   /* 行尾垃圾桶：28px 的按钮 */
+  /* 该让位的三格各自的底线 —— 不给的话会一路缩到几个像素，框窄得打不了字，
+     比横向滚难用得多 */
+  table.tbl-exam td[data-lab="考试科目"] .input{min-width:118px}
+  table.tbl-exam td[data-lab="考试铃声"] > .select-btn{min-width:100px}
+  table.tbl-exam td[data-lab="听力音频"] > .select-btn{min-width:86px}
+}
+td.t{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:14px;white-space:nowrap}
+td.n{font-weight:500}
+td .sub{font-size:12px;color:var(--fg-3)}
+.cellarea{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rowacts{display:flex;gap:1px;justify-content:flex-end;white-space:nowrap}
+.rowacts .btn{flex:none}
+/* 行尾三个图标：编辑 / 复制 / 删除。SVG 跟着 currentColor 走，不用字体图标 */
+.rowacts .ric{flex:none;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--r-sm);color:var(--fg-3);background:none}
+.rowacts .ric:hover{background:var(--surface-3);color:var(--fg)}
+.rowacts .ric.danger:hover{background:var(--crit-soft);color:var(--crit)}
+.rowacts svg{width:15px;height:15px;display:block}
+/* 行尾那枚「⋯」和它的小单子（openRowMenu，js/30-view-list.js）。⋯ 只在竖屏上
+   出现 —— 宽屏上那三枚图标并排摊着更好用，见文件末尾那一档。两套零件在 DOM 里
+   各有一份，谁来显示由断点说了算，JS 里不认宽度。 */
+.tbl-bells .rowacts .r-more{display:none}
+/* 浮层和「时 / 分 / 秒 转轮」同一套：挂 #layers 下、position:fixed，位置由 JS
+   按锚点算好写在 inline style 上（不这样会被 .tbl-wrap 的 overflow 裁掉）。
+   遮罩是透明的 —— 它只负责把外面那一下吃掉（不然那一指会落到后面的行上，
+   把那条铃声选中），不负责压暗：这不是模态，是一个贴在按钮边上的小单子。 */
+.rowmenu{
+  position:fixed;z-index:70;min-width:132px;padding:5px;
+  display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:var(--r-md);box-shadow:var(--shadow-md);
+}
+.rm-row{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:left;cursor:pointer;
+  padding:10px 12px;border:0;border-radius:var(--r-sm);background:none;
+  color:var(--fg);font:inherit;font-size:13.5px;font-weight:500;white-space:nowrap;
+}
+.rm-row:hover{background:var(--surface-2)}
+.rm-row .ri{display:flex;flex:none;color:var(--fg-3)}
+.rm-row .ri svg.ic{width:16px;height:16px}
+.rm-row.danger,.rm-row.danger .ri{color:var(--crit)}
+.rm-row.danger:hover{background:var(--crit-soft)}
+.rowmenu-scrim{position:fixed;inset:0;z-index:69}
+/* 时间列：设了全局偏移时，下面补一行服务器上原样的时刻。
+   前面挂一只小时钟，不写「真」字 —— 「真 11:59:30」得先解释「真」是什么意思，
+   图标不用解释（鼠标放上去有 title 说明）。
+   铃声表和定时任务表共用 —— 只写在 td.t 里的话，任务表那行会跟着主体字号走 */
+/* 单元格里只有一个图标的按钮（定时任务表「详情」那栏的圈 i）：
+   和行尾 .ric 同一个尺寸和 hover，只是不在 .rowacts 里，所以不能直接复用那条规则 */
+.cell-btn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--r-sm);color:var(--fg-3);background:none}
+.cell-btn:hover{background:var(--surface-3);color:var(--fg)}
+.cell-btn svg{width:15px;height:15px;display:block}
+.cell-btn.warn{color:var(--warn)}
+.cell-btn.warn:hover{background:var(--warn-soft);color:var(--warn)}
+.shift{display:flex;align-items:center;gap:1px;font-size:11px;font-weight:400;line-height:1.3;color:var(--warn);
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.shift .ic{width:11px;height:11px;flex:none}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(27,24,21,.42);backdrop-filter:blur(2px);z-index:40;animation:fade .16s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes slidein{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes pop{from{transform:translateY(10px) scale(.985);opacity:0}to{transform:none;opacity:1}}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(620px,100vw);background:var(--surface);z-index:41;
+  display:flex;flex-direction:column;box-shadow:var(--shadow-lg);animation:slidein .2s ease;
+  border-left:1px solid var(--border);
+}
+.drawer-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex:none;
+  padding-top:calc(14px + env(safe-area-inset-top,0px))}
+.drawer-head h3{font-size:15px}
+.drawer-body{flex:1;overflow-y:auto;padding:16px 18px}
+.drawer-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex:none;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));background:var(--surface)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 18px;flex:none}
+.tab{padding:10px 12px;font-size:13px;color:var(--fg-3);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent-fill)}
+
+.op{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:8px;background:var(--surface)}
+.op .l1{display:flex;align-items:center;gap:8px}
+.op .l1 .k{font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;letter-spacing:.06em;padding:1px 6px;border-radius:4px;background:var(--surface-3);color:var(--fg-2)}
+.op .l1 .k.POST{background:var(--good-soft);color:var(--good)}
+.op .l1 .k.PUT{background:var(--warn-soft);color:var(--warn)}
+.op .l1 .k.DELETE{background:var(--crit-soft);color:var(--crit)}
+.op .l1 .t{font-weight:500;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op .l2{font-size:12px;color:var(--fg-3);margin-top:4px;font-family:"IBM Plex Mono",monospace;word-break:break-all}
+.op.ok{border-color:var(--good)}
+.op.err{border-color:var(--crit)}
+.op.sim{border-style:dashed}
+.code{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;line-height:1.6;white-space:pre;overflow-x:auto;
+  max-height:60vh;overflow-y:auto;color:var(--fg);margin:0;
+}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px}
+.kv dt{color:var(--fg-3)}
+.kv dd{margin:0;font-family:"IBM Plex Mono",monospace}
+
+/* modal */
+.modal-host{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{
+  background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);width:100%;max-width:var(--mw,560px);
+  max-height:min(88vh,900px);display:flex;flex-direction:column;animation:pop .18s ease;border:1px solid var(--border);
+}
+.modal-head{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border);flex:none}
+.modal-head h3{font-size:16px}
+.modal-head .sub{font-size:12px;color:var(--fg-3);margin-top:2px}
+.modal-body{flex:1;overflow-y:auto;padding:18px 20px}
+/* 正文里装着一张**要自己滚**的表（眼下只有「更多功能 → 查询结果」）：
+   正文交出剩余高度，让里头的 .panel.grow 去分，表头才钉得住 ——
+   道理写在 .panel.grow 那两条旁边，简言之 sticky 只认最近的那个滚动容器，
+   内容跟着 .modal-body 一起滚的时候，表头就跟着行一起走了（用户实测）。
+   整页那一份不用这条：它走的是现成的 .main-inner.fill。 */
+.modal-body.grow-body{display:flex;flex-direction:column;overflow:hidden}
+.modal-body.grow-body > .grow{flex:1 1 auto;min-height:0}
+.modal-foot{padding:13px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex:none;
+  padding-bottom:calc(13px + env(safe-area-inset-bottom,0px))}
+.modal-foot .spacer{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+/* 一行里「吃两格」的那一项：添加铃声和定时任务两边的「名称」都用它。 */
+.grid3 > .span2{grid-column:span 2}
+
+/* 定时任务编辑框顶上那四格（执行时间 / 名称 / 音量 / 优先级）横向永远不拆。
+   (0,2,0) 比 @media 里那条 .grid4 的 (0,1,0) 高，所以后面 820/640 两份媒体查询
+   把 .grid4 收成单列时，这一行照样是四列 —— 这就是要的效果，别当成漏网之鱼。
+
+   音量 / 优先级给死 64px：这两格只要塞得下三位数（0~100），多吃一列宽度没有意义，
+   多出来的全给「名称」—— 它是这一行里唯一会长到看不完的那格。 */
+.grid4.tk-top{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) 64px 64px}
+/* 这两格是 number，浏览器默认带一对上下小箭头，64px 里它俩要吃掉十几个像素，
+   数字就没地方了。去掉箭头、数字居中 —— 宽度刚好够写三位数。 */
+.grid4.tk-top input[type=number],
+.bell-top [data-bf=vol] input,.bell-top [data-bf=pri] input{
+  text-align:center;-moz-appearance:textfield;appearance:textfield}
+.grid4.tk-top input[type=number]::-webkit-outer-spin-button,
+.grid4.tk-top input[type=number]::-webkit-inner-spin-button,
+.bell-top [data-bf=vol] input::-webkit-outer-spin-button,
+.bell-top [data-bf=vol] input::-webkit-inner-spin-button,
+.bell-top [data-bf=pri] input::-webkit-outer-spin-button,
+.bell-top [data-bf=pri] input::-webkit-inner-spin-button{
+  -webkit-appearance:none;appearance:none;margin:0}
+
+/* 添加/编辑铃声那五格（执行时间 / 名称 / 执行周期 / 音量 / 优先级）。
+   宽屏两行：时间 + 名称(占 2 格) / 周期 + 音量 + 优先级 —— DOM 顺序就是照这个写的，
+   .bf-name 那格占两列是它自己在基线上的事，不用 span2（下面 640 还要改它的跨度，
+   用独立类写清楚，省得跟 `.grid3 > .span2` 那条在 820 的复位规则打架）。
+   ≤640px 才换分组，见文件末尾那段。 */
+.bell-top .bf-name{grid-column:span 2}
+/* 铃音那块里「播放模式 + 播放时长」一行。基线跟着 .grid3 走（两格占三列中的两列），
+   ≤640 才收成等宽两列。 */
+.bell-play{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+
+/* ── 考试日期月历（可多选，日期可以不连续）────────────────────────── */
+/* 「本月」那个键去掉了（它和「今日」是一回事），head 里少一个键，整块就能收窄：
+   322px → 280px，七列格子还剩约 35px 一格，点得着。 */
+.cal-wrap{display:grid;grid-template-columns:280px minmax(0,1fr);gap:20px;align-items:start}
+.cal{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 10px 12px;background:var(--surface-2)}
+.cal-head{display:flex;align-items:center;gap:4px;margin-bottom:6px}
+.cal-head .ym{flex:1;text-align:center;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--fg-2);white-space:nowrap}
+.cal-head .btn{padding:2px 8px;line-height:1.4}
+.cal-head .btn.btn-icon{padding:4px 6px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-dow{text-align:center;font-size:11px;color:var(--fg-3);padding:2px 0 4px}
+.cal-d{
+  height:30px;border:1px solid transparent;border-radius:var(--r-sm);background:transparent;
+  color:var(--fg-2);font-size:12.5px;font-variant-numeric:tabular-nums;cursor:pointer;
+}
+.cal-d:hover{background:var(--surface-3)}
+.cal-d.today{border-color:var(--accent-line)}
+.cal-d.on{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff;font-weight:600}
+.cal-d.on:hover{background:var(--accent)}
+.cal-d.blank{visibility:hidden;cursor:default}
+.cal-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.cal-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cal-chip{
+  display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;
+  background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);
+  font-family:"IBM Plex Mono",monospace;font-size:12px;cursor:pointer;
+}
+.cal-chip:hover{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
+.cal-chip svg.ic{width:12px;height:12px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.sect{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.sect-h{padding:8px 12px;background:var(--surface-2);font-size:12px;font-weight:600;color:var(--fg-2);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.sect-h .acts{margin-left:auto;display:flex;gap:4px}
+.sect-b{padding:12px}
+.tabbar{display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:var(--r-sm)}
+.tabbar button{flex:1;padding:6px 10px;border-radius:5px;font-size:12.5px;color:var(--fg-2);font-weight:500}
+.tabbar button.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow-sm)}
+
+.pick{max-height:290px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface)}
+/* 铃音选择器那三个页签的内容区：**恒为 8 行高**（`.pick-stage` = 那块地方本身）。
+   三个页签的行数差得远（预设 5 行、音频文件上千行、媒体库几十行），各自按内容撑高的
+   话，每切一次页签整个模态框就跳一次高度 —— 鼠标底下那个页签按钮会跑掉，得重新找。
+   定死之后，切页签只有内容在换，框子纹丝不动。
+   行高**写死** 32px 而不是跟着内容算：只有定死，"8 行"才真的是 8 行；容器高 = 8 行 +
+   上下两条 1px 边框（`box-sizing:border-box` 在全局开着，边框算在里面，不把这 2px 加
+   回去，8 行会顶出一条 2px 的滚动条）。
+   「音频文件」那一页顶上多一行搜索框，所以它的列表只排 7 行：**搜索行(1) + 列表(7)
+   = 8 行**，和另外两页一样高。搜索框行高写死成和列表行一样，这样两边的账才合得上。 */
+.pick-stage{--pick-row:32px;height:calc(8 * var(--pick-row) + 2px)}
+.pick-stage > .pick{max-height:none;height:100%}
+.pick-stage > .pick-search{height:var(--pick-row);margin-bottom:0}
+.pick-stage > .pick-search + .pick{height:calc(100% - var(--pick-row))}
+.pick-stage .pick-search .input,
+.pick-stage .pick-search .select{height:calc(var(--pick-row) - 2px);padding-top:0;padding-bottom:0}
+.pick-stage .pick-row{height:var(--pick-row);padding-top:0;padding-bottom:0}
+/* 列表头上的搜索行：搜索框 + 媒体库筛选。filesOnly 那些选择器没有恒高那套，
+   走的就是这一条 —— 底下留 8px 的空。 */
+.pick-search{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pick-row{display:flex;align-items:center;gap:9px;padding:6px 11px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px}
+.pick-row:last-child{border-bottom:0}
+/* 选择器里那几份长名单（点位 79 个、音频文件一堆、媒体文件夹）隔行换底。
+   同样写在 :hover 前面，悬停照旧盖得住。 */
+.pick-row:nth-child(even){background:var(--row-alt)}
+.pick-row:hover{background:var(--surface-2)}
+.pick-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-row .ip{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--fg-3);flex:none}
+/* ── 终端列表（点顶栏那句「终端 xx/xx」开的模态，见 js/15-status.js）──────
+   框子照 .pick 的样子做（描边、圆角、自己滚），但高度交给弹窗去分，不写死 290px ——
+   这一份名册就是全校 79 个点位，弹窗多高它就多高。 */
+.term-list{flex:1 1 auto;min-height:0;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface)}
+/* 行借 .pick-row 的排版（状态点 + 名字 + IP），但**点不动** —— 去掉手型和悬停底色，
+   不然看着像能选，点下去什么也不会发生。 */
+.term-list .pick-row{cursor:default}
+.term-list .pick-row:hover{background:transparent}
+/* 上面那条 `:hover{background:transparent}` 权重比 `.pick-row:nth-child(even)` 高，
+   排在它后面就把它盖掉了 —— 这份名册没有悬停反馈（点不动），鼠标划过时那层交替底
+   得留住，所以这一条得写在它下面。
+   （「离线」页顶上那句 .term-note 也是这个框里的一行，它占掉第一格，于是那一页的
+   第一行是浅底、在线那页是白底。两页各自看都是老实的一行隔一行，不碍事。） */
+.term-list .pick-row:nth-child(even){background:var(--row-alt)}
+/* 那一行末尾的「状态未知」：它落在「离线」页里，可它不是离线，得自己说清楚。
+   灰字，和那颗空心灰点是同一个说法。 */
+.term-list .pick-row .stt{font-size:11px;color:var(--fg-3);flex:none}
+/* 「离线」页顶上那句交代（有几个只是「不知道」）。它在名册上头，和第一条之间要有一道线，
+   不然混在行里看不出这是一句说明。 */
+.term-note{padding:10px 11px;border-bottom:1px solid var(--border)}
+/* 点位在线状态的点。未知一律灰点 —— 拿红点冒充「离线」是撒谎。 */
+.tdot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--fg-3);display:inline-block}
+.tdot.online{background:var(--good);box-shadow:0 0 0 2px var(--good-soft)}
+.tdot.offline{background:var(--crit);box-shadow:0 0 0 2px var(--crit-soft)}
+.tdot.unknown{background:transparent;border:1.5px solid var(--fg-3);width:6px;height:6px}
+.pick-legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--fg-3);
+  margin:0 0 8px;font-family:"IBM Plex Mono",monospace}
+.pick-legend .tdot{margin-left:8px}
+.pick-legend .tdot:first-child{margin-left:0}
+.chip .tdot{margin-right:1px}
+.sel-chips{display:flex;flex-wrap:wrap;gap:5px;min-height:30px;padding:6px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:var(--surface-2)}
+.chip .x{display:inline-flex;align-items:center;opacity:.5;padding:0 1px}
+.chip .x svg.ic{width:12px;height:12px}
+.chip .x:hover{opacity:1;color:var(--crit)}
+.grp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+/* 列表头上那格「全选」：点位列表和分组网格共用，两种页签都在 .pick / .grp-grid
+   上面留了这一条。空的时候（点位搜不到东西）整条收掉，不留一段空当 ——
+   `.pick` 里那句「没有匹配的点位」已经把话说完了。 */
+/* flex-wrap: 那一行现在是「全选 + 当前列出 N 个 + 最右边那份红绿点说明」，
+   窄到放不下时让说明整块掉到第二行，别硬挤成一团（说明自己不缩，见下）。 */
+.pick-head{display:flex;align-items:center;gap:10px;font-size:12px;flex-wrap:wrap}
+/* 红绿点那份说明顶到「全选 … 当前列出 N 个」这一行的最右边
+   （它原来是搜索框下面自成一行，见 js/20-ui.js 的 drawAllRow）。 */
+.pick-head .pick-legend{margin-left:auto;flex:none}
+.pick-head:not(:empty){margin-bottom:6px}
+.grp-card{border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 11px;text-align:left;background:var(--surface)}
+.grp-card:hover{border-color:var(--border-strong)}
+.grp-card.on{border-color:var(--accent-fill);background:var(--accent-soft)}
+.grp-card .n{font-weight:500;font-size:13px;display:block}
+.grp-card .c{font-size:11px;color:var(--fg-3);font-family:"IBM Plex Mono",monospace}
+.grp-card .c .on{color:var(--good)}
+
+.prev-tbl{width:100%;border-collapse:collapse;font-size:12.5px;font-family:"IBM Plex Mono",monospace}
+.prev-tbl th{text-align:left;font-size:10px;letter-spacing:.08em;color:var(--fg-3);padding:5px 8px;border-bottom:1px solid var(--border);text-transform:uppercase;font-weight:700}
+.prev-tbl td{padding:4px 8px;border-bottom:1px solid var(--border)}
+.prev-tbl tr:not(.on) td{opacity:.4}
+
+/* toasts —— 一律右下角。
+   挑右下角是因为它是这块屏幕上唯一常年空着的地方：顶上从左到右塞着连接状态、
+   终端读数、注销、草稿开关、页签、提交按钮，左边是中栏和侧栏，正中是弹窗，
+   顶边正中被忙等提示（.busy-tip）占着。右下角平时什么也没有。
+   摞子是**往上长**的：新的贴着角出现，旧的一条条往上顶（toast() 里 append 在末尾），
+   撤也是从最上面那条开始撤，所以目光落在角上那一条就够了。
+   pop-t 是从下方升起来（pop 是从下方，位置在下面就顺着来）—— 和上面那半句一起改的。 */
+.toasts{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;
+  display:flex;flex-direction:column;gap:8px;max-width:min(420px,90vw)}
+.toast{background:var(--surface);border:1px solid var(--border-strong);border-left:4px solid var(--accent-fill);
+  border-radius:var(--r-sm);padding:12px 16px;box-shadow:var(--shadow-md);
+  font-size:14.5px;line-height:1.45;color:var(--fg);animation:pop-t .18s ease}
+@keyframes pop-t{from{transform:translateY(8px) scale(.985);opacity:0}to{transform:none;opacity:1}}
+/* 只有 err / warn 这两种弹（外加没写 kind 的那种「这一步没做成」，用的是上面那条
+   默认配色）。.ok 那条绿边不用留 —— toast() 里已经把 ok 拦在门外了。 */
+.toast.err{border-left-color:var(--crit)}
+.toast.warn{border-left-color:var(--warn)}
+
+/* 发送期间的整页挡板（只在草稿模式关着时挂上，见 js/50-drawer.js 的 busyOn）。
+   底色是全透明的 —— 点一下开关那种一两百毫秒的，用户除了光标变忙之外一个像素
+   都看不到，不会「啪地闪一下」。只有真排上队、过了 0.4 秒还没排空，body 上才多
+   一个 busy-slow，那行字才淡出来（没排到 0.4 秒就散了的话，它压根没机会出现）。
+   z-index 90 要压过所有点得动的东西：时间转轮 70、通知 60、弹窗 50、抽屉 41。
+   **那行字放顶边居中**（用户定的，原来是底边居中）：它是一句「正在写入」，视线
+   在等的时候是往上找的 —— 顶栏本来就在头顶，浮在它正中间那条空档上最显眼，
+   也不会挡着底下正要看的那张表。那个位置是顶栏里唯一一截常年空着的：
+   左边是标题和读数、右边是页签和提交，中间那个 .spacer 只负责吃掉余量。
+   11px 是照顶栏量的：.topbar-inner 高 54px，这枚胶囊约 33px，两边各余 10 左右。 */
+.busy-veil{display:none}
+body.busy .busy-veil{display:block;position:fixed;inset:0;z-index:90;cursor:progress}
+.busy-tip{position:absolute;left:50%;top:calc(11px + env(safe-area-inset-top,0px));
+  transform:translateX(-50%);padding:7px 15px;border-radius:999px;
+  background:var(--surface);border:1px solid var(--border-strong);box-shadow:var(--shadow-md);
+  font-size:12.5px;color:var(--fg-2);white-space:nowrap;
+  opacity:0;transition:opacity .18s ease}
+body.busy-slow .busy-tip{opacity:1}
+
+/* login */
+.login{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-md);padding:26px 24px}
+.login-card h1{font-family:"Songti SC","Songti TC",SimSun,Georgia,serif;font-size:21px;letter-spacing:.04em}
+.login-card p{color:var(--fg-3);font-size:12.5px;margin:6px 0 20px}
+/* 「服务器地址」+「端口」并排：端口最多五位数，占一格宽纯属浪费，
+   地址那格才是要看清的一格（IP 中间少一位就拨到别人家去了）。
+   端口 92px：够放下 5 位等宽数字加内边距，也够放下「端口」两个字。 */
+.srv-row{display:flex;gap:10px}
+.srv-row > .field:first-child{flex:1;min-width:0}
+.srv-row > .field:last-child{flex:0 0 92px}
+
+/* ── iOS：一点输入框，页面自己放大 ──────────────────────────────────────
+   Safari（iOS）另有一条自己的规矩：**框里的字小于 16px 时，一聚焦就把整页放大**
+   并顶到那个框上，缩回去还得手动点一下。登录页这四个框是 13px，正踩在这条线上 ——
+   手机上点哪一格，页面就跳一下。
+
+   正解只有一个：把框里的字放到 16px。另外两条路都不走 ——
+     · viewport 上写 maximum-scale=1 / user-scalable=no：iOS 10 以后不认它拦放大
+       （该放照放），却实打实收走了用户的双指缩放，是拿别人的可及性换自己的方便；
+     · JS 里在 focus 时 preventDefault：那一下放大发生在原生层，拦不住。
+   判据用 (pointer:coarse) 而不是屏宽：iPad 横屏 1024px 宽照样会放大，而鼠标那套
+   （真正的桌面）一个像素都不动。 */
+@media (pointer:coarse){
+  .login .input{font-size:16px}
+}
+
+.spin{width:15px;height:15px;border:2px solid var(--border-strong);border-top-color:var(--accent-fill);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+.bar{height:3px;background:var(--surface-3);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent-fill);transition:width .2s}
+
+/* 窄屏：两栏并排放不下，回到「整页滚动 + 选择器在上」的老样子 */
+@media (max-width:980px){
+  .main-inner.pane{display:block;overflow-y:auto;padding-bottom:90px}
+  .wb{display:block}
+  .rail{border-right:0;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px}
+  .rail-list{max-height:300px}
+  .wb-main{display:block;overflow:visible;padding-bottom:0}
+  .main-inner.fill{display:block;overflow-y:auto;padding-bottom:90px}
+  .main-inner.headfix{display:block;overflow-y:auto;padding-bottom:90px}
+  .main-inner.headfix > .page-body{overflow:visible;padding-bottom:0}
+}
+@media (max-width:820px){
+  .main-inner{padding:16px 16px 90px}
+  .grid2,.grid3,.grid4,.cal-wrap{grid-template-columns:1fr}
+  /* 只剩一列时 span 2 会给网格凭空多造一条隐式列，那一行的兄弟被挤成
+     「1fr + 两条 max-content」，窄屏上更难看了。窄屏本来就该一列到底。 */
+  .grid3 > .span2{grid-column:auto}
+  /* 同一条复位，给铃声那五格里自己撑两列的那个「名称」*/
+  .bell-top .bf-name{grid-column:auto}
+  /* 顶栏折两行（见下面的 .tb）—— 正文左右边距收到 16px 了，顶栏得跟着收，
+     不然窄屏上顶栏比正文靠外 8px，上下两块各说各话。 */
+  .topbar-inner{padding:8px 16px;height:auto;flex-direction:column;align-items:stretch;gap:8px}
+  .tb{display:flex;align-items:center;gap:10px;min-width:0}
+  .tb-l .spacer{flex:1}
+  /* 页签留在左边，提交按钮和草稿开关靠右 —— 和单行时的左右关系一样 */
+  .tb-r .seg{margin-right:auto}
+
+  /* 铃声表收掉「铃音」这一列。那一格是一个文件名 + 一行「时长 · 播放方式」，在
+     窄屏上会折成两三行，把时间、名称、区域一起挤窄；而它恰恰是整张表里最不常
+     看的一列 —— 铃声叫什么、几点响，才是扫表时要找的。
+     按列号隐藏：这张表是 勾选/时间/名称/铃音/区域/状态/操作 七列，铃音排第 4。
+     只挂在 .tbl-bells 上，别的表（定时任务、考试分区、改动预览）不受影响。
+     要确认某条放的是什么，点「编辑」里看得见。
+
+     断点从 640 挪到了 820：640 那条拦不住「竖屏」—— 平板竖屏（768）、大屏手机
+     竖屏都在 640 之上，用户看到的正是那一档。≤820 本来就是这套面板认的「窄」，
+     顶上那条 .grid2/.grid3/.grid4 塌成单列也在这个断点，一并在这一档收起更顺。 */
+  .tbl-bells th:nth-child(4),.tbl-bells td:nth-child(4){display:none}
+}
+
+/* ══ 视图切换段控（打铃列表 / 考试模式 / 定时任务）════════════════ */
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:2px;gap:2px}
+.seg button{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:var(--fg-2);
+  font:inherit;font-size:12.5px;padding:4px 11px;border-radius:calc(var(--r) - 2px);cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow-1);font-weight:500}
+/* 切换组末尾那个齿轮：只有图标没有字，左右留白收一点才和旁边几个字按钮一般宽 */
+.seg button.seg-ic{padding:4px 9px}
+/* 各个页签之间一条竖线：四个按钮并排贴着，光靠 2px 间距看不出是「几个页签」。
+   线画在按钮**前面**那道缝里（gap 是 2px，往左挪 1px 落在整像素上，比居中
+   挪 0.5px 更不容易发虚），所以它不占宽度，也不影响 .on 那个白底胶囊的尺寸。 */
+.seg button + button{position:relative}
+.seg button + button::before{content:"";position:absolute;left:-1px;top:50%;transform:translateY(-50%);
+  width:1px;height:16px;background:var(--border-strong)}
+.seg-dot{width:6px;height:6px;border-radius:50%;background:var(--accent-fill)}
+.chip-link{border:0;background:none;font:inherit;font-size:12px;padding:0 2px;cursor:pointer}
+.chip-link:hover{color:var(--fg);text-decoration:underline}
+
+/* ══ 列表 / 任务的停用态 ═══════════════════════════════════════════ */
+.badge-stop{background:var(--crit-soft);color:var(--crit)}
+button.badge-stop,button.badge-on{border:0;font:inherit;cursor:pointer}
+button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
+/* 停用态现在由右侧开关直说，名字不再划线（三处重复反而吵） */
+.rail-item .r1 .badge{margin-left:6px;flex:none;font-size:10px;padding:0 5px}
+.btn-warn{border-color:var(--warn);color:var(--warn)}
+
+/* ══ 定时任务视图 ══════════════════════════════════════════════════ */
+/* 时间列不再是个按钮（点它展开详情那条路撤了，详情走圈 i），所以只剩名字这点样式。
+   原来配套的 .tk-head / .task-detail 几条规则一并删掉 —— 没有任何元素再用它们。 */
+.task-row .nm{font-weight:500}
+.chip-media .dot{background:var(--warn)}
+.tk-dates{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ══ 通用小件 ══════════════════════════════════════════════════════ */
+.quickrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+/* ══ 批量编辑菜单（批量条上那枚铅笔点开的小单子）══════════════════════
+   收进来的是原来摊在栏上的四个文字按钮：「改区域 / 改铃音 / 改时间 / 恢复默认」。
+   一行一个、带一句说明 —— 四个动作名字都短，光排一行看不出各自会改什么。 */
+.act-list{display:flex;flex-direction:column;gap:6px}
+.act-row{display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;
+  padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--fg)}
+.act-row:hover{background:var(--surface-2);border-color:var(--border-strong)}
+.act-row .ai{display:flex;flex:none;color:var(--fg-2)}
+.act-row .ai svg.ic{width:17px;height:17px}
+.act-row .at{display:flex;flex-direction:column;gap:2px;min-width:0}
+.act-row .at b{font-size:13px;font-weight:600}
+.act-row .as{font-size:12px;color:var(--fg-3)}
+.tabbar button.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow-1)}
+
+@media (max-width:820px){
+  .seg button{padding:4px 8px;font-size:12px}
+}
+
+/* ══ 手机竖屏（≤640px）═══════════════════════════════════════════════
+   两件事：一是「铃声计划」页改成一次只显示一栏（点列表看详情，再点返回），
+   二是页面级按钮组到这一档才独占一行 —— 820px 就把「启用考试模式」推到第二行
+   太早了，那会儿标题旁边明明还有一大截空位。 */
+@media (max-width:640px){
+  /* 定时任务编辑框顶上那四格在真机宽度上按比例分，不改成等宽：等宽的话「名称」
+     只剩八十几像素，连自己填的名字都看不全。时间框要放得下 HH:MM:SS；音量/优先级
+     给死 64px —— 去掉上下箭头、数字居中之后，写三位数绰绰有余。仍然是**一行四列**。 */
+  .grid4.tk-top{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr) 64px 64px;gap:8px}
+
+  /* ── 添加/编辑铃声那五格换成竖屏分组 ────────────────────────────────
+     宽屏是「时间 + 名称(2格) / 周期 + 音量 + 优先级」，到这一档改成
+     「时间 + 周期 / 名称 + 音量 + 优先级」：时间和周期是一对（什么时候、多久一次），
+     名称/音量/优先级是一对（这条铃声本身的属性），配对之后一屏扫下来更顺。
+     做法是同一行五格换一套 10 列的底：DOM 顺序按宽屏写的，这里用 order 把它
+     重排成 时间(1) → 周期(2) → 名称(3) → 音量(4) → 优先级(5)，
+     跨度 5+5 一行、6+2+2 一行，正好两行排满。
+     音量/优先级只占 2 列（约 66px）—— 能写下三位数就够了，省下的都给「名称」。 */
+  .bell-top{grid-template-columns:repeat(10,minmax(0,1fr));gap:8px}
+  .bell-top [data-bf=time] {grid-column:span 5; order:1}
+  .bell-top [data-bf=strat]{grid-column:span 5; order:2}
+  .bell-top .bf-name      {grid-column:span 6; order:3}
+  .bell-top [data-bf=vol]  {grid-column:span 2; order:4}
+  .bell-top [data-bf=pri]  {grid-column:span 2; order:5}
+  /* 播放模式 + 播放时长：手机上两格等宽一行。宽一点的档位（641~820）还是照着
+     .grid3 收成单列堆着，这一档才并排 —— 两个控件都矮，并排看着更像一组。 */
+  .bell-play{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+
+  /* ── 一次只显示一栏 ───────────────────────────────────────────────
+     ≤980px 已经把这一页打回「整页滚」的老样子（列表在上、详情在下）。手机上那样
+     不好用：得先滚过三百来像素的列表才够得着详情。到这一档改成一次一屏，并且
+     把结构重新交还给 flex —— 一页只滚**里面那一块**：
+       · 只看列表时，滚的是 .rail-list，头上「任务列表 N」和脚下「新建/刷新」
+         钉在原地（它们在 .rail 里，不在 .rail-list 里，所以只要 rail 自己不滚
+         就自然钉住了）；
+       · 看详情时，滚的是正文那一块（.page-body），页标题栏和页首那条
+         「已锁定」横幅钉在顶上 —— 详情是一段长内容，滚过一屏之后得知道
+         自己在看哪张列表、还锁没锁着。
+     .show-main 是 JS 挂的一个意图（用户点进详情了），宽度够的时候这些规则不生效。 */
+  /* 「全局设置」和「考试模式」这两页也一样：标题那一行钉住，只滚下面的面板。
+     ≤980px 那一档把 .headfix 打回「整页滚」了，标题跟着滚走 —— 手机上这更要命，
+     标题是这两页唯一的方向感，滚过两屏就不知道自己在哪一页。
+     这里就是把桌面那套（见 .main-inner.headfix 基线）在竖屏上再拿回来。 */
+  .main-inner.headfix{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+  .main-inner.headfix > .page-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-bottom:90px}
+
+  /* 「定时任务」页同理：标题钉住，只滚下面那张表。
+     它的结构和上面两页不一样 —— 这里钉住的不只是标题，连「任务列表」那条面板头
+     也一起钉住（表头也在面板里），只滚 .tbl-wrap。所以不用另写什么，把桌面那套
+     `.fill` 拿回来就够了：`.panel.grow` 自己就是 flex 竖排 + overflow:hidden，
+     `.panel.grow > .tbl-wrap{flex:1;min-height:0;overflow:auto}` 是基线里写好的。 */
+  .main-inner.fill{display:flex;flex-direction:column;overflow:hidden;padding-bottom:16px}
+
+  .main-inner.pane{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+  .wb:not(.show-main){flex:1;min-height:0;display:flex;flex-direction:column}
+  .wb:not(.show-main) .rail{flex:1;min-height:0}
+  /* 钉子：这两行不参与伸缩，才不会跟着 .rail-list 一起被挤扁 */
+  .wb:not(.show-main) .rail-head,.wb:not(.show-main) .rail-foot{flex:none}
+  .wb.show-main{flex:1;min-height:0;display:flex;flex-direction:column}
+  /* 标题栏、横幅这些是 .wb-main 的直接子元素（基线里那条 .wb-main > *{flex:none}
+     管着，它们不参与伸缩），所以这一栏改成 flex 竖排、自己不滚，钉住的效果就出来了。
+     滚的是里面的 .page-body，而它在这一档得是**块级**的：写成 flex 竖排的话，
+     里面那个 .panel.grow 会拿到一个确定的高度，于是表自己滚、上面「区域 / 分组」
+     两块钉死 —— 那不是这一档要的样子（手机上正文是一整段，一起滚）。 */
+  .wb.show-main .wb-main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+  .wb.show-main .wb-main > .page-body{display:block;flex:1 1 auto;min-height:0;overflow-y:auto;padding-bottom:90px}
+
+  /* 「‹ 返回」现在长在顶栏左端那一格（renderTopbar 的 #tbBack，占的是标题的位置），
+     类和这里同一个 .rail-back。这一条只管「显示出来」—— 尺寸和排布在下面顶栏那段。
+     一级尺寸（.btn，不是 .btn-sm）：它是这一页上唯一的出口，手机上得够大。 */
+  .rail-back{display:inline-flex}
+  .wb:not(.show-main) .wb-main{display:none}
+  .wb.show-main .rail{display:none}
+  /* 只剩侧栏时，那条「下面还有内容」的分隔线和 300px 高度上限都没意义了 */
+  .wb:not(.show-main) .rail{border-bottom:0;padding-bottom:0;margin-bottom:0}
+  .wb:not(.show-main) .rail-list{max-height:none}
+  /* 侧栏在竖屏上占满整宽，那 18px 右边距是给宽屏两栏之间那条分隔线留的 ——
+     这里既没有第二栏也没有分隔线，留着就是右边凭空多出 18px：列表行和
+     「新建任务」那一排都贴不到右边，看着像没对齐。 */
+  .wb:not(.show-main) .rail-head,
+  .wb:not(.show-main) .rail-list,
+  .wb:not(.show-main) .rail-foot{padding-right:2px}
+  /* 那条线是 ::before 自己画的，量的是内边距盒，不跟着 padding-right 走 ——
+     上面把内边距收到 2px 了，这里得跟着收，否则它一头还悬在 18px 处。 */
+  .wb:not(.show-main) .rail-foot::before{right:2px}
+
+  /* 手机上的详情头，一行装完：[任务名] …………………………… [✎][🗑]
+     名字在左、图标在最右 —— 手指够得着的两个角，中间不管多宽都不动。
+     （最左那个返回键原来在这儿，现在搬去顶栏左端那一格了，见上面 .rail-back。）
+     实现只有三件事：
+       · title-row 在这一档**不折行**（宽屏那份是要折的：名字长就和图标分两行）；
+       · 名字 min-width:0 + ellipsis，太长就从**尾部**省略（用户原话）；
+       · .acts margin-left:auto，把中间所有空白吃掉，于是它顶在最右边。
+     DOM 顺序本来就是「名字 / 图标」，不用 order。 */
+  .sec-head .sec-title{flex:1;min-width:0}
+  .sec-head .sec-title .title-row{flex-wrap:nowrap}
+  .sec-head .sec-title .title-row h2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sec-head .sec-title .title-row .acts{margin-left:auto;flex:none}
+  .sec-head .sec-title .meta{justify-content:flex-end}
+
+  /* 这一档以前有一条 `.sec-head > .acts{margin-left:0;width:100%}`，把页面级按钮组
+     **无条件**推到第二行、拉满整行。用户实测下来不接受：「考试模式」那行和
+     「考试分区」那行在手机上明明还放得下，按钮却被挤下去了。删掉之后回到基线那条
+     `margin-left:auto` —— 有空位就贴着标题站在最右边，真放不下才由 .sec-head 自己
+     的 flex-wrap 折行。 （全项目只有考试模式页这两处是 .sec-head 的直接子 .acts，
+     铃声计划详情页那对图标在 .title-row 里，是另一条规则。） */
+
+  /* ── 顶栏在竖屏上收成一行，**高度钉死**（装不下就自己折成两行）─────────
+       广播控制台  （右对齐）●已连接 🖥终端 28/28 👤注销 ⚙设置
+     四个页签搬去了屏幕底下那条导航栏（.navbar，见下），「提交」跟着草稿模式一起收着
+     （SHOW_MODE_SWITCHES 关着，见 js/00-core.js），于是顶栏第二行**一样东西都不剩**，
+     整排撤掉。少一行，手机上就多一行高度给内容。
+     上面那行现在**并得下**了：标题 80 + 一条缝 + 四格读数约 198 ≈ 284 ＜ 390px 机器的
+     358px，连 360px 机器那 328px 也塞得进去。（「注销」「设置」各短了两个字、
+     图标↔字又从 4px 收到 2px，一起省下约 70px —— 算出来的，见下面那把尺子。）
+     推送没连上时「终端」那格的字样会长十几像素，那种时候才轮到四格读数折到第二行。
+
+     左端那格是**二选一**：平时是标题（原文照写，只收字号），需要「‹ 返回」时
+     换成返回键。这个取舍在 js 里就算好了（renderTopbar 的 showBack），标题照着它挂
+     .has-back —— css 只负责把挂了 .has-back 的标题收起来，不去猜「这一页要不要返回」。
+     两样都是 order:1，但永远不会同时出现，所以谁也不用给谁让位。
+
+     右端那四格凑成一组整体靠右：靠**那一组**的 margin-left:auto，不用 .spacer ——
+     那个空盒子自己虽然不占宽，前后却各带一条 gap，撤掉就是白捡一档缝，
+     而这一行每个像素都要数着花（实测数见下）。
+
+     抓手只有一步：把 .tb 那两组**解散**（display:contents），让所有子元素直接参与
+     .topbar-inner 的排布，再用 order 排。解散 + order 只在这一档生效 —— 641–820px
+     那一档的硬要求是「一个字不改」，那边连 1px 都不动。 */
+  /* **高度钉死在这儿**：min-height 50px。只有一行的那一页被抬到 50、内容居中；
+     本来就比 50 高的（一行装不下、折成两行的）钉了不生效，不挤。
+     两页一样高，进进出出就不抖。 */
+  .topbar-inner{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px;
+                min-height:50px;align-content:center}
+  .tb{display:contents}
+  /* 标题在这一档收一档字号（17 → 15px，占 111px）：原文照写，只是小一号（用户定的）。
+     min-height 28 是把这一格的高度也钉死 —— 标题自己只有二十来像素，返回键是 28，
+     两样不一样高的话，上面那个 67 就算不准了（67 是照「标题行 28」算的）。 */
+  .topbar .brand{order:1;flex:none;min-height:28px;align-items:center}
+  .topbar .brand h1{font-size:15px}
+  .topbar .brand.has-back{display:none}
+  /* 「‹ 返回」＝顶栏左端那一格。28px 高是**照手指定的**（不是照旁边读数那 17px 定的 ——
+     那几格是给眼睛看的，这颗是要按的）；一级尺寸（.btn，不是 .btn-sm）—— 它是这一页上
+     唯一的出口，手机上得够大。size 那几条和上面布局那几条写在同一个规则里，
+     免得同一个选择器在这一档里出现两遍。 */
+  .topbar .rail-back{order:1;flex:none;height:28px;padding:0 7px;font-size:12px;gap:4px}
+  .topbar .rail-back svg.ic{width:13px;height:13px}
+  /* 四格读数整组贴右端：余量全塞在**这一组**左边，于是贴住左边的是标题/返回、
+     贴住右边的是「设置」，中间那段空白随视口宽窄伸缩，两头都不动。
+     组内 flex-wrap + justify-content:flex-end 是给窄机器兜底的：最窄的机器上
+     四格摆不下时（字最长的「终端状态未连」赶上 320px），这一组会往下折，
+     折下来的那几格仍然靠右 —— 没有这一层的话，折下来的格子会甩到第二行最左边，
+     看着像画错了。 */
+  .topbar .tb-stats{order:2;display:flex;flex-wrap:wrap;justify-content:flex-end;
+                    gap:6px;margin-left:auto;min-width:0}
+  .topbar .stat{flex:none}
+  .topbar .spacer{display:none}
+  /* 页签那一组整组收掉：四个页签在**底下**那条导航栏里（DOM 里各有一份，不是同一份
+     搬来搬去）。「提交」也在这一组里（.tb-act ＝ 页签 + 提交），于是一起看不见了 ——
+     这一档它是真的没有去处：草稿模式收着，它本来就挂着 disabled（全局那条
+     `.topbar #pushBtn[disabled]{display:none}`），而顶栏那一行已经排满了。
+     ⚠ 哪天要打开草稿模式（SHOW_MODE_SWITCHES），「提交」得先在这一档重新找个位置 ——
+     最省事的是挪到底部导航栏那一排的右端。别只是把这条删了。 */
+  .topbar .tb-act{display:none}
+  /* 草稿开关也收着（同上），所以这一档现在没有它。真打开了它排在四格读数后面：
+     装得下就跟着右边，装不下自己折到第二行、靠 margin-left:auto 贴右边。
+     字样合成一行（DOM 一个字不动，只把那个 <br> 藏起来）—— 四个字横着排在这儿
+     比竖排两行说得清楚。641–820px 那一档照旧竖排两行，连 1px 高度都不差。 */
+  .topbar .switch{order:3;margin-left:auto}
+  .topbar .switch > .dimmer{white-space:nowrap;font-size:11px}
+  .topbar .switch > .dimmer br{display:none}
+  /* 四格读数在这一档一起收小一档。文案一个字不动。 */
+  .topbar .stat .dimmer{font-size:11px}
+
+  /* ── 这一行有多宽（2026-10-15 在 390px 的无头浏览器上核过；那把尺子后来又改了，
+        改动的部分是按尺子**算**出来的，没有重量 —— 量的代价和这点收益不成比例）──
+     左端那格是「广播控制台」五个字（15px 下约 80px），右边四格读数加起来约 198
+     （已连接 47 + 终端 28/28 59 + 注销 48 + 设置 44 + 三条缝 18）。
+     可用宽 = 视口 − 顶栏左右各 16px（≤820 那条内边距）＝ 390px 的机器上 358px。
+     80 + 198 + 一条缝 ≈ 284 ＜ 358 —— 390px 的机器上并得下还余一大截；
+     360px 的机器（可用 328）也塞得进去，320px 的老机器才会折。
+     「终端」那格换成「终端状态未连」时整组要再宽十几像素 —— 所以那一组内部留着
+     flex-wrap，折下来仍然靠右。
+     不管折还是并，**顶栏高度都一样**（上面那条 min-height:50px 钉住的）—— 详情页左端
+     换成窄一些的「‹ 返回」时也不会矮下去，这就是「进详情页顶栏抖一下」的治法：
+     不动排布，只把高度定住。
+
+     ── 那把尺子（早先几轮在无头 Chrome 上量的实测数，留着比对）─────────
+       标题「ITC 广播控制台」111（15px）/ 126（17px，试过、顶栏太高被否）
+         └ 现在换成了「广播控制台」，五个字，约 80px
+       已连接 51 / 终端 28/28 63 / 头像 20 + 6 + 退出登录 44 / 草稿开关 88
+       └ 「终端 xx/xx」是按钮（点开终端列表），和旁边那两句一样吃了 .chip-link 的
+         左右各 2px 内边距，比原来那个 <span> 宽 4px。
+       └ 尺子上这几个数是**旧字样、旧间距**量的（11px 字号下，一个汉字约 11px）。
+         现在改名 + 收紧之后的账这么算：四格各少一条 2px 的缝（−8）；
+         「退出登录」四个字→「注销」两个字（−22）；「全局设置」→「设置」（−40）。
+         250 − 70 = 180，加三条缝 18 = 198。 */
+
+  /* ── 屏幕底下那条导航栏：四个页签的新家 ──────────────────────────────
+     一根通栏的横条，四格等宽，上图标下文字，像 iOS 的 tab bar。
+     样式全写在这一档里 —— 它在别的宽度上根本不存在（基线那条 `.navbar{display:none}`
+     在 layout 那段），没有第二处要照顾。
+     高度：图标 22 + 缝 3 + 字 11×1.2 ≈ 13 + 上下各 7 ＝ 约 52px。
+     底下再补一条 safe-area 的内边距：全面屏最下面那道横杠会压在「更多功能」四个字上。 */
+  .navbar{
+    display:flex;flex:none;background:var(--surface);border-top:1px solid var(--border);
+    padding:7px 4px calc(7px + env(safe-area-inset-bottom,0px));
+  }
+  .navbar-btn{
+    flex:1 1 0;min-width:0;                 /* 四格等宽：不管屏幕多宽都是平均分 */
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    border:0;background:transparent;color:var(--fg-3);cursor:pointer;
+    padding:2px 0;border-radius:var(--r-sm);
+  }
+  .navbar-btn:active{background:var(--surface-2)}
+  .navbar-ic{position:relative;display:inline-flex}
+  .navbar-ic .ic{width:22px;height:22px}
+  .navbar-tx{font-size:11px;line-height:1.2;white-space:nowrap}
+  /* 当前这一页：图标和字一起染主色，字再加粗一档 —— 颜色之外还有第二层，
+     不只靠颜色说话。用的是 --accent（照文字挑的那档），不是 --accent-fill。 */
+  .navbar-btn.on{color:var(--accent)}
+  .navbar-btn.on .navbar-tx{font-weight:600}
+  /* 「考试模式」启用时那枚小圆点，和顶栏那排页签上的 .seg-dot 是同一件事、同一个色。
+     钉在图标右上角，负的偏移让它悬出去一点，不占图标自己的位置。 */
+  .navbar-dot{position:absolute;top:-1px;right:-2px;width:6px;height:6px;border-radius:50%;
+              background:var(--accent-fill)}
+  /* 通知摞子（.toasts，基线里钉在右下 16px）在这一档抬到导航栏上面 ——
+     导航栏是常驻的，通知压在它上面就等于把那四个页签临时封了。 */
+  .toasts{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
+
+  /* 「铃音」那一列的隐藏规则在 ≤820 那一档，见上面 —— 这一档不用再写一遍。 */
+
+  /* ── 三张表在竖屏上一起收一档 ──────────────────────────────────────
+     `.tbl` 是 13px、单元格左右各 12px 内边距。六到七列排下来，光内边距就吃掉
+     一百四五十像素，400px 宽必然横向滚 —— 用户要的是「尽量不用横向滚动」。
+     收到 11.5px / 左右各 7px 之后，铃声表和任务表都能在 400px 里排完。
+     时间列（td.t）比正文大一档是宽屏的规矩，竖屏跟着降到 13px，别在一行里冒尖。 */
+  table.tbl{font-size:11.5px}
+  table.tbl th{padding:7px;letter-spacing:.04em}
+  table.tbl td{padding:7px}
+  td.t{font-size:13px}
+  .rowacts .ric{width:26px;height:26px}
+  .rowacts svg{width:14px;height:14px}
+
+  /* ── 铃声表行尾那三枚图标收成一枚「⋯」────────────────────────────────
+     编辑 / 复制 / 删除三个 26px 的方块并排占 80px，在 400px 的屏上是屏宽的
+     五分之一，而且三枚挨着、指头按不准，误触哪个都是改数据。收成一枚点开的小单子
+     （openRowMenu），列宽也跟着从 106px 落到二十几像素，省下的全归「名称」「区域」。
+     两条的顺序不能换：⋯ 身上也挂着 .ric（尺寸、hover 都从它那儿来），
+     后写的那条说了算。**只圈 .tbl-bells** —— 考试分区表行尾那枚垃圾桶也是
+     .rowacts .ric，收掉它就没法删考试了。 */
+  .tbl-bells .rowacts .ric{display:none}
+  .tbl-bells .rowacts .r-more{display:inline-flex}
+  /* 三个点得比旁边那几个图标粗一档才看得见：它自己只有 24 分之 14 宽 */
+  .tbl-bells .rowacts .r-more svg{width:19px;height:19px}
+
+  /* ── 那枚启停开关和行尾图标之间空着的一大块 ────────────────────────────
+     铃声详情表和定时任务表都是同一个毛病：状态列写死 60px 却只放一个 30px 的开关、
+     行尾那列写死 106px（任务表 74px）而里面的图标又靠右排 —— 开关贴着本格左边缘、
+     图标贴着右边缘，中间就空出四十来像素。在 400px 的屏上那是屏宽的十分之一。
+     这里四刀收到只剩格与格之间该有的那点边距（铃声表 4px、任务表 4px）：
+       · 两列撤掉定宽（width:1% —— 表格是 width:100%，省下的宽自动归「名称」「区域」，
+         那才是该宽的地方）；
+       · 开关改贴**本格右边缘**，和它右边那排图标靠同一侧：读起来是「这条开没开，
+         然后能拿它怎么办」一整个尾巴，而不是两坨东西隔着一条河；
+       · 两格相邻的那两条内边距各留 2px，不再叠出双份。
+     就算列还是被撑宽（宽一点的手机），开关靠右、图标靠右这两条也仍然成立 ——
+     空档不会重新长出来。 */
+  .tbl-bells .c-sw,.tbl-tasks .c-sw,
+  .tbl-bells .c-act,.tbl-tasks .c-act{width:1%}
+  /* 开关和行尾图标之间留 10px（这里 8px + 最后一格自己的 2px）。收到 4px 之后用户
+     实测下来嫌挤：「怕误触」—— 这两个都是行上最要命的操作（一个是启停、一个是删）。
+     10px 只有原来那 21px 的一半不到，也没到能再养出一条空档的地步。 */
+  .tbl-bells .swcell,.tbl-tasks .swcell{padding-right:8px;text-align:right}
+  .tbl-bells td:last-child:not([colspan]),
+  .tbl-tasks td:last-child:not([colspan]){padding-left:2px}
+
+  /* ── 「添加铃声」在竖屏上只写「添加」─────────────────────────────────
+     它和左边那个筛选框是「铃声」面板头这一行里最宽的两样。按字号**推**下来：
+     「铃声」26 + 缝 10 +「共 N 条」约 55 + 缝 10 + 右边那一组（筛选框 150 +
+     缝 6 + 按钮约 88）= 345px，而 390px 的手机这一格只有 328px（表宽 358 −
+     面板边框 2 − 头部内边距 28）—— 不收就要折成两行。收掉这两个字省约 26px，
+     正好把这一行拉回来。（这几个数是照 CSS 里的字号和内边距加的，不是量出来的；
+     真机上对不对，看这一行折不折。）
+     **字还在 DOM 里，只是不显示**：按钮的 title 和无障碍名字都不受影响。
+     这个类是共用的，别的地方（考试模式那两枚「添加分区 / 添加考试」）要用也挂它。 */
+  .wide-only{display:none}
+
+  /* ── 竖屏上不显示滚动条 ───────────────────────────────────────────────
+     顶上那套 14px 宽的滚动条（见文件开头）是给桌面用的：手机上它要吃掉屏宽的 4%，
+     而手指本来就在屏幕上推，那条杠既按不着也没人按。
+     两边都得写：Chromium / Safari 认 ::-webkit-scrollbar，Firefox 只认
+     scrollbar-width。写 display:none 而不是 width:0 —— 宽度归零之后 Safari 有时
+     还会留一条轨道。
+     代价：滚动条是「还剩多少没看」唯一的指示，藏掉之后就只剩下内容自己的边缘了。 */
+  ::-webkit-scrollbar{display:none}
+  *{scrollbar-width:none}
+
+  /* 定时任务：竖屏上收掉「音源」「详情」「执行周期」三列（第 4、5、6 列）。
+     剩下的 勾选/时间/名称/状态/操作 五列正好排满一屏。
+     执行周期那一格是「周二到周五」这种长文本，又是这五列里最宽的一格；
+     它和上面的时间、名称一起看才有意义，手机上先让它们三个排得下 ——
+     要看这条任务哪天跑，点「编辑」里看得见（宽屏上它仍然在表里）。
+     代价：行里那枚圈 i（任务信息 + 执行区域）在竖屏上没有入口了 ——
+     区域是「这条任务会不会响」的关键信息，不在手机上核对时得留意。
+     （铃声表那列挂在 ≤820px，这张表这几列仍留在 ≤640px：收起「音源」是更大的
+     让步，不该提前到平板上做。） */
+  .tbl-tasks th:nth-child(4),.tbl-tasks td:nth-child(4),
+  .tbl-tasks th:nth-child(5),.tbl-tasks td:nth-child(5),
+  .tbl-tasks th:nth-child(6),.tbl-tasks td:nth-child(6){display:none}
+
+  /* ── 考试分区那张表，竖屏上不再是表 ────────────────────────────────
+     一场考试摆成三块，三行各摆什么、谁跟谁同排，全是用户画出来的：
+       第一行  考试日期 · 开考时间 · 结束时间
+       第二行  考试科目 + 行尾那枚删除
+       第三行  考试铃声 · 铃声音量 · 听力音频 · 听力音量
+     删除按钮原来挂在第一行末尾，用户要的是「跟着它删的那一场走」：这一场叫什么
+     写在第二行，按钮就摆到第二行去 —— 一行读完「这是哪一科、不要它就点这儿」，
+     第一行也正好把那枚按钮和它占的一道缝还给三个时间框。
+
+     表头整块收掉，但**每格的名字不能跟着丢**：一屏四五个时间框、下拉框、数字框
+     摆在眼前，没有名字就只剩「试一下才知道这是干什么的」。名字改由 CSS 从格子上的
+     data-lab 画出来，落在控件正上方（见下面那条 ::before）—— 用户原话：「用户面对
+     一堆下拉框和文本框不知道是干嘛用的」。宽屏上不生效，管事的仍是 <thead>。
+
+     做法：把 tr 从表格行改成 flex 行，格子靠 order 重排 —— 删除按钮在 DOM 里排
+     第 9，现在跟着科目那一行走（order:3），DOM 顺序和摆出来的顺序无关。
+     `tr::before` 和 `tr::after` 是两条 `flex-basis:100%` 的零高占位，专门用来
+     **折断一行** —— flex 没有别的换行办法；第一行 order:1、科目那行 order:3、
+     第三行 order:5，两条伪元素占 2 和 4，正好把九格切成三行。
+
+     宽度靠 flex-basis，三行各排各的，互不牵扯：
+       第一行  日期、开考、结束**三等分**之后，两个时刻格再各让 4px 给日期
+               （用户定的：时刻框本来就富余，日期框一直紧）。一行能分的是
+               (视口 − 60)：时刻格 = 它 ÷ 3 − 4，日期格 = 它 ÷ 3 + 8 ——
+               390 上 106 / 118、412 上 113.3 / 125.3、360 上 96 / 108；
+       第二行  科目吃零头（`flex:1 1 0`，剩下的全归它），删除 28px 钉在行尾；
+       第三行  铃音 110px、两个音量各 58px、听力音频吃零头。
+     第一行是**硬分，不给任何格子留底线** —— 所以得知道每格多少才不裁字：
+       · 时刻框 98px：八个等宽字符 62 + 内边距 34 + 边框 2；
+       · 日期框 104px：十个字符 78 + 内边距 8 + 边框 2 + 雪佛龙 12 + 间距 4
+         —— 见下面那两条，为了把 ▾ 留在格子里，它的内边距和间距都比别处紧。
+     于是 348 及以上日期就铺得满（360 上 108，比 104 那道线多 4px）、
+     370 及以上时刻铺得满；360 上时刻格 96，时/分吃一个省略号 —— 这是这一让的代价，
+     再往下两个一起紧（340 上时刻 89.3、日期 101）。
+     **再窄也不会折行** —— 时刻格是 calc、日期格 basis 是 0，flex 永远排得下，
+     挤的只是格子里的内容。
+     第三行不受影响：它照旧是 308px 起，视口 ≥ 356px 就不折。
+
+     max-width:100% 是兜底：格子上那些 `<td style="width:225px">` 在宽屏是列宽，
+     到 flex 行里宽度全由 flex-basis 说了算（flex-basis 压过 width）；万一以后
+     添一格忘了给 flex-basis，它就会照着自己的 width 铺开，夹一道 100% 兜住。
+
+     align-items 从 center 改成 flex-end：每一格现在是「一行名字 + 一个控件」两层，
+     底对齐才能让**控件**这一排齐平（名字在上方各自悬着，高度一样所以也齐）；
+     删除那格没有名字、只有一个垃圾桶，底对齐之后它和旁边的控件站在同一条线上，
+     居中会浮在两行之间的空档里。 */
+  .tbl-exam{display:block}
+  .tbl-exam thead{display:none}
+  .tbl-exam tbody{display:block}
+  .tbl-exam tr{
+    display:flex;flex-wrap:wrap;align-items:flex-end;gap:2px 6px;
+    padding:9px 7px;border-bottom:1px solid var(--border);
+  }
+  .tbl-exam tbody tr:last-child{border-bottom:0}
+  /* 竖屏上的「表头」：从格子自己的 data-lab 里取字，画在控件正上方。
+     样子照着宽屏那个 th 来（11px/700/.09em/--fg-3），只是再小一档、不缩进 ——
+     一行的宽度就这么点，标签宽一个字就可能把这一格顶出换行。
+     white-space:nowrap 是必须的：这行字一折，「开考时间」就变成两行，
+     整格变高，第一行那两个时刻框被顶得比旁边的科目框矮半截。
+     只挂在 [data-lab] 上，所以删除那格（没有 data-lab）什么都不会多出来。
+     line-height 收到 1（原来 1.7）、下边距给 4px：这行字是行与行之间唯一的白，
+     用户要三行控件的行间距减半 —— 原来的 7（行距）+ 17（这行字）= 24，现在
+     2 + 10 + 4 = 16（留 4 是因为收到 1 之后字屁股贴着控件，用户实测说太挤）。 */
+  table.tbl-exam td[data-lab]::before{
+    content:attr(data-lab);display:block;margin-bottom:4px;
+    font-size:10px;font-weight:700;letter-spacing:.06em;line-height:1;
+    color:var(--fg-3);white-space:nowrap;
+  }
+  /* 选择器写成 `table.tbl-exam td` 而不是 `.tbl-exam td`：基线那条是
+     `table.tbl td{padding:8px 12px}`（0,1,2），比 `.tbl-exam td`（0,1,1）更具体，
+     少写一个 `table` 就压不住它，格子会带着 12px 内边距，第一行当场排不下。 */
+  table.tbl-exam td{display:block;min-width:0;max-width:100%;padding:0;border-bottom:0}
+  /* 列号是数着 <td> 来的，宽屏那份 <thead> 加一格记得跟着改这儿。
+     现在这一行是：考试日期 / 开考 / 结束 / 科目 / 考试铃声 / 铃声音量 /
+     听力音频 / 听力音量 / 删除。（原来「科目」后面还有一格没人用的空列，
+     宽屏上专门吃剩下的宽度，已经删了 —— 这儿跟着整体往前挪了一位。）
+     三行排法（order 1 / 3 / 5，两条伪元素占 2 / 4 断行）：
+       1  考试日期 / 开考时间 / 结束时间
+       3  考试科目 / 删除
+       5  考试铃声 / 铃声音量 / 听力音频 / 听力音量
+     第一行三个格子**三等分**：basis 全给 0、各长一份，摆出来的宽度就是
+     (这一行 − 12 两道缝) ÷ 3，三个框永远一样宽。basis 是 0 还有个
+     副作用是好的：三格永远不会顶出换行，屏幕再窄也只是把它们一起挤扁。
+     第二行只有「科目」和那枚删除：科目 basis 给 0 吃零头（flex-grow:1），
+     删除 28px 钉在行尾 —— 用户要的就是按钮跟着它删的那一场走。
+     第三行那个 1 1 64px 是听力音频的**底**（换行判断用的），实际宽度 = 这一行
+     减掉别人，所以它是唯一会变的。 */
+  .tbl-exam td:nth-child(1){order:1;flex:1 1 0}                     /* 考试日期 ← 吃零头 */
+  /* 两个时刻格比「三等分」再各让出 4px（用户要的：时刻框本来就富余，日期框紧）。
+     用 calc 写死、不让它伸缩（flex-shrink:0）—— 三等分是硬分，这里只是把硬分的
+     结果挪 4px 到日期那边，哪个宽度上都一样是 4px。 */
+  .tbl-exam td:nth-child(2){order:1;flex:0 0 calc((100% - 12px)/3 - 4px)}  /* 开考时间 */
+  .tbl-exam td:nth-child(3){order:1;flex:0 0 calc((100% - 12px)/3 - 4px)}  /* 结束时间 */
+  /* 日期那格里要塞下「2026-10-14」十个字（13px 等宽 = 78px）**和那枚 ▾**，
+     所以这格的间距得比别处紧，而且它拿的是剩下的一切：
+     内边距 8→4、间距 6→4、雪佛龙 14→12，加起来 78 + 8 + 2 + 12 + 4 = 104 ——
+     比三等分多 8px 之后，375 上 113、360 上 108，104 那道线哪儿都够得着
+     （三格平分的日子里 375 只有 105，只多 1px 余量，紧得差半个像素就蹦省略号）。
+     代价记在这儿：时刻框比三等分矮 4px，八个等宽字符要 98px —— 375 上 101 还够，
+     360 上 96 就轮到时/分被裁了（原来 360 上正好 100，够）。 */
+  .tbl-exam td[data-lab="考试日期"] .select-btn{padding:4px 4px;gap:4px}
+  .tbl-exam td[data-lab="考试日期"] .select-btn .chev .ic{width:12px;height:12px}
+  .tbl-exam tr::before{content:"";order:2;flex:0 0 100%;height:0}   /* ← 第一行末尾折断 */
+  .tbl-exam td:nth-child(4){order:3;flex:1 1 0}                     /* 考试科目 ← 吃零头 */
+  .tbl-exam td:nth-child(9){order:3;flex:0 0 28px}                  /* 删除这一场：钉在第二行行尾 */
+  .tbl-exam tr::after{content:"";order:4;flex:0 0 100%;height:0}    /* ← 第二行末尾折断 */
+  .tbl-exam td:nth-child(5){order:5;flex:0 0 110px}                 /* 考试铃声 */
+  /* 两个音量格**写死 58px、不伸缩**，剩下的零头全给听力音频（flex-grow:1）。
+     58 里留给数字的是 40px（内边距 8+8、边框 1+1），三位数「100」才 24px，
+     标红那圈粗边框再吃掉 2px 也够。早先给到 60 多像素时看着空一半，所以不让
+     它俩跟着零头伸缩；零头是听力音频的 —— 文件名在这一档本来就只剩十来个字的
+     位置，再窄就只能看见省略号（用户实测）。格子的下限是头上的标签撑出来的：
+     「铃声音量」在 10px 下要 42px。 */
+  .tbl-exam td:nth-child(6){order:5;flex:0 0 58px}                  /* 铃声音量 */
+  .tbl-exam td:nth-child(7){order:5;flex:1 1 64px}                  /* 听力音频 ← 吃零头 */
+  .tbl-exam td:nth-child(8){order:5;flex:0 0 58px}                  /* 听力音量 */
+
+  /* ── 时/分/秒 转轮：这一档不再是 popover，改成一块居中的模态 ──────────
+     贴在输入框边上时它总共才 216px 宽，三列各六十几像素 —— 竖屏上那点地方
+     手指根本按不准。改成模态之后三列能摊开，格子也从 32px 放大到 38px。
+     位置是 JS 按锚点算好写在 inline style 上的（left/top），这里用 !important
+     盖掉；宽屏上这几条不生效，那边照旧是 popover。 */
+  .tp-scrim{
+    display:block;position:fixed;inset:0;z-index:69;
+    background:rgba(27,24,21,.42);backdrop-filter:blur(2px);animation:fade .16s ease;
+  }
+  .tp{
+    left:50% !important;top:50% !important;transform:translate(-50%,-50%);
+    width:min(320px,92vw);padding:12px;
+  }
+  .tp-col{--tp-row:38px}
+  .tp-cell{font-size:15px}
+  .tp-foot .btn{padding:7px 16px;font-size:13px}
+
+  /* ── 考试日期日历：同一套路，这一档也是居中的模态 ────────────────────
+     那格在竖屏上只有一行宽，贴在它边上弹一块 280px 的日历会顶到屏幕外，
+     手指也按不准 30px 的格子。居中之后格子放大到 38px。 */
+  .dp-scrim{
+    display:block;position:fixed;inset:0;z-index:69;
+    background:rgba(27,24,21,.42);backdrop-filter:blur(2px);animation:fade .16s ease;
+  }
+  .dp{
+    left:50% !important;top:50% !important;transform:translate(-50%,-50%);
+    width:min(320px,92vw);padding:12px;
+  }
+  .dp .cal-d{height:38px;font-size:14px}
+}

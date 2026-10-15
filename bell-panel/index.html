@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ITC 广播控制台</title>
+<!-- 字体全部走系统自带的（见 app.css 里那几条字体栈），**不引用任何外部资源** ——
+     原来这儿挂着 Google Fonts 的三支字族，国内/内网环境下那支 CSS 是阻塞渲染的，
+     下不动就一直等着，首屏要愣好几秒。 -->
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="root"></div>
+<div id="layers"></div>
+<div class="toasts" id="toasts"></div>
+<!-- 发送期间的整页挡板：平时 display:none，body.busy 时才浮上来（见 js/50-drawer.js） -->
+<div class="busy-veil"><span class="busy-tip">正在写入服务器…</span></div>
+<script src="js/00-core.js"></script>
+<script src="js/05-config.js"></script>
+<script src="js/10-data.js"></script>
+<script src="js/15-status.js"></script>
+<script src="js/20-ui.js"></script>
+<script src="js/30-view-list.js"></script>
+<script src="js/35-groups.js"></script>
+<script src="js/40-view-exam.js"></script>
+<script src="js/50-drawer.js"></script>
+<script src="js/60-view-tasks.js"></script>
+<script src="js/70-view-more.js"></script>
+<script src="js/90-boot.js"></script>
+</body>
+</html>
