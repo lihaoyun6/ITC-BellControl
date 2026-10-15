@@ -37,7 +37,7 @@
 
 ### 模式一：单机模式（无需安装）
 
-1. 从发布页面下载压缩包并解压其中的 `bell-panel` 文件夹。
+1. 从本项目 [发布页面](https://github.com/lihaoyun6/ITC-BellControl/releases/latest) 下载压缩包并解压其中的 `bell-panel` 文件夹。
 2. 直接双击打开其中的 `index.html` 文件。
 3. 在登录界面输入广播服务器地址、端口及管理员凭据即可使用。
 
@@ -49,7 +49,7 @@
 
 推荐直接部署在**运行 ITC 服务端的主机**或内网常开的服务器上。 借助轻量级服务器 `dufs` 同时实现页面托管。
 
-1. 将下载好的压缩包整个解压到某目录中 (例如 `D:\ITC-BellControl`)  
+1. 从本项目 [发布页面](https://github.com/lihaoyun6/ITC-BellControl/releases/latest) 下载压缩包并将下载好的压缩包整个解压到某目录中 (例如 `D:\ITC-BellControl`)  
 2. 访问 [dufs v0.46 发布页](https://github.com/sigoden/dufs/releases#release-v0.46.0)，下载对应版本并将其中的 `dufs.exe` 或 `dufs` 文件解压到刚刚的文件夹中。  
 3. 执行对应平台的运行脚本：  
 	
