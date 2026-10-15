@@ -97,6 +97,7 @@ function reLogin(){
       if (!r || !r.token) return "failed";
       S.token = String(r.token);
       if (r.user) S.user = r.user;
+      setSrvVersion(r);
       S.conn = "ok";
       rememberLogin(LS.get("remember", true), name, password);   /* 本机那张到期表跟着往后拨 */
       reLoginDead = false;
@@ -121,6 +122,28 @@ function kickToLogin(){
 }
 
 /* ══ bootstrap ══════════════════════════════════════════════════════ */
+/* 厂商版本号在 /auth 的响应里 —— 顶层一个 version，config.version 是同一个值
+   （两个都试一下：这版接口两种形状都见过）。取不到就给空串，设置页那边显示成
+   「—」，不编一个版本号出来。 */
+const srvVersionOf = r => String((r && r.version) || (r && r.config && r.config.version) || "");
+
+/* 拿到就记下来，**并且在本机存一份** —— 刷新页面走的是「拿本机那张没过期的令牌
+   直接进主界面」那条路（见 90-boot.js），整趟都不经过 /auth；不存的话设置页上
+   那一格每次刷新都会变回「—」，非得注销重登才回来。
+   空值直接忽略：宁可留着上一次拿到的那份，也别把好数据抹成空白。
+   （/language 也报这个字段，所以它每开一次页面都会跟着刷新一次，见 15-status.js。） */
+function setSrvVersion(r){
+  const v = srvVersionOf(r);
+  if (!v) return;
+  S.srvVersion = v;
+  LS.set("srvVersion", v);
+  /* 设置页正开着就把那一格当场补上 —— 不重画整页：重画会把人正在输入的东西弄丢。
+     刷新页面走的正是这条路：先拿本机存的那份把页面画出来，等 /language 回来
+     再补一次（本机从来没存过的机器，就靠这一补）。 */
+  const cell = $("#verSrv");
+  if (cell) cell.textContent = v;
+}
+
 async function doLogin(name, password){
   S.conn = "busy"; renderAll();
   reLoginDead = false;                 /* 人手登了一趟，那扇「送回登录页」的门重新开张 */
@@ -129,6 +152,7 @@ async function doLogin(name, password){
     if (!r || !r.token) throw new Error("登录失败：服务器未返回令牌");
     S.token = String(r.token);
     S.user  = r.user || {};
+    setSrvVersion(r);
     S.tenant = (r.config && r.config.apiBaseUrl) ? r.config.apiBaseUrl : null;
     S.conn = "ok";
     /* 地址不在这儿存 —— 点「连接」的时候就存过了（见 30-view-list 的登录卡片），

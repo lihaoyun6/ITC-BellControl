@@ -171,6 +171,8 @@ async function openStatusFeed(){
     try{
       const l = await api("GET","/language");
       S.wsIp = l && l.webSocketIp;
+      /* 同一个响应里还带着厂商版本号，顺手牵回来（见 10-data.js 的 setSrvVersion）。 */
+      setSrvVersion(l);
     }catch(e){ return; }
   }
   if (!S.wsIp) return;

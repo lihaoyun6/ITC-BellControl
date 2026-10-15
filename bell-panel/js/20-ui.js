@@ -604,6 +604,36 @@ function wirePresets(body, redraw){
   if (nu) nu.onclick = ()=>{ const l = rawPresets().slice(); l.push({label:"", media:""}); setUserPresets(l); redraw(); };
 }
 
+/* 设置页尾部那张「版本信息」。五行键值，用 .kv —— 它本来就是给这种表准备的
+   （两列网格、值那列等宽），一直没人用过，正好。
+
+   有两行其实不是「版本」，但少了这张表就不完整：
+     · 广播服务器 —— 地址和厂商版本，出问题时报的是这两样
+     · 运行方式 —— 设置到底存在哪儿。这是这张表里唯一会改变人行为的答案：
+       本地模式下在这台设备上改的东西，换台设备打开是看不见的。
+
+   值那一列是等宽的（.kv 定的），所以「运行方式」只放两个词，那半句解释摆在
+   表格下面的 .hint 里 —— 一整句中文塞进等宽列里字形会打架。 */
+function versionInfoHTML(){
+  const local = location.protocol === "file:";
+  const addr  = S.server ? S.server.replace(/^https?:\/\//,"") : "—";
+  const kv = (k,v)=> '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>';
+  return '<dl class="kv">'+
+      kv("面板版本",   PANEL_VERSION)+
+      kv("运行方式",   local ? "本地模式" : "服务器模式")+
+      kv("广播服务器", addr)+
+      /* 这一格 id 是给 setSrvVersion 用的：刷新页面时它是本机存的那份画的，
+         /language 回来之后由那边就地补上（见 10-data.js），整页不重画。 */
+      '<dt>服务器版本</dt><dd id="verSrv">'+esc(S.srvVersion || "—")+'</dd>'+
+      kv("登录用户",   userNameText() || "—")+
+    '</dl>'+
+    '<div class="hint" style="margin-top:10px">'+
+      (local
+        ? "本地模式：设置只保存在这台设备的浏览器里，换台设备打开看不到。"
+        : "服务器模式：配置信息保存在服务器端，可在多个客户端间自动同步。")+
+    '</div>';
+}
+
 /* ══ 全局设置（一整页）═══════════════════════════════════════════════
    以前是个模态框。改成页面是因为里面能改的东西越攒越多（偏移、草稿、调试、
    预设的增删改），模态一窄就得上下滚；而且它和另外三个视图本来就是平级的
@@ -671,6 +701,11 @@ function renderSettings(){
       '<div class="panel-head"><h3>铃声预设</h3>'+
         '<span class="sub">'+PRESETS.length+' 个</span></div>'+
       '<div class="panel-body">'+presetSectionHTML()+'</div>'+
+    '</div>'+
+
+    '<div class="panel">'+
+      '<div class="panel-head"><h3>版本信息</h3></div>'+
+      '<div class="panel-body">'+versionInfoHTML()+'</div>'+
     '</div>'+
 
     '</div>';   /* /.page-body */
