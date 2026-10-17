@@ -9,22 +9,29 @@
    有自己的铃声时间表。
 
    启用时只做两件事，而且**原件一律不动**：
-     1. 清空并重写「Exam」这一个列表 —— 每场考试的开考/结束/听力铃
+     1. 清空并重写「¤exam_task」这一个列表 —— 每场考试的开考/结束/听力铃
         全在这里，不做增量，推倒重来，省得上一场的铃残留下来。
-     2. 每个「已启用的正常列表」另存一份「原名_E」副本，原件停用。
+     2. 每个「已启用的正常列表」另存一份「原名¤temp」副本，原件停用。
         闪避与裁剪只发生在副本里：与考试区域重合的点位/分组、以及走廊
         和室外，从副本每条铃声的执行区域里减掉；原件保持完好。
 
-   这么分层是为了「关闭考试模式」能一秒收场：删掉全部 _E 副本、把原件打开、
-   清空 Exam。不用赌任何快照能不能正确还原 —— 原件根本没被改过。
+   这么分层是为了「关闭考试模式」能一秒收场：删掉全部 ¤temp 副本、把原件打开、
+   清空 ¤exam_task。不用赌任何快照能不能正确还原 —— 原件根本没被改过。
 
    厂商格式只认名字，减法是按名字做的，所以只能整组地减（不能表达
    「某组里除了某几个点位」），宁可少响不可误响，考试场合取这个方向。
    ══════════════════════════════════════════════════════════════════ */
-const EXAM_LIST_NAME  = "Exam";            /* 考试铃声写进这个列表 */
+const EXAM_LIST_NAME  = "¤exam_task";      /* 考试铃声写进这个列表 */
 const EXAM_OLD_NAME   = "考试模式";        /* 面板早期版本的名字，见到就改名收编 */
 const EXAM_LEGACY_NAMES = [EXAM_OLD_NAME, "考试铃声"];  /* 老名字，见到就当考试列表收编 */
-const EXAM_SUFFIX     = "_E";              /* 正常列表的考试副本后缀 */
+const EXAM_SUFFIX     = "¤temp";           /* 正常列表的考试副本后缀 */
+/* 铃名里三个字段的分隔符。分区名和科目都是人随便打的自由文本，本身就可能带空格
+   （「数学 必修」），按空格数段切不回来 —— 用一个中文名里不会出现、又不是正则
+   元字符的字符当分隔符。名字长这样：分区¤角色¤科目，撞名时再挂一段 ¤时刻。 */
+const EXAM_SEP        = "¤";
+/* 静音区域没有自己的字段，靠考试列表里一条**没有铃声**的计划存着：它的执行区域
+   就是静音区域。不挂周期 —— 没周期就没有「哪一天」，从根上不会响。 */
+const EXAM_SILENCE_NAME = EXAM_SEP + "silence_zone";
 const EXAM_STRAT_NAME = "考试日期（面板）";   /* 老名字：一条通吃的那版，见到就改造成当天那条 */
 const EXAM_STRAT_PREFIX = "考试日期 ";        /* 老名字的前缀（一天一条的那版），只剩认旧数据用 */
 /* 每个考试日期一条周期。名字里带日期，同一天考的科目共用一条 —— 一场考试
@@ -40,19 +47,19 @@ function isExamStratName(name){
       || /^考\d{4}-\d{2}-\d{2}$/.test(n);
 }
 const isExamList = g => !!g && (g.name===EXAM_LIST_NAME || EXAM_LEGACY_NAMES.indexOf(g.name)>=0);
-const isExamCopyName = n => /_E$/.test(String(n||""));
+const isExamCopyName = n => String(n||"").endsWith(EXAM_SUFFIX);
 const isExamCopy = g => isExamCopyName(g && g.name);
 
 /* 考试模式自己造出来的东西，在「铃声计划」里一律不露面：
-   - Exam：考试铃声都写在这里，它不是一份「日常计划」
-   - xxx_E：正常列表的考试副本，是排布的中间产物
+   - ¤exam_task：考试铃声都写在这里，它不是一份「日常计划」
+   - xxx¤temp：正常列表的考试副本，是排布的中间产物
    它们还是服务器上真实的列表（考试模式要按名字找它们），只是铃声响不响由
    考试模式说了算，人不用去想它们，摆出来只会让人以为要手动维护。 */
 const isExamHiddenList = g => isExamList(g) || isExamCopy(g);
 
 /* ── 抽屉和提示里那行字是**给人看的** ────────────────────────────────
    所以下面这个函数是这一页唯一允许拼「标签」的地方，它保证不出现
-   `_E` / `Exam` / `副本` / `临时列表` 这些服务器上的说法 —— 用户没理由认识它们，
+   `¤temp` / `¤exam_task` / `副本` / `临时列表` 这些服务器上的说法 —— 用户没理由认识它们，
    认出来也只会在厂商后台里到处找一个他从没建过的列表。
 
    用户认识的名字只有两个：他自己的那个列表（原名），和「考试铃声」。 */
@@ -63,11 +70,11 @@ const examOpLabel = listName => {
   return "["+n+"]";
 };
 
-/* 服务器上某个列表的 _E 副本（没有就返回 null）。副本名 = 原名 + "_E"，
+/* 服务器上某个列表的 ¤temp 副本（没有就返回 null）。副本名 = 原名 + "¤temp"，
    所以去掉后缀就是原件名。 */
 const examCopyOf = g => S.data.groups.find(x=> isExamCopy(x) && x.name.slice(0,-EXAM_SUFFIX.length)===g.name) || null;
 
-/* 只要有 _E 副本在，它的原件就是**锁定的**：考试期间发声的是副本，
+/* 只要有 ¤temp 副本在，它的原件就是**锁定的**：考试期间发声的是副本，
    改原件既不会生效（副本已经拍好了），还会破坏「原件完好」这个前提 ——
    关闭考试模式要恢复的是原件的原样。所以锁住的不是副本，是原件。 */
 function examLockedOriginals(){
@@ -81,32 +88,40 @@ function examLockedOriginals(){
     const orig = S.data.groups.find(x=> x.name===g.name.slice(0,-EXAM_SUFFIX.length));
     if (orig) ids.add(Number(orig.id));
   });
-  /* 万一副本被人在厂商后台改了名，用本场记下来的对应关系兜住
-     —— 但只在副本还在的时候才算，副本删了就不该继续锁着原件。
-     （S.exam 是 loadExam() 之后才有的，早于它渲染也不该炸。） */
-  ((S.exam && S.exam.copies)||[]).forEach(c=>{
-    if (going.has(String(c.copyId))) return;
-    if (!S.data.groups.some(x=>Number(x.id)===Number(c.copyId))) return;
-    const orig = S.data.groups.find(x=>Number(x.id)===Number(c.listId));
-    if (orig && !isExamCopy(orig)) ids.add(Number(orig.id));
-  });
   return ids;
 }
 const isExamLocked = g => !!g && Number(g.id)>0 && examLockedOriginals().has(Number(g.id));
+
+/* 考试期间那道提醒（用户定的）：开着考试模式的时候，新建一条任务、或者启用一条本来
+   停着的任务，都得先问一句 —— 这两种动作都是往**正在发声的那套东西**上加内容，而
+   加的这一条会不会撞上考试，只有人知道（考试铃声的时段和区域是这套界面算的，新加的
+   任务不在其中）。所以这里只报信、不判断、也不拦：确认了就照做。
+   run 是要办的那件事，点「取消」它一次都不跑，弹窗也已经关掉了。
+   返回 true = 拦下来问了人，false = 没考试、当场就办了。 */
+function examGuard(run){
+  if (!(S.exam && S.exam.on)){ run(); return false; }
+  openConfirm("考试模式", "当前已启用考试模式，请确认新添加或启用的任务不会干扰考试。", run, "继续");
+  return true;
+}
 
 /* isoOf / todayISO 搬去了 00-core（月历控件在 20-ui 里也要用它们）。
    星期缩写也归月历控件所有，见 20-ui 的 CAL_DOW。
    （这儿原来还有个 addDays()，只给老存档那条「startDate→endDate 展开成每一天」
    的搬家用；日期改成每个科目自带一格之后那段搬家没了，它也就没人问了。） */
 
+/* 面板上「一份考试安排」长什么样。**它不存到任何地方** —— 要么是人正在编的草稿
+   （活在这一次会话里），要么是照着服务器上摆着的铃声反解出来的（readExamState）。 */
 function defaultExam(){
   return {
     on:false, listId:null,
+    /* 听力铃排在开考铃之后几分钟 —— 考试安排底下那个数字框，默认 1（见 listenDelay）。
+       它只是**手上这一份**的一个字段：不发去服务器，重开面板又回到 1。
+       服务器上已经排好的那些听力铃不受影响（它们的时刻是启用那一刻算定的）。 */
+    listenDelay: 1,
     /* 进考试模式先看到一张干净的配置表。静音区域留空，哪些区域要静音由人当场选 ——
        以前默认帮人静音一批点位（走廊/室外），人没注意就启用了。
        **考哪几天不在这儿，在每个科目自己身上**（bells[].date，见 blankExamRow）；
        启用时按「日期的并集」在服务器上维护「指定日期」周期，考试铃声各挂各的那条。 */
-    volume:70,
     mute: [],
     /* **第一次打开就摆着一个空分区**，不是零个。零个分区的页面是一片空白，人不知道
        该从哪儿下手；而下头那枚「添加分区」看着像是在问「要不要开始」，其实它只管补
@@ -115,50 +130,121 @@ function defaultExam(){
     sections: [blankSection(1)],
     /* checked：点过「启用考试模式」并且被拦下来过。置位之后那一行缺的格才标红，
        改对了随重画消失（见 examSectionHTML / examRowBad）。 */
-    checked: false,
-    copies: null,            // [{listId, copyId, name, n, trimmed}]  这一场建出来的 _E 副本
-    lastRun: null            // {at, exam, lists}
+    checked: false
   };
 }
-/* 这一份存在**配置**里（S.cfg.exam，见 05-config.js），不再只存本机 ——
-   考试模式管的是一场真的考试，换台电脑打开不该是一张空白配置页。
-   本机那个 bc.exam 键是这次改动之前的老住处，**搬一次就走**（下面那两行）。
-   没有存档（第一次打开）返回的是一份默认配置，它**不写进配置里** —— 见 saveExam。 */
-function loadExam(){
-  const legacy = LS.get("exam", null);          /* 老键，只用来搬家 */
-  const raw = (S.cfg && S.cfg.exam) || legacy;
-  const d = defaultExam();
-  if (legacy) LS.del("exam");                   /* 读过就删，不管用没用上 */
-  if (!raw || typeof raw!=="object") return d;
-  const e = Object.assign(d, raw);
-  e.sections = (e.sections||[]).map((s,i)=>({
-    id: s.id || ("s"+(i+1)),
-    name: s.name || ("分区"+(i+1)),
-    t: Array.isArray(s.t)?s.t.slice():[],
-    g: Array.isArray(s.g)?s.g.slice():[],
-    bells: (s.bells||[]).map(normExamRow)
-  }));
-  /* 日期从「页面上一张全局日期表」搬到了「每个科目各带一个」。老存档里那些行没有
-     date，补的是**今天** —— 补默认值这件事在 normExamRow 里就做完了（上面那行 map
-     跑在前头，它认不出格式的日期一律退回 todayISO()），所以这儿没有第二道可补。
-     行上的日期在这一页里是明摆着的，「考试日期」那一格一点就能改。 */
-  delete e.dates; delete e.startDate; delete e.endDate; delete e.strategyId;
-  delete e.snapshot;             /* 旧模型：按快照还原。现在原件根本不动，不需要了 */
-  if (!Array.isArray(e.copies)) e.copies = [];
-  e.mute = Array.isArray(e.mute)?e.mute.slice()
-         : Array.isArray(e.muteGroups)?e.muteGroups.slice()   /* 旧字段名 */
-         : [];                                               /* 没存过就是没设，别替人挑 */
-  delete e.muteGroups;
+/* ══ 从服务器上把考试模式读回来 ═════════════════════════════════════
+   面板**自己不存这份配置**。打开面板、登录完的那一刻，照着服务器上真实摆着的
+   东西反解一遍：
+
+     · 分区 / 角色 / 科目 —— 考试铃声的名字，用 EXAM_SEP 分段（见 examBellSplit）
+     · 考试日期          —— 这条铃声挂的那条「考YYYY-MM-DD」周期（指定日期）
+     · 分区的执行区域    —— 那个分区里每条铃声自己的执行区域（都一样）
+     · 静音区域          —— ¤silence_zone 那条的执行区域
+     · 音量 / 音源       —— 开考铃和听力铃自己的 volume / medias
+
+   「考试模式开着」也是算出来的：服务器上还有 ¤temp 副本、或者 ¤exam_task 里还有
+   考试铃声。**存**出来的状态会跟服务器对不上（换台电脑打开就是另一个样，上一版
+   就是这么出的岔子），**算**出来的不会。
+
+   反解不出来的只有「人还没启用、正在编的那份」—— 它本来就不在服务器上，活在
+   这一次会话里；关掉面板就没了。 */
+async function readExamState(){
+  const e = defaultExam();
+  const listId = listIdByName(EXAM_LIST_NAME);
+  const copies = S.data.groups.filter(g=> isExamCopy(g) && Number(g.id)>0).length;
+  e.listId = listId;
+
+  let rows = [];
+  if (listId != null){
+    try{ rows = (await fetchBells(listId)).map(normBell); }catch(err){}
+  }
+  e.on = copies > 0 || rows.length > 0;
+  /* 服务器上一条考试铃声都没有 —— 手上那份留着：那要么是**人正在编、还没启用**
+     的一份，要么是刚「关闭考试模式」收下来的那份（两种都只活在这一次会话里）。
+     它不在服务器上，服务器没资格把它抹掉。
+     判「服务器上有没有考试」得看**铃声**，不能看列表在不在：关掉考试模式只把
+     ¤exam_task 清空停用，列表本身是一直留在那儿的，照着列表判等于每按一次
+     「重新拉取」就把人手上那份抹一遍。
+     登录那趟 S.exam 是 null，所以这里交出去的仍然是一张空表。 */
+  if (!rows.length) return S.exam || e;
+
+  /* 分区\n科目\n日期 → 同一个「科目 + 那一天」的几条铃声（开考 / 结束 / 听力）。
+     一个科目一天只写一行，同一个科目考两天就是两条 —— 名字撞了才会挂上那段
+     ¤时刻，所以分组得靠日期，不能靠名字。 */
+  const buckets = new Map();
+  const areaOf  = new Map();                    /* 分区名 → 它的执行区域 */
+  rows.forEach(b=>{
+    if (b.name === EXAM_SILENCE_NAME){          /* 静音区域借这条存着 */
+      const a = bellArea(b);
+      e.mute = a.g.concat(a.t);
+      return;
+    }
+    const p = examBellSplit(b.name);
+    if (!p) return;                             /* 认不出的（人手工加的）不理 */
+    if (!areaOf.has(p.sec)) areaOf.set(p.sec, bellArea(b));
+    const date = examBellDate(b);
+    const key  = p.sec + "\n" + p.subject + "\n" + date;
+    let bk = buckets.get(key);
+    if (!bk){ bk = {sec:p.sec, subject:p.subject, date:date, starts:[], ends:[], listens:[]}; buckets.set(key, bk); }
+    bk[p.role==="start" ? "starts" : p.role==="end" ? "ends" : "listens"].push(b);
+  });
+
+  const bySec = new Map();
+  const toSec = t => hmsToSec(hhmmToHMS(t) || "08:00:00");
+  buckets.forEach(bk=>{
+    /* 同一个科目同一天排了两场的：开考铃按时刻排序，结束铃按同样的顺序贴上去 */
+    bk.starts.sort((a,b)=> toSec(a.time) - toSec(b.time));
+    bk.ends.sort((a,b)=> toSec(a.time) - toSec(b.time));
+    const list = bk.starts.map((s,i)=>{
+      const en = bk.ends[i];
+      return {
+        date: bk.date, subject: bk.subject,
+        start: String(s.time||"").slice(0,5),
+        end:   en ? String(en.time||"").slice(0,5) : "",
+        media: s.mediaNames[0] || "", vol: Number(s.volume) || 70,
+        listen: "", listenVol: LISTEN_VOL_DEFAULT
+      };
+    });
+    /* 听力铃认领它那一行：开考后 listenDelay() 分钟那一条（写出去时就是这么算的） */
+    bk.listens.forEach(l=>{
+      const row = list.find(r=> toSec(r.start) + listenDelay()*60 === toSec(l.time))
+               || list.find(r=> !r.listen);
+      if (!row) return;
+      row.listen = l.mediaNames[0] || "";
+      row.listenVol = Number(l.volume) || LISTEN_VOL_DEFAULT;
+    });
+    if (!list.length) return;                   /* 只有结束铃／听力铃，凑不出一行 */
+    bySec.set(bk.sec, (bySec.get(bk.sec)||[]).concat(list));
+  });
+
+  const names = Array.from(bySec.keys()).sort((a,b)=> a.localeCompare(b, "zh-CN", {numeric:true}));
+  e.sections = names.map((n,i)=>{
+    const a = areaOf.get(n) || {t:[], g:[]};
+    const list = bySec.get(n).sort((x,y)=> (x.date+x.start).localeCompare(y.date+y.start));
+    return { id:"s"+(i+1), name:n, t:a.t.slice(), g:a.g.slice(), bells:list };
+  });
   if (!e.sections.length) e.sections = [blankSection(1)];
-  /* 整形过的这份放回配置里（后面的 saveExam 就地改它、再交给 cfgSave 落盘）。 */
-  if (S.cfg) S.cfg.exam = e;
   return e;
 }
-/* 改动这一份配置 = 改配置里那一项，然后走配置那套落盘 + 推送（本机那份当场写，
-   服务器上的 config.json 攒 5 秒一起推，见 05-config.js）—— 别的机器就是这么
-   拿到同一份考试配置的。**S.exam 和 S.cfg.exam 是同一个对象**（loadExam 里挂上去的），
-   所以这儿不用再搬一遍，直接叫 cfgSave。 */
-const saveExam = ()=>{ if (S.cfg) S.cfg.exam = S.exam; cfgSave("exam"); };
+
+/* 铃名 → {分区, 角色, 科目}。名字是「分区¤角色¤科目」，同列表内撞名的那几条
+   尾巴上还挂了一段 ¤时刻（见 examBellName），解析时只看前三段。 */
+function examBellSplit(name){
+  const p = String(name||"").split(EXAM_SEP);
+  if (p.length < 3) return null;
+  const role = (EXAM_ROLES.find(x=> x.label===p[1]) || {}).role;
+  return role ? {sec:p[0], role:role, subject:p[2]} : null;
+}
+/* 这条考试铃声考的是哪天：它挂的那条「指定日期」周期说了算（写出去时一天一条，
+   名字就是 stratNameOf(date)）。认不出来退回今天，和 blankExamRow 的路子一样。 */
+function examBellDate(b){
+  const s = S.data.strategies.find(x=>Number(x.id)===Number(b.strategyId));
+  if (!s || Number(s.time_type)!==3) return todayISO();
+  const d = (s.assign_dates||[])[0];
+  const t = String(d && d.dates!=null ? d.dates : (d||"")).slice(0,10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : todayISO();
+}
 const blankSection = n => ({ id:"s"+Date.now().toString(36)+n, name:"分区"+n, t:[], g:[], bells:[] });
 const examSection = id => S.exam.sections.find(s=>s.id===id);
 
@@ -194,31 +280,17 @@ function examRowBad(r){
   if (!r.end || hmsToSec(r.end) < hmsToSec(r.start)) bad.end = true;
   return bad;
 }
-/* 一行考试安排 = 考试日期 + 开考铃（考试铃）+ 结束铃（同一首）+ 可选的听力音频。
-   三个时刻各自是一条服务器铃声。不记 bellId —— 每次启用都是「清空重写」，
-   旧的 id 一律作废，留着只会误导。 */
-function normExamRow(b){
-  const m = b || {};
-  const media = m.media || "";
-  const vol = Number(m.vol); const lv = Number(m.listenVol);
-  return {
-    /* 认不出来的日期一律退回今天：以后面拿它去拼周期名、去比日期的，都是格式 */
-    date: /^\d{4}-\d{2}-\d{2}$/.test(String(m.date||"")) ? String(m.date) : todayISO(),
-    start: m.start!=null ? (m.start||"08:00") : ((m.time)||"08:00"),
-    end: m.end||"",
-    subject: m.subject!=null ? m.subject : (m.name||""),
-    media: media, vol: isFinite(vol)&&vol>0 ? vol : 70,
-    listen: m.listen||"",
-    /* 存档里没存过听力音量才落到 85。存过 70 的就是 70 —— 分不清「当年默认
-       填的」和「人特意调到 70」，就不替人改。 */
-    listenVol: isFinite(lv)&&lv>0 ? lv : LISTEN_VOL_DEFAULT
-  };
+/* 听力排在开考后几分钟，考试安排底下那个数字框说了算（默认 1）。广播系统要先把考试铃
+   放完、考场静下来，听力才起 —— 所以最小是 1 分钟：0 就和开考铃挤在同一时刻了。
+   框里空着、写了非数、或者被全选删掉的那一刻，一律按 1 走：这个数一路乘进时刻里，
+   NaN 写出去就是一条没有时刻的铃声。 */
+function listenDelay(){
+  const n = Math.round(Number(S.exam && S.exam.listenDelay));
+  return n >= 1 ? Math.min(n, 60) : 1;
 }
-/* 听力排在开考后 1 分钟：广播系统要先把考试铃放完、考场静下来，听力才起 */
-const LISTEN_DELAY = 1;
 function examRowTime(row, role){
   if (role==="end") return row.end;
-  if (role==="listen") return secToHMS(hmsToSec(hhmmToHMS(row.start)||"08:00:00") + LISTEN_DELAY*60).slice(0,5);
+  if (role==="listen") return secToHMS(hmsToSec(hhmmToHMS(row.start)||"08:00:00") + listenDelay()*60).slice(0,5);
   return row.start;
 }
 /* 这条安排要写几条铃声：开考必有，结束/听力填了才有 */
@@ -271,8 +343,7 @@ function trimForExam(area, sets){
    周期认不出的（id 找不到、time_type 1/2）不猜日期，交给时刻判。老那条兜底
    「认不出就算重合」在这儿同样成立：漏裁是考场里多响一声，比多裁一间教室轻。
 
-   时刻用的是报文 execute_time 减掉全局偏移之后的值（normBell 已经减过），
-   和面板上、铃声表里显示的是一回事。 */
+   时刻用的是报文 execute_time，和面板上、铃声表里显示的是一回事。 */
 function examSpans(){
   const out = [];
   S.exam.sections.forEach(sec=> (sec.bells||[]).forEach(r=>{
@@ -315,14 +386,15 @@ const examAreaUnion = ()=>{
 };
 
 /* ── 报文 ─────────────────────────────────────────────────────────── */
-/* 一条考试铃声的名字：分区 + 科目 + 开考/结束/听力。
-   同列表内铃名必须唯一，撞了就补上时刻。 */
+/* 一条考试铃声的名字：分区¤角色¤科目（见 EXAM_SEP）。
+   角色夹在中间，正好把前后两个自由文本隔开；科目放最后，它里面带空格也不怕。
+   同列表内铃名必须唯一，撞了就再挂一段 ¤时刻（第 4 段，解析时取前三段就丢掉）。 */
 function examBellName(section, row, role, taken){
   const subject = String(row.subject||"").trim() || "考试";
   const tail = (EXAM_ROLES.find(x=>x.role===role)||{}).label || role;
   const time = examRowTime(row, role);
-  let n = section.name+" "+subject+" "+tail;
-  if (taken.has(n)) n += " "+hm(time);
+  let n = section.name + EXAM_SEP + tail + EXAM_SEP + subject;
+  if (taken.has(n)) n += EXAM_SEP + hm(time);
   taken.add(n);
   return n;
 }
@@ -347,7 +419,7 @@ function examBellBody(section, row, role, name, listId, stratId){
     sound_source: { life_time: lifeTimeOf([media]), play_model: 0 },
     is_done: 1,
     timing_bells_mode: "1",
-    execute_time: offsetHMS(hhmmToHMS(time) || "08:00:00"),   /* ← 全局时间偏移 */
+    execute_time: hhmmToHMS(time) || "08:00:00",
     ...areaJunc(section.t, section.g),                        /* 带 id，见 00-core.js */
     ...mediaJunc([media], []),
     led_text: "", led_display_cfg_id: 1
@@ -374,6 +446,23 @@ function examRange(){
      退回今天就是在替人决定考试日期；给空的话写出去的报文一眼能看出不对。
      （日期是行上的默认值，正常走不到这儿。） */
   return d.length ? {start:d[0], end:d[d.length-1]} : {start:"", end:""};
+}
+/* 手上这一份配置里有没有**人动过手的**东西 —— 退出前拦那一道按它判
+   （见 90-boot.js 的 beforeunload）。
+   不能拿「有几个分区」当判据：默认那张表本来就摆着一个空分区（见 defaultExam）。
+   分区名不算数 —— 光改个名字、区域和科目一个没设，这份配置连「启用」那一关都过不去
+   （enableExam 要求既有执行区域又有考试安排），丢了也只是丢个名字。
+   加了一行却一个字没填的科目同理：subject / 音源 / 结束时间 / 听力四样全空，
+   等于没填（blankExamRow 的默认值就是全空）。
+   **只有没启用的那一份算**：启用之后整页是只读的（lockExam 把 .page-body 里的
+   控件全禁掉），页面上这份就是服务器上正在响的那份，刷新能原样读回来。 */
+function examHasContent(){
+  const e = S.exam;
+  if (!e || e.on) return false;
+  if ((e.mute||[]).length) return true;
+  return (e.sections||[]).some(s=>
+    (s.t && s.t.length) || (s.g && s.g.length) ||
+    (s.bells||[]).some(r=> r.subject || r.media || r.end || r.listen));
 }
 /* alsoLegacy：老版本只有一条不分日期的「考试日期（面板）」，全场共用。第一条
    日期就地把它**改名**用掉，不另开一条 —— 否则它会永远杵在厂商后台的周期列表里，
@@ -466,11 +555,6 @@ function ensureList(name, proto, extra){
       if (g){ g.id = real; delete g.is_tmp; }
       if (Number(S.groupId)===tmp){ S.groupId = real; LS.set("lastGroup", real); }
       if (Number(S.exam && S.exam.listId)===tmp) S.exam.listId = real;
-      (S.exam && S.exam.copies || []).forEach(c=>{
-        if (Number(c.copyId)===tmp) c.copyId = real;
-        if (Number(c.listId)===tmp) c.listId = real;
-      });
-      saveExam();
     }
   });
   return tmp;
@@ -505,7 +589,7 @@ async function queueClearList(gid, listName){
 async function queueDropList(gid, listName){
   if (!(Number(gid)>0)) return;
   /* 先从本地名单里摘掉，再去拉里面的铃声（下面那句是 await，中间会让人看见）。
-     不摘的话：调用方紧接着调 ensureList("全校周六_E") 找同名列表，
+     不摘的话：调用方紧接着调 ensureList("全校周六¤temp") 找同名列表，
      会命中这个**正在被删的**旧 id 并直接返回它 —— 于是不再建新列表，
      铃声全塞进一个几秒后就没了的列表里。 */
   S.data.groups = S.data.groups.filter(x=>Number(x.id)!==Number(gid));
@@ -544,7 +628,7 @@ function queueDropExamStrategies(){
   return victims.length;
 }
 
-/* ── 扫描所有正常列表，算出启用后 _E 副本里会被去掉什么（只读预览）── */
+/* ── 扫描所有正常列表，算出启用后 ¤temp 副本里会被去掉什么（只读预览）── */
 async function scanNormalLists(){
   const sets = examSets();
   const lists = S.data.groups.filter(g=>
@@ -559,7 +643,10 @@ async function scanNormalLists(){
     if (!isListEnabled(g)) continue;
     let rows = [];
     try{ rows = await fetchBells(g.id); }catch(e){ continue; }
-    rows.map(normBell).forEach(b=>{
+    /* 预览表里印的是铃声名字，所以走 grpAdoptRows 把分组名单摘掉、把 ¤分组名
+       尾巴切掉（见 35-groups.js）—— 不然表里会多出一条「¤grp¤…」的「铃声」，
+       别的名字后面也拖着「¤早间」。 */
+    grpAdoptRows(rows).bells.forEach(b=>{
       /* 先不看时刻：这条跟考场或静音区域沾不沾边 */
       if (!trimForExam(bellArea(b), sets).changed) return;
       const tr = examTrimOf(b, sets);
@@ -593,11 +680,10 @@ function adoptOldExamList(){
 function ensureExamList(){
   adoptOldExamList();
   const found = S.data.groups.find(g=>g.name===EXAM_LIST_NAME);
-  if (found){ S.exam.listId = Number(found.id); saveExam(); return Number(found.id); }
+  if (found){ S.exam.listId = Number(found.id); return Number(found.id); }
   const r = examRange();
   S.exam.listId = ensureList(EXAM_LIST_NAME,
     { start_date:r.start, end_date:r.end, is_year_repeat:0 });
-  saveExam();
   return S.exam.listId;
 }
 const examListId = ()=>{
@@ -623,7 +709,7 @@ function queueExamWindow(gid){
   });
 }
 
-/* ── 正常列表 → 「_E」副本 ─────────────────────────────────────────
+/* ── 正常列表 → 「¤temp」副本 ──────────────────────────────────────
    每个已启用的正常列表复制一份，闪避与裁剪只发生在副本里；原件只是停用。
    原件保持完好，是「关闭考试模式」能干脆收场的前提。 */
 async function queueExamCopies(examId){
@@ -644,6 +730,10 @@ async function queueExamCopies(examId){
       start_date:g.start_date, end_date:g.end_date, is_year_repeat:g.is_year_repeat });
 
     let trimmed = 0;
+    /* 这儿**故意**用原始的 map(normBell)，不走 grpAdoptRows（对比上面预览那一处）：
+       副本要的是原件的原样 —— 铃名尾巴上的 ¤分组名 和那条「分组名单」铃铛都跟着
+       一起复制过去，副本里那几条铃声的分组才认得出人。副本列表平时藏起来不给人看
+       （readExamState / railGroups），要显示它的地方（终端任务反查）自己会切尾巴。 */
     rows.map(normBell).forEach(b=>{
       /* 和预览（scanNormalLists）用同一条判据：只有考试那天真会响的铃声才裁 */
       const tr = examTrimOf(b, sets);
@@ -676,7 +766,7 @@ async function queueExamCopies(examId){
   return out;
 }
 
-/* ── 启用：清空重写 Exam + 建 _E 副本 ────────────────────────────── */
+/* ── 启用：清空重写 ¤exam_task + 建 ¤temp 副本 ───────────────────── */
 async function enableExam(){
   const secs = S.exam.sections.filter(s=>(s.t.length||s.g.length) && s.bells.length);
   if (!secs.length){ toast("请先为至少一个分区设置执行区域和考试安排","err"); return; }
@@ -708,7 +798,7 @@ async function enableExam(){
   const short = secs.reduce((n,sec)=> n + sec.bells.filter(r=> Object.keys(examRowBad(r)).length).length, 0);
   S.exam.checked = short > 0;
   if (short){
-    saveExam(); renderAll();
+    renderAll();
     toast(short+" 个科目设置有误，请检查标红参数","err");
     return;
   }
@@ -759,17 +849,61 @@ async function enableExam(){
       });
     });
 
-    /* 3) 正常列表：原件停用，另存 _E 副本，在副本里做闪避与裁剪 */
+    /* 2.5) 静音区域。它没有自己的字段，就借一条**不发声的计划**存着：
+       执行区域 = 静音区域，名字固定一个，上面那次清空会把上一场那条一起带走。
+
+       「没有铃声的计划」在厂商那儿存不下来 —— 那边两道硬要求（vendor 前端
+       「新建打铃任务」的 save 里写着）：type=1 的音乐播放**必须**挂至少一个音源
+       （「请把音源当前选中项填完」），而且每一条都**必须**挂一个时间属性。
+       所以这条得装成一条**正常的铃声**才存得住：音源借本场考试铃那个文件
+       （一定取得到，上面 examRowBad 已经把「哪一行没选铃声」拦下来了），
+       时间属性借本场第一条考试日期那条（关闭考试模式时它跟着一起收走）。
+
+       让它永远不响的是**另外两样**，不是「没周期」：is_done=0（停用，
+       也就是面板列表里那个开关的关），加上音量 0。就算哪天有人在厂商后台
+       把它打开，它也只是在考试第一天 00:00:00 静悄悄地跑一趟，什么都不放。 */
+    const muteArea = splitNames(S.exam.mute||[]);
+    if (muteArea.t.length || muteArea.g.length){
+      const muteMedia = secs[0].bells[0].media;
+      const muteDate  = examDates()[0];
+      const silenceBody = {
+        name: EXAM_SILENCE_NAME,
+        timing_bells_groups_id: gid,
+        timing_bells_strategy_id: examStrategyId(muteDate),
+        terminals_light_id: 1,
+        volume: 0, type: 1, priority: 50,
+        sound_source: { life_time: lifeTimeOf([muteMedia]), play_model: 0 },
+        is_done: 0,
+        timing_bells_mode: "1",
+        execute_time: "00:00:00",
+        ...areaJunc(muteArea.t, muteArea.g),
+        ...mediaJunc([muteMedia], []),
+        led_text: "", led_display_cfg_id: 1
+      };
+      queueOp({
+        kind:"create", method:"POST", url:"/timing-bells",
+        body: silenceBody, entity:"bell",
+        bodyFn: ()=>{
+          const lid = listIdByName(EXAM_LIST_NAME);
+          const sid = examStrategyId(muteDate);
+          const fix = {};
+          if (lid!=null) fix.timing_bells_groups_id = lid;
+          if (sid!=null) fix.timing_bells_strategy_id = Number(sid);
+          return Object.assign({}, silenceBody, fix);
+        },
+        bellId:"exam:silence",
+        label:"[考试] "+EXAM_SILENCE_NAME, sub:"静音区域"
+      });
+    }
+
+    /* 3) 正常列表：原件停用，另存 ¤temp 副本，在副本里做闪避与裁剪 */
     const copies = await queueExamCopies(gid);
 
     S.exam.on = true;
-    S.exam.copies = copies;
-    S.exam.lastRun = {at:new Date().toLocaleString("zh-CN"), exam:nExam, lists:copies.length};
-    saveExam();
     renderAll();
     /* toast 是**通知**，只讲用户在自己的面板上看得见的事：几天、几个分区、几条
        铃声、哪几个列表被暂停了。服务器上新建/改写的那几个列表叫什么名字、
-       「副本」「_E」这类说法，一律不进来。 */
+       考试模式在服务器上动了什么，一律不进来。 */
     toast("考试模式已排布完成：" + examDates().length + " 天、" + secs.length + " 个分区、共 " + nExam + " 条考试铃声"+
       (wiped ? "，已清除旧铃声 " + wiped + " 条" : "") +
       (copies.length ? "；" + copies.length + " 个铃声列表已暂停，考试期间由考试铃声接管" : "") +
@@ -780,28 +914,21 @@ async function enableExam(){
     const b2 = $("#exOn");
     /* b2 是**现在**查的，renderAll() 已经把按钮换成新造的那个了。这里只把忙碌态
        收回来 —— 按成功之后 renderExam 会把它重新画成「关闭考试模式」那一支，
-       按失败就还是「启用考试模式」。 */
-    if (b2){ b2.disabled = false; b2.textContent = "启用考试模式"; }
+       按失败就还是「提交并启用考试」（下面那枚按钮的字，两处要一起改）。 */
+    if (b2){ b2.disabled = false; b2.textContent = "提交并启用考试"; }
   }
 }
 
 /* ── 清空考试：只清面板上这一份设置，一个报文都不发 ──────────────────
    和「关闭考试模式」（clearExam）是两件事，别混：
-   - 这里动的是 S.exam，也就是面板自己存的那份配置（分区 / 科目 / 日期 / 静音
-     区域）加上「这一场建了哪些副本」这类本地记录。删掉存档再按「第一次打开」
-     那条路读一遍，清出来的就是全新面板的样子，不用在这儿抄一遍 defaultExam 的字段。
-   - 服务器上的东西（Exam 列表、考试铃声、_E 临时列表、常规列表的启用状态）
+   - 这里动的是 S.exam，也就是手上这一份安排（分区 / 科目 / 日期 / 静音区域）。
+     它没存在任何地方，清掉就是「回到刚打开面板的样子」。
+   - 服务器上的东西（¤exam_task 列表、考试铃声、¤temp 临时列表、常规列表的启用状态）
      **一律不碰** —— 那些归「启用 / 关闭考试模式」。 */
 function clearExamConfig(){
-  /* 配置里那一份要落成**一个值**，不能把 exam 这个键删掉：键不在那儿读起来是
-     「本机没有这一项」，对账那一步会把服务器上那份原样读回来 —— 等于没清。
-     写一份全新的默认，下面 saveExam 再把它的版本号抬上去：**抬的那一下才是
-     「我清空了」这句话本身**，别的机器就是照这个数认的。 */
-  if (S.cfg) S.cfg.exam = defaultExam();
-  S.exam = loadExam();          /* 读的就是刚放进去那份默认，出来的是整形过的它 */
-  saveExam();
+  S.exam = defaultExam();
   renderAll();
-  toast("面板上的考试设置已清空。服务器没有任何改动 —— 考试模式的开关走「启用 / 关闭考试模式」。","ok");
+  toast("已清空这份考试安排。服务器没有任何改动 —— 考试模式的开关走「启用 / 关闭考试模式」。","ok");
 }
 
 /* ── 关闭考试模式：删副本、开原件、清空考试铃声 ──────────────────── */
@@ -814,12 +941,6 @@ async function clearExam(){
     const orig = S.data.groups.find(x=> x.name===g.name.slice(0, -EXAM_SUFFIX.length) && Number(x.id)>0);
     if (orig) restore.add(orig);
   }
-  /* 这一场记下来的对应关系（万一有人把副本改过名），一并兜住 */
-  (S.exam.copies||[]).forEach(c=>{
-    const orig = S.data.groups.find(x=>Number(x.id)===Number(c.listId));
-    if (orig && !isExamCopy(orig)) restore.add(orig);
-  });
-
   let nRestore = 0;
   restore.forEach(orig=>{ if (!isListEnabled(orig)){ queueListToggle(orig, true); nRestore++; } });
 
@@ -835,8 +956,7 @@ async function clearExam(){
   const nStrat = queueDropExamStrategies();
 
   S.exam.on = false;
-  S.exam.copies = [];
-  saveExam(); renderAll();
+  renderAll();
   /* 同样只讲面板上看得见的结果。原来这句把「删了 3 个「_E」临时列表」「清空
      「Exam」里 9 条」都念出来了 —— 用户既没见过那两个名字，也做不了什么。 */
   toast("已关闭考试模式：" + (nRestore ? nRestore + " 个铃声列表已恢复启用，" : "") +
@@ -852,7 +972,7 @@ async function clearExam(){
 
    浮层学时分秒转轮那一套：挂在 #layers 下、position:fixed（不然会被
    .tbl-wrap 的 overflow 裁掉），按那一格定位，点外面 / Esc / 滚页面就收；
-   ≤640px 由 css 盖成一块居中模态。同时只开一个。 */
+   ≤980px 由 css 盖成一块居中模态。同时只开一个。 */
 let DP = null;
 function closeDatePicker(){
   if (!DP) return;
@@ -912,7 +1032,7 @@ function openSecName(sec){
       const ok = ()=>{
         const v = inp.value.trim();
         if (!v){ toast("分区名称不能为空","err"); return; }
-        sec.name = v; saveExam(); closeModal(mm.id); renderAll();
+        sec.name = v; closeModal(mm.id); renderAll();
       };
       inp.onkeydown = e => { if (e.key==="Enter") ok(); };
       f.innerHTML = '<span class="spacer"></span><button class="btn" id="secNmC">取消</button>'+
@@ -951,14 +1071,93 @@ function lockExam(el){
   if (pb) pb.classList.add("is-locked");
 }
 
+/* ══ 「所有科目都已结束」═════════════════════════════════════════════
+   考试模式开着的时候，页首那条「已锁定」说的是「现在改不了」。最后一场考试连结束铃
+   都响过之后，它其实在说一件**该收摊了**的事 —— 于是上面再压一条「已结束」，
+   告诉人现在可以关掉考试模式了（关掉 = 常规列表解锁、考试铃声和那些临时列表收走，
+   见 clearExam）。横幅不是警告，是「可以动手了」，所以走绿色，别照着 .pill-lock 抄颜色。
+
+   比的是「服务器现在几点」对「最后一场考试的结束时间」：
+     · 前者是 srvStamp()（登录时跟服务器对的那口钟，见 00-core.js）—— 本机钟可能
+       差着一两分钟（这台打铃服务器实测就慢着约一分钟），所以不能读 Date.now()；
+     · 后者就是人在这页上填的那个结束时间，直接比，不做任何加减 —— 报告得比
+       实际晚一点没关系，早一步就是把最后那记结束铃一起收走了。
+   两边都拼成定宽的 "YYYY-MM-DD HH:MM:SS" 再比，字典序就是时间序。 */
+function examLatestEnd(){
+  const e = S.exam;
+  if (!e || !Array.isArray(e.sections)) return "";
+  let last = "";
+  e.sections.forEach(s=> (s.bells||[]).forEach(r=>{
+    const end = hhmmToHMS(r.end);              /* 没填 / 认不出的那行跳过，不给它编一个时刻 */
+    if (!end) return;
+    const at = String(r.date||"").slice(0,10) + " " + end;
+    if (at > last) last = at;
+  }));
+  return last;
+}
+function examAllDone(){
+  const e = S.exam;
+  if (!e || !e.on) return false;               /* 考试模式没开着，就没有「收摊」这回事 */
+  const last = examLatestEnd();
+  if (!last) return false;                     /* 一条完整的考试安排都没有 —— 不猜 */
+  return srvStamp() >= last;
+}
+/* 和「已锁定」同一个壳（.panel.banner），只是边框和胶囊走绿色。
+   **自己不带上边距**：它和「已锁定」是一件事的两句（能关了 / 为什么之前改不了），
+   两条之间的距离由外面那个 .banner-group 的 gap 管（7px）—— 早先试过在这一条身上
+   写下边距，怎么写都没用：缝是 `.panel + .panel{margin-top:14px}` 加在**下面**那条
+   「已锁定」的上边距上的，跟这条的下边距是两回事（用户实测看出来的）。
+   带 id 是为了让下面 syncExamDone 能就地找到它 —— 这条横幅会**在不重画整页的
+   情况下**自己冒出来或者自己撤掉。 */
+function examDoneHTML(){
+  return '<div class="panel banner" id="exDone" style="border-color:var(--good)"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
+    '<span class="pill-done">已结束</span>'+
+    '<span style="font-size:13px"><b>所有科目都已结束</b>，可以关闭考试模式了</span>'+
+  '</div></div>';
+}
+/* 人可能就是停在这一页上等的：上一分钟还没结束，下一分钟结束了，横幅得自己出来。
+   **只动这一个节点，绝不整页重画** —— 这一页上全是输入框和日期选择器，重画一次
+   正在敲的那一格就换了人（光标和输入法都飞）。
+   锚点是「已锁定」那条横幅：它在就说明这一页正开着考试模式，横幅就贴在它上面
+   （它的父节点是那个 .banner-group，所以插进去就在组内、贴在同一条缝上）。 */
+function syncExamDone(){
+  const el = $("#main"); if (!el) return;
+  const host = el.querySelector(".lock-banner");
+  const node = el.querySelector("#exDone");
+  if (host && examAllDone()){
+    if (node) return;
+    const box = document.createElement("div");
+    box.innerHTML = examDoneHTML();
+    host.parentNode.insertBefore(box.firstChild, host);
+  } else if (node) node.remove();
+}
+/* 十秒看一眼。这一页上一次状态变化隔着一整天，问勤了没意义；问稀了，
+   横幅出来得比那一刻晚太多。两道闸：**登录过**、**页面在前台**
+   （挂在后台的标签页不跟着转）。 */
+const EXAM_DONE_POLL = 10000;
+setInterval(()=>{
+  if (S.view !== "app" || S.mode !== "exam") return;
+  if (document.visibilityState !== "visible") return;
+  syncExamDone();
+}, EXAM_DONE_POLL);
+
 function renderExam(){
   const el = $("#main"); if (!el) return;
-  el.classList.add("headfix");   /* 「考试模式」那一行钉住，下面整块（面板 + 分区 + 预览）自己滚 */
-  const e = S.exam;
-  /* e.on = 已经排布下去了，整页只读（见上面的 lockExam）。
+  /* 竖屏上点开的那份「改动预览」是**整页顶掉这一页**的（见 openExamPreview）。
+     窗口要是停在它上面被拉宽了 —— 没有 resize 监听，所以只能等下一次重画 ——
+     当场退回考试模式这一页，和「终端任务反查」同一个处理（见 70-view-more）。 */
+  if (S.dt.exPreview && !isNarrow()) S.dt.exPreview = false;
+  if (S.dt.exPreview) return renderExamPreviewFull(el);
+  el.classList.add("headfix");   /* 「考试模式」那一行钉住，下面整块（面板 + 分区）自己滚 */
+  /* S.exam 是**开工前就得有**的东西：刷新页面停在考试模式这一页时，第一帧会赶在
+     loadAll()（那儿才 S.exam = readExamState()）之前画，那一刻它是 null，下面读
+     e.sections 当场抛错 —— 那一下抛在 boot 里，整条启动链子都断了（探针不发、
+     数据不拉、推送不开，页面就卡在考试模式上）。所以在这儿补一手：先摆一张空表，
+     loadAll() 回来再换成照服务器读回来的那份。 */
+  const e = S.exam || (S.exam = defaultExam());
+  /* e.on = 已经排布下去了（服务器上真的有考试铃声在响），整页只读（见上面 lockExam）。
      注意别在这儿起个叫 on 的局部量 —— 函数末尾那个 "#exOn" 的引用已经叫 on 了。 */
   const union = examAreaUnion();
-  const nCopies = S.data.groups.filter(g=> isExamCopy(g) && Number(g.id)>0).length;
   const hasArea = e.sections.some(s=> s.t.length || s.g.length);
   /* 日期不用再拦：它现在是每个科目自带的，加一行就有一天（见 blankExamRow），
      唯一的空档是「有分区有科目但一个区域都没设」 */
@@ -970,26 +1169,49 @@ function renderExam(){
          那条黄色横幅第一句就是「考试配置已锁定」，说的是同一件事，
          而横幅还多交代了「怎么办」。一个状态在一屏里说两遍，就把标题那一行白占了。 */
       '<div style="min-width:0"><div class="title-row"><h2 class="serif">考试模式</h2>'+
+        /* 标题右边这句副标题是**常驻**的（用户要的）：手上这一份考试配置（分区 /
+           科目 / 日期 / 静音区域）在点「提交并启用考试」之前，服务器上没有、本机也
+           没存，刷新一下或者关掉标签页就没了。90-boot 里那道 beforeunload 说的是
+           同一件事，可它得等人真去按刷新那一下，而且浏览器只让说它自己那句
+           「更改可能不会保存」；这句是我们自己的字，说得准，人也正在填的时候就
+           看得见。窄屏上它落到第二行、跟标题左对齐（这一行的两行排法见 css 里
+           `.sec-head:has(> div > .title-row > .hint)` 那一组）。 */
+        '<span class="hint">刷新或关闭页面将丢失未提交的考试配置</span>'+
       '</div></div>'+
       /* 这两个按钮管的是**两件完全不同的事**，名字上就把它分开：
-         - 「清空考试」只清面板上这一份设置（S.exam：分区、科目、日期、静音区域，
-           以及本地记着的副本对应关系），一个报文都不发。
-         - 「启用 / 关闭考试模式」才是对服务器动手的那一对：启用 = 把考试铃声和
-           _E 副本排下去、把常规列表停用；关闭 = 删掉考试铃声和 _E 临时列表、
+         - 「清空考试」只清手上这一份安排（S.exam：分区、科目、日期、静音区域），
+           一个报文都不发。**它没存在任何地方**，清掉只是「回到刚打开面板的样子」。
+         - 「提交并启用考试 / 关闭考试模式」才是对服务器动手的那一对——
+           左边那枚的字面上就写着**这一下会提交**（它干的事是把手上这份配置排下去，
+           不是先存起来再另点一下「启用」）；启用 = 把考试铃声和
+           ¤temp 副本排下去、把常规列表停用；关闭 = 删掉考试铃声和 ¤temp 临时列表、
            把常规列表解锁。删列表这件事**只归它**，别塞给「清空考试」。
          所以考试模式开着时「清空考试」是灰的：那一刻页面上这份就是服务器上正在响的
-         那份，清掉只会让两边对不上。 */
-      /* 这一排按钮上的字是**给人看的**，所以「还剩 3 个 _E 列表」那种写法不能要 ——
-         _E 是服务器上的后缀，用户没见过也不该去认。残留这件事只体现在
-         「考试模式已经没开了，这个按钮却还在」和它那句 hover 提示上。 */
+         那份，清掉只会让两边对不上。
+
+         **只有两个按钮**。以前这里是三个：`e.on` 是从本机那份配置里读的，配置和
+         服务器对不上（换台电脑打开读到的是另一个文件）就会出现「考试模式没开、
+         服务器上却还摆着那一场」——于是「启用」和「关闭」并排摆着，点哪个都是猜。
+         现在 e.on 是照服务器上有没考试铃声算出来的（readExamState），那种局面
+         不可能出现，那个兜底按钮也就跟着没了。
+
+         「改动预览」那枚眼镜也归这一组了（用户要的：挪到「清空考试」左边）。它原来
+         挨着标题站，混在「这一页自己的动作」里 —— 可它说的是**整份配置**排下去会
+         带来什么改动，是页面级的一件事，跟「清空考试」同一档。
+         **考试模式开着的时候它照样点得动**（用户要的）：lockExam 冻的是 `.page-body`
+         里的控件，这一组在 .sec-head 里，本来就不挨冻；何况「会闪避哪些铃声」正是
+         排布下去之后最该看一眼的那件事。
+         它是**隐形键**（btn-quiet，用户要的）：旁边那两枚是这一页的正事，这枚眼镜
+         是「看一眼」的旁支，不该跟它们长得一样重（`--fg-2` 的图标、悬停才浮出一层
+         底）。悬停那层底是 --surface-2，而这一组踩在页面的 --bg 上，看得见。 */
       '<div class="acts">'+
+        '<button class="btn btn-icon btn-quiet" id="exPreview" title="改动预览：看看哪些铃声会在考试期间自动闪避" aria-label="改动预览">'+ICON.eye+'</button>'+
         '<button class="btn" id="exClear"'+
           (e.on?' disabled title="考试模式已启用 —— 要先「关闭考试模式」，这一份设置才轮得到清"':"")+
           '>清空考试</button>'+
         (e.on
           ? '<button class="btn btn-danger" id="exOff">关闭考试模式</button>'
-          : '<button class="btn btn-primary" id="exOn"'+(why?' disabled title="'+esc(why)+'"':"")+'>启用考试模式</button>'+
-            (nCopies?'<button class="btn btn-danger" id="exOff" title="上一次考试模式还没收干净，点这里收拾掉">关闭考试模式</button>':""))+
+          : '<button class="btn btn-primary" id="exOn"'+(why?' disabled title="'+esc(why)+'"':"")+'>提交并启用考试</button>')+
       '</div>'+
     '</div>'+
 
@@ -998,16 +1220,26 @@ function renderExam(){
        opacity:1;filter:none 只能盖住它自己那一层，盖不住父节点压下来的。
        拎出来既是唯一能让它「不灰」的办法，也顺带把它的地位摆正了 ——
        它是这一页的告示，不是页面里的一块内容。 */
-    (e.on?'<div class="panel lock-banner" style="border-color:var(--warn);margin-bottom:14px"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
+    /* 「已结束」压在「已锁定」**上面**：两条一起说的是「考试模式还开着（所以改不了），
+       可最后一场也考完了（所以可以关了）」—— 先听见「能关了」，再读「为什么之前改不了」。
+       上面那条只在考场全考完时才有，见 examAllDone。
+       两条包在 .banner-group 里当一条页首元素（缝 7px、上下各 14px，见 css）——
+       不包的话两条之间那道 14px 压不掉，因为它是 `.panel + .panel` 给的。 */
+    (e.on? '<div class="banner-group">'+
+      (examAllDone()? examDoneHTML() : "")+
+      '<div class="panel banner lock-banner" style="border-color:var(--warn)"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
       '<span class="pill-lock">已锁定</span>'+
       '<span style="font-size:13px"><b>考试配置已锁定</b>，关闭考试模式后可修改</span>'+
-    '</div></div>':"")+
+    '</div></div></div>':"")+
 
     '<div class="page-body">'+
 
     '<div class="panel">'+
       '<div class="panel-head"><h3>考试区域</h3>'+
-        '<span class="sub">全部分区的并集：'+union.t.length+' 点位 / '+union.g.length+' 分组</span>'+
+        /* 「全部分区的并集：N 点位 / M 分组」改成现在这句（用户定的）：说的还是
+           同一件事（下面那排胶囊里到底有多少个名字），只是不再用「点位」这个词 ——
+           面板上别处一律叫「终端」。 */
+        '<span class="sub">共 '+union.t.length+' 个终端 + '+union.g.length+' 个分组</span>'+
       '</div>'+
       '<div class="panel-body"><div class="area-chips">'+
         (union.t.length+union.g.length? areaChips(union) : '<span class="hint">还没有设置任何考试分区</span>')+
@@ -1016,12 +1248,16 @@ function renderExam(){
 
     '<div class="panel">'+
       '<div class="panel-head"><h3>静音区域</h3>'+
-        '<span class="sub">每场考试的时段里都不打铃</span>'+
+        '<span class="sub">在考试过程中始终保持静音的区域</span>'+
         '<span class="acts"><button class="btn btn-sm" id="exMute">编辑区域</button></span>'+
       '</div>'+
       '<div class="panel-body"><div class="area-chips">'+
-        ((e.mute||[]).length? areaChips(splitNames(e.mute))
-          : '<span class="hint">没选 —— 考试时段里不额外禁掉哪个区域</span>')+
+        /* 胶囊自带 ×，点整颗就摘掉那个名字（用户定的）—— 要拿掉一个点位，不该
+           为了它把「编辑区域」整个再点开翻一遍。锁定时**不给 ×**：`e.on` 那一档
+           整页只读，lockExam 只冻得住 `.page-body button`，而胶囊本身不是按钮，
+           点得动；所以连 × 都不画，只读就是只读。 */
+        ((e.mute||[]).length? areaChips(splitNames(e.mute), !e.on)
+          : '<span class="hint">暂未选择任何静音区域</span>')+
       '</div></div>'+
     '</div>'+
 
@@ -1032,27 +1268,21 @@ function renderExam(){
 
     e.sections.map(s=> examSectionHTML(s)).join("")+
 
-    '<div class="panel" style="margin-top:16px">'+
-      '<div class="panel-head"><h3>改动预览</h3>'+
-        '<span class="acts"><button class="btn btn-sm" id="exPreview">计算改动</button></span>'+
-      '</div>'+
-      '<div class="panel-body" id="exImpact">'+
-        '<div class="hint">检查并预览所有铃声的闪避情况</div>'+
-      '</div>'+
-    '</div>'+
-
     '</div>';   /* /.page-body */
 
   el.querySelector("#exAddSec").onclick = ()=>{
     S.exam.sections.push(blankSection(S.exam.sections.length+1));
-    saveExam(); renderAll();
+    renderAll();
   };
   const on = el.querySelector("#exOn");   if (on)  on.onclick = enableExam;
+  /* 「关闭考试模式」本来就有这一问（标题「关闭考试模式」），正文改成把两件事一起
+     说出来（用户定的）：它不只是关掉那个开关，还会把手上这份考试配置一起清掉
+     —— 面板不存配置，清掉就真没了。确认键照旧是红的（它删服务器上的副本）。 */
   const off= el.querySelector("#exOff");  if (off) off.onclick = ()=> openConfirm("关闭考试模式",
-    "是否要关闭考试模式？",
+    "确认要关闭考试模式并清空当前考试配置吗？",
     clearExam, "关闭考试模式", true);
-  /* 「清空考试」不写服务器，但它会把这一页上填的东西（分区、科目、日期、静音区域）
-     连同本地那份副本记录一起抹掉，所以照样要问一句。确认键是**主色**不是红色 ——
+  /* 「清空考试」不写服务器，只清手上这一份 —— 可面板不存配置，这一份就是唯一
+     一份，清掉就真没了，所以照样要问一句。确认键是**主色**不是红色 ——
      它没删服务器上的任何东西。
      正文只问一句「是否清空当前考试配置？」（用户定的）：原来那两句话想解释
      「这个不碰服务器、要撤销请用另一个按钮」，可它俩旁边就摆着「关闭考试模式」，
@@ -1063,9 +1293,32 @@ function renderExam(){
     clearExamConfig, "清空", false);
   el.querySelector("#exMute").onclick = ()=>{
     S.dt.area = splitNames(S.exam.mute||[]);
-    openAreaEditor("pick", null, area=>{ S.exam.mute = area.g.concat(area.t); saveExam(); renderAll(); });
+    openAreaEditor("pick", null, area=>{ S.exam.mute = area.g.concat(area.t); renderAll(); });
   };
-  el.querySelector("#exPreview").onclick = runExamPreview;
+  /* 静音区域那几颗胶囊上的一下：摘掉点中的那个名字。
+     `mute` 是一串**平的名字**（点位和分组混在一起，见 splitNames），所以按名字直接
+     过滤就够，不用管它是哪一路 —— 回复里那个 k 这儿用不上。
+     挂在**面板**上而不是那个 .area-chips 上：mountAreaChips 只在盒子里找
+     [data-rm]，多包一层无妨，面板这一块里也只有这一处有胶囊。 */
+  const mutePanel = el.querySelector("#exMute").closest(".panel");
+  if (mutePanel) mountAreaChips(mutePanel, (k, n)=>{
+    S.exam.mute = (S.exam.mute||[]).filter(x=> x!==n);
+    renderAll();
+  });
+  /* 听力延迟那个数字框：改了**不重画** —— 重画会把焦点从这个框上打掉，人正往里
+     敲数字呢（和上面科目那一格同一个道理）。它不影响页面上任何显示，存下值就够了，
+     真正读它的是「启用考试模式」那一刻的 examRowTime。
+     锁定期间这个框是 disabled 的 —— 那会儿铃声已经按老数字排好了，改它也不会
+     回头去动服务器上的东西，不如不给改（要改就关掉考试模式重来）。 */
+  const ld = el.querySelector("#exListenDelay");
+  if (ld){
+    ld.oninput  = ()=> { S.exam.listenDelay = ld.value; };
+    /* 松手（离开这个框）才重画：分区不止一个的时候底下这句是**每个分区各一份**，
+       它们共用同一个数 —— 敲的时候不重画，是怕把焦点打掉；松开之后重画一次，
+       另外那几个框就跟上了。顺带把越界的值收回来（写了 90，框里自己变回 60）。 */
+    ld.onchange = ()=> renderAll();
+  }
+  el.querySelector("#exPreview").onclick = openExamPreview;
 
   // 分区卡片的事件
   $$("[data-sec]", el).forEach(card=>{
@@ -1074,7 +1327,7 @@ function renderExam(){
     q("[data-act=secName]").onclick = ()=> openSecName(sec);
     q("[data-act=area]").onclick = ()=>{
       S.dt.area = {t:sec.t.slice(), g:sec.g.slice()};
-      openAreaEditor("pick", null, area=>{ sec.t = area.t; sec.g = area.g; saveExam(); renderAll(); });
+      openAreaEditor("pick", null, area=>{ sec.t = area.t; sec.g = area.g; renderAll(); });
     };
     /* 最后一枚按钮是「重置」不是「删除」—— 面板得留着至少一个分区当容器。
        重置**保留这个分区的 id**：id 是 DOM 上 data-sec 的锚，换掉它以后下面几处
@@ -1088,13 +1341,24 @@ function renderExam(){
         "默认分区无法删除，是否重置此分区？",
         ()=>{ const d = blankSection(1);
               sec.name = d.name; sec.t = d.t; sec.g = d.g; sec.bells = d.bells;
-              saveExam(); renderAll(); }, "重置", true);
+              renderAll(); }, "重置", true);
     }
     const delBtn = q("[data-act=delsec]");
+    /* 正文只问一句（用户定的）。原来那句是「只从面板里删掉这个分区的设置；已经提交到
+       服务器的考试铃声要等停用时才会停」—— 标题里已经写着删的是哪个分区，
+       「面板上删 ≠ 服务器上停」这层意思，页首的横幅和「启用 / 关闭考试模式」
+       那一对按钮各自都在说，不必挤进这一问里。 */
     if (delBtn) delBtn.onclick = ()=> openConfirm("删除分区「"+sec.name+"」",
-      "只从面板里删掉这个分区的设置；已经提交到服务器的考试铃声要等停用时才会停。",
-      ()=>{ S.exam.sections = S.exam.sections.filter(x=>x.id!==sec.id); saveExam(); renderAll(); }, "删除", true);
-    q("[data-act=addbell]").onclick = ()=>{ sec.bells.push(blankExamRow()); saveExam(); renderAll(); };
+      "确认要删除此分区吗？",
+      ()=>{ S.exam.sections = S.exam.sections.filter(x=>x.id!==sec.id); renderAll(); }, "删除", true);
+    q("[data-act=addbell]").onclick = ()=>{ sec.bells.push(blankExamRow()); renderAll(); };
+    /* 区域胶囊上的一下：把点中的那个名字从**这一块**的区域里摘掉。
+       点位和分组分在两个数组里（sec.t / sec.g），所以这儿得看 k。 */
+    mountAreaChips(card, (k, n)=>{
+      if (k==="g") sec.g = sec.g.filter(x=> x!==n);
+      else         sec.t = sec.t.filter(x=> x!==n);
+      renderAll();
+    });
   });
   $$("[data-sec] [data-row]", el).forEach(tr=>{
     const sec = examSection(tr.closest("[data-sec]").dataset.sec);
@@ -1109,14 +1373,14 @@ function renderExam(){
     q("[data-f=start]").onchange  = ev=>{
       const v = parseQuickTime(ev.target.value);
       if (!v) return;
-      row.start = v; saveExam(); renderAll();
+      row.start = v; renderAll();
     };
     /* 结束铃是这一页唯一允许留空的时间框：清空 = 不写结束铃 */
     q("[data-f=end]").onchange    = ev=>{
       const raw = String(ev.target.value==null?"":ev.target.value).trim();
       const v = raw ? parseQuickTime(raw) : "";
       if (v===null) return;
-      row.end = v; saveExam(); renderAll();
+      row.end = v; renderAll();
     };
     wireQuickTime(q("[data-f=start]"));
     wireQuickTime(q("[data-f=end]"), {emptyOK:true});
@@ -1124,7 +1388,7 @@ function renderExam(){
        选完再点一次那个框 = 收起（openDatePicker 自己判）。 */
     q("[data-f=date]").onclick = ev=>{
       openDatePicker(ev.currentTarget, row.date, day=>{
-        row.date = day; saveExam();
+        row.date = day;
         /* 已经在考了的话，这一天的周期和列表窗口得跟着挪。正常走不到 —— 排布下去
            之后整页只读（lockExam 把 .page-body 里的 button 全 disable 了，这一格
            点不开），这是给「改了锁定范围」留的保险。 */
@@ -1133,21 +1397,21 @@ function renderExam(){
       });
     };
     q("[data-f=subject]").oninput = ev=>{
-      row.subject = ev.target.value; saveExam();
+      row.subject = ev.target.value;
       /* 红是照着缺格挂的，重画才会消失 —— 可这个框不能边打边重画（焦点会掉到地上）。
          所以填够字了就地把它摘掉，人打着字就看着红圈没了。 */
       const cell = ev.target.closest("td");
       if (cell && !examRowBad(row).subject) cell.classList.remove("is-err");
     };
-    /* 考试铃声：点开正经的铃音选择器（预设 + 音频文件，没有「媒体库」——
+    /* 考试铃声：点开音源选择器（只列音频文件，没有「媒体库」——
        这一格只装得下一个文件名）。 */
     q("[data-f=mediaPick]").onclick = ()=>
-      pickOneMedia("选择考试铃声", m=>{ row.media = m; saveExam(); renderAll(); }, row.media,
-        {noDir:true, sub:"从预设或音频文件里挑一个铃声"});
-    q("[data-f=vol]").onchange    = ev=>{ row.vol = Number(ev.target.value)||70; saveExam(); };
-    q("[data-f=listenPick]").onclick = ()=>{ pickOneMedia("选择听力音频", m=>{ row.listen = m; saveExam(); renderAll(); }, row.listen); };
-    q("[data-f=listenVol]").onchange = ev=>{ row.listenVol = Number(ev.target.value)||LISTEN_VOL_DEFAULT; saveExam(); };
-    q("[data-f=del]").onclick     = ()=>{ sec.bells.splice(sec.bells.indexOf(row),1); saveExam(); renderAll(); };
+      pickOneMedia("选择考试铃声", m=>{ row.media = m; renderAll(); }, row.media,
+        {sub:"从媒体库的音频文件里挑一个铃声"});
+    q("[data-f=vol]").onchange    = ev=>{ row.vol = Number(ev.target.value)||70; };
+    q("[data-f=listenPick]").onclick = ()=>{ pickOneMedia("选择听力音频", m=>{ row.listen = m; renderAll(); }, row.listen); };
+    q("[data-f=listenVol]").onchange = ev=>{ row.listenVol = Number(ev.target.value)||LISTEN_VOL_DEFAULT; };
+    q("[data-f=del]").onclick     = ()=>{ sec.bells.splice(sec.bells.indexOf(row),1); renderAll(); };
   });
 
   /* 事件都接完了再冻 —— 顺序上反过来也一样（disabled 的控件不派发 click），
@@ -1155,12 +1419,12 @@ function renderExam(){
   if (e.on) lockExam(el);
 }
 
-/* 二级：从媒体库里挑一个铃音文件。预设、考试铃声、听力音频都走这里。 */
+/* 二级：从媒体库里挑一个音源文件。考试铃声、听力音频都走这里。 */
 function pickOneMedia(title, cb, cur, opts){
   /* cur 是这一行当前选的那个文件：不带上它，再点一次伪下拉就会看到
      「一个都没选」，明明刚选过。带上之后选择器里就是当前这一项。 */
   openMediaPicker(cur?[cur]:[], [], r => cb((r && r.media[0]) || ""),
-    Object.assign({filesOnly:true, title:title, sub:"从服务器的媒体库里挑一个铃音文件"}, opts));
+    Object.assign({filesOnly:true, title:title, sub:"从服务器的媒体库里挑一个音源文件"}, opts));
 }
 
 function examSectionHTML(s){
@@ -1174,10 +1438,18 @@ function examSectionHTML(s){
        写死在那个公共函数里，从外面加不上去。 */
     const td = k => '<td'+(bad[k]?' class="is-err"':'')+' ';
     return '<tr data-row="'+ri+'">'+
-      /* 考试日期打头：这一行「哪天考」比「几点考」还粗一层，读的时候该先落到眼睛上；
-         竖屏上也靠它把这一场单独起一行（见 css 末尾 nth-child 那份表）。
-         它是个**按钮**不是输入框：日期是点出来的，让人手敲 2026-10-14 只会敲错。
-         .select-btn 就是「长得像框、但只能点」的那套（听力音频也用同一套）。
+      /* 考试科目打头（用户定的：横屏第一列、竖屏第一行）。这一行是「哪个科目」，
+         比「哪天考」「几点考」都粗一层，读的时候该先落到眼睛上。
+         这一格 225px（原来是 150px，用户要的 1.5 倍）——科目名是这一行里
+         唯一**手打**的东西，其它格都是点出来的。「道德与法治」六个字在 13px 下
+         约 78px，原来那个框刨掉内边距只剩 124px，打个长科目名一眼看不全。
+         这一格和右边两格（考试铃声 / 听力音频）是整张表**仅有的三格可以让位**的：
+         它们的落脚点是「窄了有省略号」，别人不是。窗口不够宽时先缩它们，
+         缩到各自的底线（见 css 里 min-width 那段）才轮到 .tbl-wrap 横向滚。 */
+      td("subject")+'style="width:225px" data-lab="考试科目"><input class="input" style="padding:4px 8px" data-f="subject" value="'+esc(r.subject||"")+'" placeholder="如 语文"></td>'+
+      /* 考试日期第二格。它是个**按钮**不是输入框：日期是点出来的，让人手敲
+         2026-10-14 只会敲错。.select-btn 就是「长得像框、但只能点」的那套
+         （听力音频也用同一套）。
          格宽 148px 比旁边两个时刻格（132px）多 16px：旁边那两格是把「▾」**绝对定位
          压在框里**（.t-in 自己留 26px 右内边距），这一格是 flex，「▾」和日期各占一份
          真宽度 —— 132px 刨下来只够 70px，而「2026-10-14」十个等宽字符在 13px 下约
@@ -1194,7 +1466,7 @@ function examSectionHTML(s){
          的可见宽度是 132-24-2-8-26 = 72px。八个等宽字符在 13px 等宽字体下约 62px ——
          刚好放得下，还剩一点余量。原来写的是 108px，算下来只剩 48px，秒那两位就被
          那枚「▾」压住看不见了。 */
-      /* data-lab 是**竖屏那一格的表头**：≤640px 时整张表的 <thead> 被收掉、这场考试
+      /* data-lab 是**竖屏那一格的表头**：≤980px 时整张表的 <thead> 被收掉、这场考试
          改成两块 flex 行（见 css/app.css 末尾），表格列头跟着没了，一屏下拉框和
          输入框就没了名字。标签由 CSS 用 ::before 画在控件上方，宽屏上这条规则不生效，
          真正管事的还是 <thead>。宽屏那份列头和这里一一对应，改一个记得改另一个。 */
@@ -1203,23 +1475,16 @@ function examSectionHTML(s){
          一眼看出「这儿是空的」，不是一个已经填好的上午八点。启用考试模式前这一格
          必须填上，而且不能早于开考时间（见 examRowBad）。 */
       td("end")+'style="width:132px" data-lab="结束时间">'+quickTimeHTML('data-f="end" style="padding:4px 26px 4px 8px" title="这场考试的结束时间，不能早于开考时间"', r.end, "00:00:00")+'</td>'+
-      /* 科目这一格 225px（原来是 150px，用户要的 1.5 倍）——科目名是这一行里
-         唯一**手打**的东西，其它格都是点出来的。「道德与法治」六个字在 13px 下
-         约 78px，原来那个框刨掉内边距只剩 124px，打个长科目名一眼看不全。
-         这一格和右边两格（考试铃声 / 听力音频）是整张表**仅有的三格可以让位**的：
-         它们的落脚点是「窄了有省略号」，别人不是。窗口不够宽时先缩它们，
-         缩到各自的底线（见 css 里 min-width 那段）才轮到 .tbl-wrap 横向滚。 */
-      td("subject")+'style="width:225px" data-lab="考试科目"><input class="input" style="padding:4px 8px" data-f="subject" value="'+esc(r.subject||"")+'" placeholder="如 语文"></td>'+
       /* 考试铃声和右边那格听力音频一个样子：长得像下拉，点下去开选择器。以前它是
-         个真的 <select>，只列预设 + 「自定义…」—— 预设现在全是用户自己加的，一条
-         都没有时那个下拉里就只剩个空壳。改成伪下拉之后走的是正经的铃音选择器
-         （预设 + 音频文件两个页签，没有「媒体库」）。 */
+         个真的 <select>，只列预设 + 「自定义…」；预设有过一版是面板自带的，后来
+         改成全是用户自己加的，一条都没有时那个下拉里就只剩个空壳。现在直接开
+         音频文件列表。 */
       td("media")+'style="width:150px" data-lab="考试铃声"><button class="select-btn" type="button" data-f="mediaPick" title="'+esc(r.media||"这场考试还没有选铃声")+'">'+
         '<span class="v'+(r.media?"":" ph")+'">'+esc(r.media||"无")+'</span>'+
         '<span class="chev">'+ICON.chevD+'</span></button></td>'+
       '<td style="width:80px" data-lab="铃声音量"><input class="input mono" type="number" min="0" max="100" style="padding:4px 8px" data-f="vol" value="'+Number(r.vol||70)+'"></td>'+
-      /* 听力音频：长得像下拉，点下去直接开选择器。它没有「几个预设」可选 ——
-         只有「放哪一首」和「不放」，所以不用先选一个再展开。空 = 不放听力。 */
+      /* 听力音频：长得像下拉，点下去直接开选择器。它没有「先挑一首再展开」那一步 ——
+         只有「放哪一首」和「不放」。空 = 不放听力。 */
       '<td style="width:150px" data-lab="听力音频"><button class="select-btn" type="button" data-f="listenPick" title="'+esc(r.listen||"这场考试不放听力音频")+'">'+
         '<span class="v'+(r.listen?"":" ph")+'">'+esc(r.listen||"无")+'</span>'+
         '<span class="chev">'+ICON.chevD+'</span></button></td>'+
@@ -1249,58 +1514,143 @@ function examSectionHTML(s){
             '<button class="btn btn-icon btn-danger" data-act="delsec" title="删除这个分区">'+ICON.del+'</button>')+
         '</span>'+
       '</span>'+
-      '<span class="sub">'+(s.t.length+s.g.length)+' 个区域 · '+s.bells.length+' 个科目</span>'+
+      /* 这一行后面原来还挂着一句「N 个区域 · M 个科目」（用户要的：直接去掉）——
+         两个数一个都不缺地方看：区域就是紧底下那排胶囊，几条一眼数得出来；
+         科目的条数在同一张卡片的「考试安排」那一行上（那儿写「N 科」）。
+         去掉之后「编辑区域」照样靠右 —— 它是自己那条 .panel-head .acts 的
+         margin-left:auto 顶过去的，不是那句 .sub 撑的。 */
       '<span class="acts">'+
         '<button class="btn btn-sm" data-act="area">编辑区域</button>'+
       '</span>'+
     '</div>'+
     '<div class="panel-body"><div class="area-chips">'+
-      ((s.t.length+s.g.length)? areaChips({t:s.t,g:s.g}) : '<span class="hint">还没有选区域 — 这个分区不会响</span>')+
+      /* 和「静音区域」那一条同一个道理（见那一段的注释）：胶囊自带 ×、点整颗就摘掉。
+         锁定时不给 —— 这里只认 `S.exam.on`，和 lockExam 同一个口径。 */
+      ((s.t.length+s.g.length)? areaChips({t:s.t,g:s.g}, !S.exam.on) : '<span class="hint">还没有选区域 — 这个分区不会响</span>')+
     '</div></div>'+
     '<div class="panel-head" style="border-top:1px solid var(--border)">'+
-      '<h3>考试</h3>'+
+      '<h3>考试安排</h3>'+
       '<span class="sub">'+s.bells.length+' 科</span>'+
       '<span class="acts"><button class="btn btn-sm" data-act="addbell">'+ICON.plus+' 添加考试</button></span>'+
     '</div>'+
     (s.bells.length?
-      /* tbl-exam 这个类只给竖屏用：≤640px 时这张表不再是表，改成一场考试一块、
-         两行的网格（见 css/app.css 末尾）。 */
+      /* tbl-exam 这个类只给竖屏用：≤980px 时这张表不再是表，改成一场考试一块、
+         三行的网格（见 css/app.css 末尾）。 */
       '<div class="tbl-wrap"><table class="tbl tbl-exam"><thead><tr>'+
-        '<th style="width:148px">考试日期</th>'+
+        '<th style="width:225px">考试科目</th>'+
         /* 这张 <thead> 和上面每一行 <td> 的 data-lab 一一对应，改一个记得改另一个。
+           **顺序也是**：科目前在头一格（横屏第一列）。竖屏那份排法不认列号，
+           认的是 data-lab（见 css 末尾），所以那儿不用跟着数格子。
            原来「考试科目」和「考试铃声」中间还有一格**没写宽度的空列**，
            专门吃剩下的宽度 —— 用户说那截空白不要了，删了。 */
-        '<th style="width:132px">开考时间</th><th style="width:132px">结束时间</th><th style="width:225px">考试科目</th>'+
+        '<th style="width:148px">考试日期</th>'+
+        '<th style="width:132px">开考时间</th><th style="width:132px">结束时间</th>'+
         '<th style="width:150px">考试铃声</th><th style="width:80px">铃声音量</th>'+
         '<th style="width:150px">听力音频</th><th style="width:80px">听力音量</th>'+
         '<th style="width:36px"></th>'+
       '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
-      '<div class="panel-body hint" style="border-top:1px solid var(--border)">'+
-        '听力任务会在考试开始 '+LISTEN_DELAY+' 分钟后开始播放'+
+      /* 底下这句里那个数是个真的输入框（默认 1）：它说了算的是「启用」那一刻
+         给听力铃算时刻时加几分钟（见 examRowTime）。挤在 12px 的句子里，所以
+         字号跟着句子走、内边距收到 2px，宽度够放两位数和它自己的上下箭头。
+         这一行的高度和右对齐（.ex-listen，48px）走 css —— 整句包一层 span 是
+         那边要求的，理由写在 css 里。 */
+      '<div class="panel-body hint ex-listen" style="border-top:1px solid var(--border)">'+
+        '<span>听力任务将在考试开始 '+
+        '<input class="input mono" id="exListenDelay" type="number" min="1" max="60" step="1" '+
+          'style="width:56px;padding:2px 6px;font-size:12px;text-align:center;vertical-align:middle" '+
+          'title="听力铃声排在开考铃之后几分钟" value="'+listenDelay()+'">'+
+        ' 分钟后播放</span>'+
       '</div>'
-     : '<div class="panel-body hint">还没有安排考试，点右上「添加考试」。</div>')+
+     : '<div class="panel-body hint ex-empty">还没有安排考试，点右上「添加考试」。</div>')+
   '</div>';
 }
 
-async function runExamPreview(){
-  const box = $("#exImpact"); if (!box) return;
-  box.innerHTML = '<div class="hint">正在扫描全部正常列表…</div>';
+/* 「改动预览」：这一场排下去之后，常规列表里哪些铃声会在考试时段自动闪避。
+   它从页面最底下那块常驻的 .panel 搬进了「考试模式」标题旁那枚眼镜后面
+   （用户要的）：点开就当场算，不用先点一枚「计算改动」。
+   摆法**照「终端任务反查」那一套**（用户定的）：宽屏弹一张居中卡片，
+   竖屏整页顶掉考试模式这一页 —— 顶栏不动，内容在下面，出口是顶栏第二行
+   最左那枚「‹ 返回」。一张四列的表塞进手机上的居中卡片里看不成的道理，
+   那边已经付过一次学费了，不再另发明一种。
+   宽度写死 760px 是给宽屏那一档的（就是 --mw 那个上限）。 */
+function openExamPreview(){
+  if (isNarrow()){
+    if (S.dt.exPreview) return;
+    /* 走 renderAll() 不走 renderMain()：那枚「‹ 返回」住在顶栏里，
+       不重画顶栏它不会长出来。 */
+    S.dt.exPreview = true;
+    renderAll();
+    return;
+  }
+  openModal({
+    title:"改动预览", sub:"哪些铃声会在考试期间自动闪避",
+    width:"760px", footer:false,
+    mount(body){ runExamPreview(body); }
+  });
+}
+/* ══ 竖屏：整页 ═════════════════════════════════════════════════════
+   骨架和「终端任务反查」的结果页一模一样（#main.fill + .sec-head + .panel.grow）：
+   整页不滚，**只有那张表滚**，题头才钉得住（道理写在 70-view-more 的
+   moreResultsBoxHTML 那段：sticky 只认最近的那个滚动容器，所以 .tbl-wrap
+   必须是 .panel.grow 的直接孩子，中间不能垫一层）。
+   出口是顶栏那枚 #tbBack（见 30-view-list 的 showBack / tbBack.onclick）。 */
+function renderExamPreviewFull(el){
+  el.classList.add("fill");
+  el.innerHTML =
+    '<div class="sec-head">'+
+      '<div style="min-width:0">'+
+        /* 「几条」抬到标题右边（和「查询结果」那一页同一个排法）：条数一进正文，
+           表就被挤下去一行，钉住的题头也跟着低一行。flex-wrap 必须写回来 ——
+           ≤980 那条 `.sec-head .title-row{flex-wrap:nowrap}` 是给「标题 + 右边按钮」
+           那类行准备的，套到这儿会让这一行在 360px 的屏上顶出屏幕去（行内样式
+           压得过媒体查询）。 */
+        '<div class="title-row" style="flex-wrap:wrap">'+
+          '<h2 class="serif">改动预览</h2>'+
+          '<span class="hint" id="exPvSub"></span>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="panel grow" id="exPvBox">'+
+      '<div class="hint" style="padding:16px 14px">正在扫描全部正常列表…</div>'+
+    '</div>';
+  runExamPreview(el.querySelector("#exPvBox"), el.querySelector("#exPvSub"));
+}
+/* 抢在扫描回来之前把弹窗关掉（人看一眼就走了）时，这个盒子已经从文档里摘下来，
+   往它身上写没意义 —— 项目里凡是异步回来再写 DOM 的地方都留着这道闸
+   （见 js/20-ui.js 里那句注释）。 */
+async function runExamPreview(box, sub){
+  if (!box) return;
+  /* 两个容器共用这一段，差别只有两处：
+       · 竖屏整页那一份（有 sub，就是标题行右边那一格）把「几条」抬到标题旁边，
+         正文里只剩那张表 —— 表头才钉得住；弹窗那一份标题在弹窗头上，
+         这句话只能留在正文里。
+       · 整页那一份的盒子是 .panel.grow，本身没有内边距（表要贴着边、题头才钉得
+         住），所以纯文字那几句得自己带上内边距；弹窗正文自己有 18px/20px。 */
+  const full = !!sub;
+  const pad  = full ? ' style="padding:16px 14px"' : "";
+  const say  = t => { if (sub && sub.isConnected) sub.textContent = t; };
+  const crit = t => '<div class="hint" style="color:var(--crit)'+(full?";padding:16px 14px":"")+'">'+esc(t)+'</div>';
+  box.innerHTML = '<div class="hint"'+pad+'>正在扫描全部正常列表…</div>';
   try{
     const scanned = await scanNormalLists();
+    if (!box.isConnected) return;
     /* 这里原来还挂着两句交代：「已跳过 N 个停用列表」和「另有 N 条铃声的区域虽然
        和考场或静音区域重合、但时刻不在考试时段里」。用户看过之后决定不要 —— 这一页
        只摊开「哪些铃声会闪避」，旁枝末节的话压过了那张表本身。扫描那两份计数照旧
        算着（scanNormalLists 里），要交代随时能拿回来。 */
+    const EMPTY = "没有需要闪避的铃声，都会原样保留。";
     if (!scanned.length){
-      box.innerHTML = '<div class="hint">没有需要闪避的铃声，都会原样保留。</div>';
+      if (full){ say(EMPTY); box.innerHTML = ""; }
+      else box.innerHTML = '<div class="hint">'+EMPTY+'</div>';
       return;
     }
+    if (full) say("下列 "+scanned.length+" 条铃声会在考试期间自动闪避");
     box.innerHTML =
-      '<div class="hint" style="margin-bottom:8px">下列 '+scanned.length+' 条铃声会在考试期间自动闪避：</div>'+
+      (full ? "" : '<div class="hint" style="margin-bottom:8px">下列 '+scanned.length+' 条铃声会在考试期间自动闪避：</div>')+
       '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>列表</th><th style="width:70px">时间</th><th>铃声</th><th>闪避区域</th></tr></thead><tbody>'+
       scanned.map(x=>'<tr><td>'+esc(x.listName)+'</td><td class="mono">'+esc(hm(x.bell.time))+'</td><td>'+esc(x.bell.name)+'</td>'+
         '<td>'+esc(x.trim.removedT.concat(x.trim.removedG).join("、"))+'</td></tr>').join("")+
       '</tbody></table></div>';
-  }catch(e){ box.innerHTML = '<div class="hint" style="color:var(--crit)">'+esc(e.message)+'</div>'; }
+  }catch(e){ box.innerHTML = crit(e.message); }
 }
 

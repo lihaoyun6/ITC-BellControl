@@ -151,7 +151,7 @@ function applyLocally(o, r){
    即时模式下 settle() 会在每条发完后 1.2 秒动一次 S.pending，
    把**还没轮到的**报文一起剔出去（当时那行 filter 只留 status==="ok"），
    于是 onOk 回头一条也找不着 —— 副本铃声就带着 -1 这样的临时 id 发出去了，
-   服务端全拒，_E 列表看着是空的。
+   服务端全拒，那张副本列表看着是空的。
 
    所以改成 o.bodyFn：发的时候现算一遍，不依赖队列里还剩谁。 */
 async function runOp(o){

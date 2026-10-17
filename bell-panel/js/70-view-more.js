@@ -23,11 +23,10 @@ function moreState(){
   return S.dt.more;
 }
 /* 结果摆在哪：**宽屏弹模态，竖屏整页替换**（用户定的）。
-   判据只在点「开始查询」那一下看一眼，不挂 resize / matchMedia 监听 ——
-   面板里一条尺寸监听都没有，布局全交给 CSS 媒体查询；这里要决定的不是布局，
-   而是「结果画在哪个容器里」，所以只在动作发生的那一刻取一次宽度。
-   断点写 640px，和 CSS 里竖屏那一档是同一个值（见 app.css 文件末尾）。 */
-const moreNarrow = ()=> window.matchMedia("(max-width:640px)").matches;
+   判据就是 00-core 里那个 isNarrow（980px，全项目唯一一处 matchMedia）；
+   这儿留个名字只是为了读起来是这一页的话 —— 「竖屏」在这一页的语境里
+   就是「整页顶掉浏览区」。 */
+const moreNarrow = isNarrow;
 const moreAreaChosen = a => !!((a && a.t && a.t.length) || (a && a.g && a.g.length));
 const moreAreaText = a => moreAreaChosen(a)
   ? (a.t||[]).concat(a.g||[]).join("、")
@@ -167,14 +166,17 @@ async function runMoreQuery(){
       try{ rows = await fetchBells(g.id); }
       catch(e){ noRead.push(examOpLabel(g.name)); continue; }
 
-      rows.map(normBell).forEach(b=>{
+      /* 这张列表的分组名单也在这一把行里（一条不响的铃铛），名字尾巴上还挂着
+         ¤分组名 —— grpAdoptRows 把名单摘掉、把尾巴切掉，和列表页看到的是同一份
+         样子。别在这儿自己 map(normBell)：那样名单会当成一条铃铛、名字会带尾巴。 */
+      grpAdoptRows(rows).bells.forEach(b=>{
         if (!inWindow(date, g.start_date, g.end_date)) return;
         const sc = bellSchedule(b);
         const hit = sc ? runsOn(sc, date) : "unknown";
         if (hit === "unknown"){ unknown++; return; }   /* 认不出的不猜，也不进表 */
         if (!hit) return;
         /* 没有执行区域的铃声不算命中：面板自己的列表页对它们挂的是红字
-           「没有任何执行区域，到点不会响」，查询要是把它们算进「会响」，
+           「没有任何执行区域，到时间不会响」，查询要是把它们算进「会响」，
            就和同一页的横幅自相矛盾。 */
         if (isEmptyArea(b)) return;
         /* 这里**不能**写成 bellArea(b)：那个助手返回的是编辑器那一套 {t,g}，而
@@ -318,7 +320,8 @@ function openMoreResultModal(){
   });
 }
 /* ══ 竖屏：整页 ═════════════════════════════════════════════════════
-   骨架照抄「定时任务」页（`#main.fill` + `.sec-head` + `.panel.grow`）：
+   骨架和考试模式那份「改动预览」一样（`#main.fill` + `.sec-head` + `.panel.grow`，
+   见 40-view-exam.js 的 renderExamPreviewFull）：
    整页不滚，**只有那张表滚** —— 题头才钉得住（见 moreResultsBoxHTML 那段）。
    出口是顶栏第二行最左那个「‹ 返回」（见 30-view-list 的 #tbBack）。 */
 function renderMoreFull(el, st){
@@ -330,9 +333,10 @@ function renderMoreFull(el, st){
     '<div class="sec-head">'+
       '<div style="min-width:0">'+
         /* 条数那一行摆在标题**同一行**、紧跟在后（用户定的）—— 原来挂在下面当
-           .meta 副标题，竖屏上标题底下就白多占一行。.title-row 自己会 align-items
-           居中，窄了它自己掉到标题下面，不用另外管。
-           flex-wrap 必须在这儿写回去：≤640 那条 `.sec-head .title-row{flex-wrap:nowrap}`
+           .meta 副标题，竖屏上标题底下就白多占一行。这一行带副标题，所以那一对按
+           基线站（跟标题底部对齐，见 css 的 .title-row:has(> .hint)），窄了它自己
+           掉到标题下面，不用另外管。
+           flex-wrap 必须在这儿写回去：≤980 那条 `.sec-head .title-row{flex-wrap:nowrap}`
            是给「标题 + 右边按钮」那类行准备的，套到这儿会让「这一天没有会执行的铃声
            或定时任务」这 17 个字在 360px 的屏上顶出屏幕去。行内样式压得过媒体查询。 */
         '<div class="title-row" style="flex-wrap:wrap">'+

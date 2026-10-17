@@ -15,10 +15,15 @@
 <div class="toasts" id="toasts"></div>
 <!-- 发送期间的整页挡板：平时 display:none，body.busy 时才浮上来（见 js/50-drawer.js） -->
 <div class="busy-veil"><span class="busy-tip">正在写入服务器…</span></div>
+<!-- 会话胶囊：通话中／播放中切到别的页时，挂在顶栏下面提醒一句，点它回那一页。
+     **常驻在 DOM 里**，不跟着任何一次重画走 —— 顶栏每收一条终端状态就整个重写一遍
+     （见 30-view-list.js 的 renderTopbar），挂在顶栏里的话它一分钟会被冲掉好几次。
+     脚本只改它的文案、位置和显隐（75-view-live.js 的 syncSessionBadge）。 -->
+<button type="button" class="sess-badge" id="sessBadge" hidden></button>
 <script src="js/00-core.js"></script>
-<script src="js/05-config.js"></script>
 <script src="js/10-data.js"></script>
 <script src="js/15-status.js"></script>
+<script src="js/17-device.js"></script>
 <script src="js/20-ui.js"></script>
 <script src="js/30-view-list.js"></script>
 <script src="js/35-groups.js"></script>
@@ -26,6 +31,7 @@
 <script src="js/50-drawer.js"></script>
 <script src="js/60-view-tasks.js"></script>
 <script src="js/70-view-more.js"></script>
+<script src="js/75-view-live.js"></script>
 <script src="js/90-boot.js"></script>
 </body>
 </html>

@@ -13,9 +13,16 @@ function openModal(cfg){
   const host = document.createElement("div");
   host.className="modal-host"; host.id=id; host.dataset.scrim=scrim.dataset.for;
   host.style.setProperty("--mw", cfg.width || "560px");
+  /* 这儿曾经有个 fullNarrow：竖屏上整块铺满屏幕的那一档（当时只有「改动预览」
+     用它）。用户看过之后把它改成了**整页顶掉当前视图**那一套 —— 顶栏不动，
+     出口是顶栏最左那枚「‹ 返回」，和「终端任务反查」的结果页一模一样
+     （见 40-view-exam 的 openExamPreview）。铺满屏幕的弹窗连顶栏一起盖住了，
+     那不是这一页要的样子，所以那一档连同它的 CSS 一起撤了。 */
   host.innerHTML = '<div class="modal" role="dialog" aria-modal="true">'+
     '<div class="modal-head"><div style="min-width:0"><h3>'+esc(cfg.title)+'</h3>'+(cfg.sub?'<div class="sub">'+esc(cfg.sub)+'</div>':"")+'</div>'+
-      '<span style="flex:1"></span><button class="btn btn-sm btn-quiet btn-icon" data-close aria-label="关闭">'+ICON.x+'</button></div>'+
+      '<span style="flex:1"></span>'+
+      '<button class="btn btn-sm btn-quiet btn-icon m-x" data-close aria-label="关闭">'+ICON.x+'</button>'+
+    '</div>'+
     '<div class="modal-body"></div>'+
     (cfg.footer===false?"":'<div class="modal-foot"></div>')+
   '</div>';
@@ -24,7 +31,10 @@ function openModal(cfg){
   modalStack.push(id);
   if (cfg.onClose) modalOnClose[id] = cfg.onClose;
   const m = {id, host, scrim, cfg};
-  host.querySelector("[data-close]").onclick = ()=> closeModal(id);
+  /* 头里那几枚「关掉」（眼下只有一枚 ×，但模态头将来可能不止一枚）—— 它们都是
+     data-close，一枚一枚接过去。原来这里只 querySelector 第一枚，多出来的那枚
+     就成了个按不动的摆设（点它什么都不会发生）。 */
+  $$("[data-close]", host).forEach(b=> b.onclick = ()=> closeModal(id));
   document.addEventListener("keydown", escHandler);
   cfg.mount && cfg.mount(host.querySelector(".modal-body"), host.querySelector(".modal-foot"), m);
   return m;
@@ -78,18 +88,18 @@ function openConfirm(title, body, onYes, yesLabel, danger){
   return m;
 }
 
-/* 点位选择器顶上那行红绿点说明。状态推送没连上时别装作知道 —— 直说未知。 */
+/* 点位选择器顶上那行红绿点说明（用户定的）：**三个点，永远三个点**。
+   它是一份图例，图例就该老老实实摆着，不该跟着连接状态变形。
+   原来推送没连上时这儿会换成一整句「未连接终端状态推送，点位在线情况未知」——
+   那句话其实是多余的：推送一断，名单上的点本来就全变成灰的空心圈，而「灰点＝
+   未知」这条图例就在旁边，两下一对就明白了。 */
 function statLegend(){
-  if (S.link==="ok")
-    return '<div class="pick-legend"><span class="tdot online"></span>在线'+
-      '<span class="tdot offline"></span>离线<span class="tdot unknown"></span>状态未知</div>';
-  const why = S.link==="busy" ? "正在连接" : "未连接";
-  return '<div class="pick-legend"><span class="tdot unknown"></span>'+
-    why+'终端状态推送，点位在线情况未知</div>';
+  return '<div class="pick-legend"><span class="tdot online"></span>在线'+
+    '<span class="tdot offline"></span>离线<span class="tdot unknown"></span>未知</div>';
 }
 
 /* ══ 批量编辑菜单 ════════════════════════════════════════════════════
-   批量条上原来摊着「改区域 / 改铃音 / 改时间 / 恢复默认」四个文字按钮，连同
+   批量条上原来摊着「改区域 / 改音源 / 改时间 / 恢复默认」四个文字按钮，连同
    启用 / 停用 / 删除一共七个 —— 窄屏上换行换得看不出是一组，而且前四个各自
    还要再弹一个框，等于按两下。现在那四个收进一枚铅笔：点开是这张小单子，
    一目了然，也只剩一层。启用 / 停用 / 删除留在栏上 —— 它们各自只要一下，
@@ -140,13 +150,13 @@ function openAreaEditor(mode, bulkList, onDone){
     width:"760px",
     onClose: ()=>{ if (statHook){ const i=statusHooks.indexOf(statHook); if (i>=0) statusHooks.splice(i,1); statHook=null; } },
     mount(body, foot, mm){
+      /* 顶上那格「已选区域」整块去掉了（用户要的）：那排胶囊把同一件事说了两遍 ——
+         下面列表里每一行自己就勾着，这儿再列一遍、还各带一枚 ×，于是「在哪儿取消」
+         有了两个入口。现在只有列表这一个入口，「已选了哪些」由列表头上那句
+         「已选择 N 个」交代（全选那一格的右边）。「清空」也跟着没了：
+         它清的就是那排胶囊，而全选那一格反勾一下本来就是一键清空。 */
       body.innerHTML =
         '<div class="stack">'+
-          '<div class="sect"><div class="sect-h">已选区域 <span class="mono" id="aCount"></span>'+
-            /* 「清空」一律是危险操作的样子（白底红框红字）—— 它一键就把已选的
-               点位和分组全扔了，长得跟旁边的普通按钮一样容易被误点。 */
-            '<span class="acts"><button class="btn btn-sm btn-danger" id="aClear">清空</button></span></div>'+
-            '<div class="sect-b"><div class="sel-chips" id="aChips"></div></div></div>'+
           '<div class="tabbar" id="aTabs">'+
             '<button data-t="term" class="on">终端点位 · '+S.data.terminals.length+'</button>'+
             '<button data-t="group">分组 · '+S.data.termGroups.length+'</button>'+
@@ -157,15 +167,11 @@ function openAreaEditor(mode, bulkList, onDone){
       foot.innerHTML = '<span class="spacer"></span><button class="btn" id="aCancel">取消</button>'+
         '<button class="btn btn-primary" id="aOk">确定</button>';
 
-      const chips = ()=> $("#aChips");
-      const drawChips = ()=>{
-        const a = S.dt.area;
-        chips().innerHTML = (a.t.length+a.g.length)
-          ? a.t.map(n=>'<span class="chip chip-term" title="'+statusTitle(n)+'">'+statusDot(n)+esc(n)+'<button class="x" data-rm="t" data-n="'+esc(n)+'" aria-label="移除">×</button></span>').join("")+
-            a.g.map(n=>'<span class="chip chip-group"><span class="dot"></span>'+esc(n)+'<button class="x" data-rm="g" data-n="'+esc(n)+'" aria-label="移除">×</button></span>').join("")
-          /* chip-ph 也是 .chip，为的是把一颗胶囊的高度先占住 —— 见 css 里那段注释 */
-          : '<span class="chip chip-ph">还没有选任何点位或分组</span>';
-        $("#aCount").textContent = a.t.length+" 点位 / "+a.g.length+" 分组";
+      /* 页签上那个数字跟着**当前列出的**走：搜索一过滤，它就从「全部点位」
+         变成「搜出来几个」（用户要的口径）。没搜的时候它本来就等于总数。 */
+      const setTabCount = (tab, n)=>{
+        const b = $("#aTabs button[data-t='"+tab+"']");
+        if (b) b.textContent = (tab==="term" ? "终端点位 · " : "分组 · ")+n;
       };
       const drawPane = ()=>{
         const tab = S.dt.areaTab;
@@ -174,7 +180,9 @@ function openAreaEditor(mode, bulkList, onDone){
           const groups = S.data.termGroups;
           pane.innerHTML =
             '<div style="display:flex;gap:8px;margin-bottom:8px">'+
-              '<input class="input" id="aq" placeholder="搜索点位名称或 IP" value="'+esc(S.dt.areaQ)+'">'+
+              '<span class="sbox">'+ICON.search+
+                '<input class="input" id="aq" placeholder="搜索名称或 IP" value="'+esc(S.dt.areaQ)+'">'+
+              '</span>'+
               '<select class="select" id="ag" style="width:150px"><option value="all">全部分组</option>'+
                 groups.map(g=>'<option value="'+g.id+'"'+(String(S.dt.areaGroup)===String(g.id)?" selected":"")+'>'+esc(g.name)+'</option>').join("")+
               '</select>'+
@@ -193,30 +201,30 @@ function openAreaEditor(mode, bulkList, onDone){
           drawGroups();
         }
       };
-      /* 列表头上那格「全选」。勾的是**当前列出来的这一批**，不是整个媒体库 ——
-         搜索或分组筛过之后，「全选搜索结果」比「全选两千个点位」有用得多，
-         而后者的入口就是清掉搜索框再点它。
+      /* 列表头上那格「全选」+ 它右边那句「已选择 N 个」。勾的是**当前列出来的
+         这一批**，不是整个媒体库 —— 搜索或分组筛过之后，「全选搜索结果」比
+         「全选两千个点位」有用得多，而后者的入口就是清掉搜索框再点它。
          三种状态照抄「按节次生成」预览表头上那一格：全勾 / 全不勾 / 半勾。
          key 是往哪个数组里写：点位页签是 "t"，分组页签是 "g" —— 两页共用这一格，
          写错就变成「在分组页上全选了所有点位」。 */
-      const drawAllRow = (names, label, key)=>{
+      let headNames = [], headKey = "t";
+      const drawAllRow = (names, key)=>{
+        headNames = names; headKey = key;
         const head = $("#aHead"); if (!head) return;
-        const nOn = names.filter(n=> S.dt.area[key].indexOf(n)>=0).length;
         /* 红绿点那份说明挂在**这一行的最右边**（CSS 里 margin-left:auto 顶过去）。
            它说的是下面每一行头上那个点的颜色，贴在这行正好。
+           它**只归点位页**（key==="t"）：分组页每张卡片写的是「N 个点位 · M 在线」，
+           一整组没有单一的红绿点，图例在那儿说的是这一页根本不显示的东西。
            列表空了（搜索没搜着）也照样留着它 —— 状态推送连没连上，跟搜没搜到无关；
            原来那版空列表把整行清成空的，底下 .pick 里那句「没有匹配的点位」
            本来就说得够清楚了，不用这一行再补一句。 */
         head.innerHTML = (names.length ?
             '<label class="chk"><input type="checkbox" id="aAllPick">'+
               '<span>全选</span></label>'+
-            '<span class="hint">'+label+' '+names.length+' 个'+(nOn?' · 已选 '+nOn:'')+'</span>'
-          : "") + statLegend();
+            '<span class="hint" id="aSelN"></span>'
+          : "") + (key === "t" ? statLegend() : "");
         const cb = $("#aAllPick");
-        if (!cb) return;
-        cb.checked = nOn>0 && nOn===names.length;
-        cb.indeterminate = nOn>0 && nOn<names.length;
-        cb.onchange = ()=>{
+        if (cb) cb.onchange = ()=>{
           const sel = S.dt.area[key];
           if (cb.checked){
             names.forEach(n=>{ if (sel.indexOf(n)<0) sel.push(n); });
@@ -224,8 +232,20 @@ function openAreaEditor(mode, bulkList, onDone){
             const drop = new Set(names);
             S.dt.area[key] = sel.filter(n=> !drop.has(n));
           }
-          drawChips(); drawPane();
+          drawPane();
         };
+        syncAllRow();
+      };
+      /* 只把那句数字和「全选」那一格的状态跟上，列表本身**不重画** ——
+         重画会把滚动条弹回顶上，勾一个列表深处的点位就得从头再找一遍。
+         那句话从前是「当前列出 N 个 · 已选 M」，用户定成「已选择 M 个」：
+         顶上那排胶囊去掉之后，这一行就是交代「选了多少」的唯一地方。 */
+      const syncAllRow = ()=>{
+        const nOn = headNames.filter(n=> S.dt.area[headKey].indexOf(n)>=0).length;
+        const c = $("#aSelN"); if (c) c.textContent = "已选择 "+nOn+" 个";
+        const cb = $("#aAllPick"); if (!cb) return;
+        cb.checked = nOn>0 && nOn===headNames.length;
+        cb.indeterminate = nOn>0 && nOn<headNames.length;
       };
       const drawPick = ()=>{
         const q = (S.dt.areaQ||"").trim().toLowerCase();
@@ -234,7 +254,8 @@ function openAreaEditor(mode, bulkList, onDone){
         if (gid!=="all") list = list.filter(t=> (t.with_groups||[]).some(w=>String(w.terminals_groups_id)===String(gid)));
         if (q) list = list.filter(t=> (String(t.name)+" "+String(t.ip_address)).toLowerCase().indexOf(q)>=0);
         const box = $("#apick"); if (!box) return;
-        drawAllRow(list.map(t=>t.name), "当前列出", "t");
+        setTabCount("term", list.length);
+        drawAllRow(list.map(t=>t.name), "t");
         box.innerHTML = list.length ? list.map(t=>{
           const on = S.dt.area.t.indexOf(t.name)>=0;
           return '<label class="pick-row" title="'+statusTitle(t.name)+'">'+
@@ -247,7 +268,7 @@ function openAreaEditor(mode, bulkList, onDone){
         const grid = $("#agrid"); if (!grid) return;
         /* 分组这边也来一格全选：场子大的时候分组能有十几个，一个个点卡片
            比勾一格费事得多。它没有搜索，所以「当前列出的」就是全部。 */
-        drawAllRow(S.data.termGroups.map(g=>g.name), "共", "g");
+        drawAllRow(S.data.termGroups.map(g=>g.name), "g");
         const counts = {}, ons = {};
         S.data.terminals.forEach(t=>{
           const hot = statusOf(t.name)==="online";
@@ -266,28 +287,26 @@ function openAreaEditor(mode, bulkList, onDone){
         }).join("");
       };
       /* 状态推送一连上 / 状态一变，就把打开着的选择器重画一遍 */
-      statHook = ()=>{ drawChips(); if (S.dt.areaTab==="term") drawPick(); else drawGroups(); };
+      statHook = ()=>{ if (S.dt.areaTab==="term") drawPick(); else drawGroups(); };
       statusHooks.push(statHook);
 
       body.addEventListener("click", e=>{
-        const rm = e.target.closest("[data-rm]");
-        if (rm){ const k=rm.dataset.rm, n=rm.dataset.n;
-          S.dt.area[k] = S.dt.area[k].filter(x=>x!==n); drawChips(); drawPane(); return; }
         const gc = e.target.closest("[data-grp]");
         if (gc){ const n=gc.dataset.grp; const i=S.dt.area.g.indexOf(n);
-          if(i>=0) S.dt.area.g.splice(i,1); else S.dt.area.g.push(n); drawChips(); drawGroups(); return; }
+          if(i>=0) S.dt.area.g.splice(i,1); else S.dt.area.g.push(n); drawGroups(); return; }
         const tb = e.target.closest("[data-t]");
         if (tb && tb.parentElement.id==="aTabs"){ S.dt.areaTab = tb.dataset.t;
           $$("#aTabs button").forEach(x=>x.classList.toggle("on", x===tb)); drawPane(); return; }
       });
+      /* 勾一行**不重画列表**，只把头上那句「已选择 N 个」和全选那一格的状态跟上。
+         从前这儿跟的是顶上那排胶囊（现在没了）。 */
       body.addEventListener("change", e=>{
         const cb = e.target.closest("[data-term]");
         if (cb){ const n=cb.dataset.term; const i=S.dt.area.t.indexOf(n);
           if (cb.checked && i<0) S.dt.area.t.push(n);
           if (!cb.checked && i>=0) S.dt.area.t.splice(i,1);
-          drawChips(); }
+          syncAllRow(); }
       });
-      $("#aClear").onclick = ()=>{ S.dt.area={t:[],g:[]}; drawChips(); drawPane(); };
       $("#aCancel").onclick = ()=> closeModal(mm.id);
       if (isList) $("#aAll").onchange = e => applyAll = e.target.checked;
       $("#aOk").onclick = ()=>{
@@ -305,136 +324,154 @@ function openAreaEditor(mode, bulkList, onDone){
           S.sel.clear();
         }
       };
-      drawChips(); drawPane();
+      drawPane();
     }
   });
 }
 
 /* 这儿原来还有一套「media picker (shared)」——mediaPickerHTML / drawMediaPick /
    wireMediaPicker 三件套，状态挂在全局的 S.dt.medSel|medQ|medG 上。它只有
-   批量改铃音一个调用点，顶上一排预设按钮，正是这一轮从别处删掉的那种「常用行」。
-   批量改铃音改开下面那个正经的多选器之后，三件套和那三个全局字段一起下掉了。 */
+   批量改音源一个调用点。批量改音源改开下面那个正经的多选器之后，三件套和
+   那三个全局字段一起下掉了。 */
 
 /* ══ 音源清单（铃声编辑框和定时任务编辑框共用）═══════════════════════
-   同一个控件两处用，所以样子必须一模一样：铃音文件是素的，文件夹加一枚蓝点 +
+   同一个控件两处用，所以样子必须一模一样：音源文件是素的，文件夹加一枚蓝点 +
    「（文件夹）」后缀 —— 和上面选择器那个「已选」区是同一套标记，三处长得一样，
    用户在哪儿看到的都是同一件事。
    ══════════════════════════════════════════════════════════════════ */
 function soundChipsHTML(mn, gs){
   mn = mn||[]; gs = gs||[];
   if (!mn.length && !gs.length)
-    return '<span class="chip chip-ph">未选择音源，点击「选择铃音」来添加</span>';
-  const chip = (name, kind)=> '<span class="chip'+(kind==="g"?" chip-group":"")+'">'+
+    return '<span class="chip chip-ph">还没有选音源，点「选择音源」来添加</span>';
+  /* data-rm / data-n 挂在**胶囊自己**身上（和区域胶囊那套一样，见 30-view-list.js
+     的 areaChips）：整颗都是热区，点名字、点空白、点 × 一个样。末尾那枚 × 只剩个
+     样子，还按 <button> 写 —— 键盘落在它身上敲回车，click 冒泡到胶囊，照样删得掉。
+     提示语和区域那套一句话一个句式，只是宾语不同（那儿是「区域」）。 */
+  const chip = (name, kind)=> '<span class="chip'+(kind==="g"?" chip-group":"")+
+    '" data-rm="'+kind+'" data-n="'+esc(name)+'" title="点击移除此音源">'+
     (kind==="g"?'<span class="dot"></span>':"")+esc(name)+(kind==="g"?"（文件夹）":"")+
-    '<button class="x" data-rm="'+kind+'" data-n="'+esc(name)+'" title="从这条里移除">'+ICON.x+'</button></span>';
+    '<button class="x" aria-label="移除">'+ICON.x+'</button></span>';
   return mn.map(n=>chip(n,"m")).join("") + gs.map(g=>chip(g,"g")).join("");
 }
-/* 绑上「点 × 移除」：onRemove(kind, name)，kind 是 "m"（文件）或 "g"（文件夹）。
+/* 绑上「点胶囊移除」：onRemove(kind, name)，kind 是 "m"（文件）或 "g"（文件夹）。
    调用方改完自己的状态后重画整块（时长合计、时长框都要跟着变）。 */
 function mountSoundChips(box, onRemove){
   $$("[data-rm]", box).forEach(btn => btn.onclick = ()=> onRemove(btn.dataset.rm, btn.dataset.n));
 }
 
-/* ══ 二级模态：挑铃音 ════════════════════════════════════════════════
+/* ══ 二级模态：挑音源 ════════════════════════════════════════════════
    这个系统既能放单个 mp3，也能整包放一个媒体文件夹 —— 所以两类一起选，
    一起回传。onDone({media:[名字], groups:[文件夹名]})。
-   状态是本模态自己的，不碰全局 S.dt（那个是批量改铃音在用的）。
+   状态是本模态自己的，不碰全局 S.dt（那个是批量改音源在用的）。
    ══════════════════════════════════════════════════════════════════ */
 function openMediaPicker(media, groups, onDone, opts){
   opts = opts || {};
-  /* filesOnly：只挑单个文件的地方（铃声预设、考试铃声、听力音频）用。
-     它们只能存一个文件名，给个文件夹也放不进去，所以干脆不显示那个页签。 */
+  /* filesOnly：只挑单个文件的地方（考试铃声、听力音频）用。它们只能存一个文件名，
+     给个文件夹也放不进去，所以干脆不显示那两个页签。 */
   const filesOnly = !!opts.filesOnly;
-  /* noDir：要「预设」页签、但不要「媒体库」（考试铃声那条）。它同样是只挑一个文件
-     的场合，文件夹页签给了也用不上；可预设是要给的 —— 一天里挑来挑去就那几首。 */
-  const noDir = !!opts.noDir;
-  /* 三个页签里「预设」排在最前，而且默认就停在它上面 —— 校广播翻来覆去就那几首，
-     多数时候要挑的就是一条预设。预设名和文件名在这儿是**同一件事的两种写法**：
-     勾一条预设，落进 st.media 的就是它绑的那个文件名，和「音频文件」页签里勾同一个
-     文件完全等价（切过去能看到它已经勾上了）。 */
-  const st = {tab:(filesOnly&&!noDir)?"file":"pre", media:(media||[]).slice(), groups:filesOnly?[]:(groups||[]).slice(), q:"", g:"all"};
-  /* extra：调用方想在这个框底下再挂自己的一两格（批量改铃音要一格「播放模式」）。
+  const st = {tab:"file", media:(media||[]).slice(), groups:filesOnly?[]:(groups||[]).slice(), q:"", g:"all"};
+  /* extra：调用方想在这个框底下再挂自己的一两格（批量改音源要一格「播放模式」）。
      挂在页签内容区**下面**，不挤那三个恒高的列表。 */
   const extra = opts.extra;
   openModal({
-    title: opts.title || "选择铃音", sub: opts.sub || "一个或多个铃音文件，或整个媒体文件夹", width:"760px",
+    title: opts.title || "选择音源", sub: opts.sub || "一个或多个音源文件，或整个媒体文件夹", width:"760px",
     mount(body, foot, mm){
       /* 音频文件是在**厂商原后台**上传的，手里这份 S.data.medias 是开面板时拉的快照 ——
          不重拉，刚传上去的文件在这个框里根本不存在，人会以为是面板没同步。
          所以先把框开出来、报一句「读着呢」，拉完再画内容（见 refreshMediaLib）。
          拉失败也照画：用的是手里那份旧的，总比框打不开强。 */
       body.innerHTML = '<div class="stack">'+
-        '<div class="hint" style="padding:28px 4px">正在读取服务器上的铃音列表…</div></div>';
+        '<div class="hint" style="padding:28px 4px">正在读取服务器上的音源列表…</div></div>';
       foot.innerHTML = '<span class="spacer"></span><button class="btn" id="mCancel">取消</button>';
       foot.querySelector("#mCancel").onclick = ()=> closeModal(mm.id);
       refreshMediaLib().then(draw);
 
       /* 画完的内容区、页签计数、三个 draw* 都在这一个作用域里 ——
-         也正因为整块重画，页签上「音频文件 · N」那个数才是刚拉回来的那个。 */
+         也正因为整块重画，页签上「音频 · N」那个数才是刚拉回来的那个。 */
       function draw(){
+        /* 顶上那格「已选」整块去掉了（用户要的）：那排胶囊和下面列表里勾着的
+           是同一件事，还各带一枚 × ——「在哪儿取消」就这么有了两个入口。
+           现在只剩列表这一个入口，「选了多少」由搜索框下面那格全选右边的
+           「已选择 N 个」交代（见 drawAllRow）。「清空」也跟着没了：
+           它清的就是那排胶囊，而全选那一格反勾一下本来就是一键清空。 */
         body.innerHTML =
           '<div class="stack">'+
-            '<div class="sect"><div class="sect-h">已选 <span class="mono" id="mCount"></span>'+
-              '<span class="acts"><button class="btn btn-sm btn-danger" id="mClear">清空</button></span></div>'+
-              '<div class="sect-b"><div class="sel-chips" id="mChips"></div></div></div>'+
-            ((filesOnly&&!noDir) ? "" :
+            (filesOnly ? "" :
             '<div class="tabbar" id="mTabs">'+
-              '<button data-t="pre"'+(st.tab==="pre"?' class="on"':"")+'>预设 · '+PRESETS.length+'</button>'+
-              '<button data-t="file"'+(st.tab==="file"?' class="on"':"")+'>音频文件 · '+S.data.medias.length+'</button>'+
-              (noDir ? "" : '<button data-t="dir">媒体库 · '+S.data.mediaGroups.length+'</button>')+
+              '<button data-t="file"'+(st.tab==="file"?' class="on"':"")+'>音频 · '+S.data.medias.length+'</button>'+
+              '<button data-t="dir"'+(st.tab==="dir"?' class="on"':"")+'>媒体库 · '+S.data.mediaGroups.length+'</button>'+
             '</div>')+
-            '<div id="mPane"'+((filesOnly&&!noDir)?'':' class="pick-stage"')+'></div>'+
+            '<div id="mPane"'+(filesOnly?'':' class="pick-stage"')+'></div>'+
             (extra && extra.html ? extra.html : "")+
           '</div>';
         foot.innerHTML = '<span class="spacer"></span><button class="btn" id="mCancel">取消</button>'+
           '<button class="btn btn-primary" id="mOk">确定</button>';
 
-        const drawChips = ()=>{
-          const all = st.media.map(n=>'<span class="chip">'+esc(n)+'<button class="x" data-rm="m" data-n="'+esc(n)+'" aria-label="移除">×</button></span>')
-            .concat(st.groups.map(n=>'<span class="chip chip-group"><span class="dot"></span>'+esc(n)+'（文件夹）<button class="x" data-rm="g" data-n="'+esc(n)+'" aria-label="移除">×</button></span>'));
-          $("#mChips").innerHTML = all.length ? all.join("")
-            : '<span class="chip chip-ph">还没有选任何铃音</span>';
-          $("#mCount").textContent = filesOnly
-            ? (st.media.length ? st.media[0] : "未选")
-            : st.media.length+" 个文件 / "+st.groups.length+" 个文件夹";
+        /* 页签上那个数字跟着**当前列出的**走：搜索或媒体库一筛，它就从
+           「全部音频」变成「筛出来几个」（用户要的口径）。没筛的时候就是总数。 */
+        const setTabCount = (tab, n)=>{
+          const b = $("#mTabs button[data-t='"+tab+"']");
+          if (b) b.textContent = (tab==="file" ? "音频 · " : "媒体库 · ")+n;
         };
-        /* 三个页签的内容区恒高（`.pick-stage`，见 css），切页签时框子不动。
-           行数账：预设 / 媒体库 各 8 行；「音频文件」顶上多一行搜索框，所以它的
-           列表只排 7 行 —— **搜索行 + 列表 = 8 行**，正好和另外两页一样高，切过去
-           也不会跳。filesOnly 那条路没有页签栏，也就没有「切页签跳动」可谈，
-           保持原样（考试铃声、听力音频、铃声预设编辑走这条）。 */
+        /* 搜索框下面那一行：左起一格「全选」，右边一句「已选择 N 个」。
+           勾的是**当前列出来的这一批**（搜索 / 媒体库筛过之后就是那一批）——
+           和区域选择器那一格是同一套写法、同一句话。filesOnly 没有这一行：
+           那儿只挑一个，「全选」跟它说的是反话。 */
+        let headNames = [], headKey = "media";
+        const drawAllRow = (names, key)=>{
+          headNames = names; headKey = key;
+          const head = $("#mHead"); if (!head) return;
+          head.innerHTML = names.length
+            ? '<label class="chk"><input type="checkbox" id="mAllPick"><span>全选</span></label>'+
+              '<span class="hint" id="mSelN"></span>'
+            : "";
+          const cb = $("#mAllPick");
+          if (cb) cb.onchange = ()=>{
+            const sel = st[key];
+            if (cb.checked) names.forEach(n=>{ if (sel.indexOf(n)<0) sel.push(n); });
+            else { const drop = new Set(names); st[key] = sel.filter(n=> !drop.has(n)); }
+            drawPane();          /* 列表里那些勾要跟着变 */
+          };
+          syncAllRow();
+        };
+        /* 只把那句数字和「全选」那一格的状态跟上，列表本身**不重画** ——
+           重画会把滚动条弹回顶上，勾一个列表深处的音源就得从头再找一遍。 */
+        const syncAllRow = ()=>{
+          const nOn = headNames.filter(n=> st[headKey].indexOf(n)>=0).length;
+          const c = $("#mSelN"); if (c) c.textContent = "已选择 "+nOn+" 个";
+          const cb = $("#mAllPick"); if (!cb) return;
+          cb.checked = nOn>0 && nOn===headNames.length;
+          cb.indeterminate = nOn>0 && nOn<headNames.length;
+        };
+        /* 两个页签的内容区恒高（`.pick-stage`，见 css），切页签时框子不动。
+           行数账：媒体库 8 行 = 全选行 + 列表 7 行；「音频」顶上多一行搜索框，
+           所以它的列表只排 6 行 —— **搜索行 + 全选行 + 列表 = 8 行**，
+           正好和另一页一样高，切过去也不会跳。
+           filesOnly 那条路没有页签栏，也就没有「切页签跳动」可谈，保持原样
+           （考试铃声、听力音频走这条）。 */
         const drawPane = ()=>{
           const pane = $("#mPane");
-          if (st.tab==="pre"){
-            pane.innerHTML = '<div class="pick" id="mpre"></div>';
-            drawPresets();
-          } else if (st.tab==="file"){
+          if (st.tab==="file"){
             pane.innerHTML =
               '<div class="pick-search">'+
-                '<input class="input" id="mq" placeholder="搜索音频文件" value="'+esc(st.q)+'">'+
+                '<span class="sbox">'+ICON.search+
+                  '<input class="input" id="mq" placeholder="搜索音频文件" value="'+esc(st.q)+'">'+
+                '</span>'+
                 '<select class="select" id="mg" style="width:160px"><option value="all">全部媒体库</option>'+
                   S.data.mediaGroups.map(g=>'<option value="'+g.id+'"'+(String(st.g)==String(g.id)?" selected":"")+'>'+esc(g.name)+'</option>').join("")+
                 '</select>'+
               '</div>'+
+              /* filesOnly 只挑一个，也就没有「全选」那一行 —— 恒高那套账
+                 （见 css 的 .pick-stage）只算走页签的这条路。 */
+              (filesOnly ? "" : '<div class="pick-head" id="mHead"></div>')+
               '<div class="pick" id="mpick"></div>';
             $("#mq").oninput = e => { st.q = e.target.value; drawFiles(); };
             $("#mg").onchange = e => { st.g = e.target.value; drawFiles(); };
             drawFiles();
           } else {
-            pane.innerHTML = '<div class="pick" id="mdir"></div>';
+            pane.innerHTML = '<div class="pick-head" id="mHead"></div><div class="pick" id="mdir"></div>';
             drawDirs();
           }
-        };
-        /* 预设页签：一条预设一行，名字在左、它绑的文件名在右。
-           勾选框和「音频文件」页签是同一套 data-med —— 两页勾的是同一份 st.media，
-           所以在哪儿勾都一样，来回切不会丢。 */
-        const drawPresets = ()=>{
-          const box = $("#mpre"); if (!box) return;
-          box.innerHTML = PRESETS.length ? PRESETS.map(p=>
-            '<label class="pick-row"><input type="checkbox" data-med="'+esc(p.media)+'"'+(st.media.indexOf(p.media)>=0?" checked":"")+'>'+
-            '<span class="nm">'+esc(p.label)+'</span>'+
-            '<span class="ip">'+esc(p.media)+'</span></label>'
-          ).join("") : '<div class="hint" style="padding:14px">无预设，可在全局设置中添加</div>';
         };
         const drawFiles = ()=>{
           const q = (st.q||"").trim().toLowerCase();
@@ -446,6 +483,9 @@ function openMediaPicker(media, groups, onDone, opts){
             '<label class="pick-row"><input type="checkbox" data-med="'+esc(m.name)+'"'+(st.media.indexOf(m.name)>=0?" checked":"")+'>'+
             '<span class="nm">'+esc(m.name)+'</span><span class="ip">'+secToHMS(Number(m.length)||0).slice(3)+'</span></label>'
           ).join("") : '<div class="hint" style="padding:14px">没有匹配的音频文件</div>';
+          if (filesOnly) return;
+          setTabCount("file", list.length);
+          drawAllRow(list.map(m=>m.name), "media");
         };
         const drawDirs = ()=>{
           const box = $("#mdir"); if (!box) return;
@@ -453,17 +493,12 @@ function openMediaPicker(media, groups, onDone, opts){
           S.data.medias.forEach(m=>{ counts[m.medias_groups_id] = (counts[m.medias_groups_id]||0)+1; });
           box.innerHTML = S.data.mediaGroups.length ? S.data.mediaGroups.map(g=>
             '<label class="pick-row"><input type="checkbox" data-dir="'+esc(g.name)+'"'+(st.groups.indexOf(g.name)>=0?" checked":"")+'>'+
-            '<span class="nm">'+esc(g.name)+'</span><span class="ip">'+(counts[g.id]||0)+' 个铃音</span></label>'
+            '<span class="nm">'+esc(g.name)+'</span><span class="ip">'+(counts[g.id]||0)+' 个音源</span></label>'
           ).join("") : '<div class="hint" style="padding:14px">服务器上没有媒体文件夹</div>';
+          drawAllRow(S.data.mediaGroups.map(g=>g.name), "groups");
         };
 
         body.addEventListener("click", e=>{
-          const rm = e.target.closest("[data-rm]");
-          if (rm){
-            const k = rm.dataset.rm==="m" ? "media" : "groups", n = rm.dataset.n;
-            st[k] = st[k].filter(x=>x!==n);
-            drawChips(); drawPane(); return;
-          }
           const tb = e.target.closest("[data-t]");
           if (tb && tb.parentElement.id==="mTabs"){
             st.tab = tb.dataset.t;
@@ -473,21 +508,21 @@ function openMediaPicker(media, groups, onDone, opts){
         });
         body.addEventListener("change", e=>{
           const f = e.target.closest("[data-med]"), d = e.target.closest("[data-dir]");
+          /* 勾一行**不重画列表**，只把全选那一格和它右边那句「已选择 N 个」
+             跟上 —— 重画会把滚动条弹回顶上。 */
           if (f){ const n=f.dataset.med;
-            /* 只挑一个的地方：勾中一个就把别的让出来，等于单选。
-               两个 pane 都重画一遍 —— 单选之后「上一个勾」得在**当前这一页**上
-               跟着取消，而只有画出来的那个 pane 有盒子，另一个自己会早退。 */
-            if (filesOnly){ st.media = f.checked ? [n] : []; drawChips(); drawPresets(); drawFiles(); return; }
+            /* 只挑一个的地方：勾中一个就把别的让出来，等于单选 ——
+               列表重画一遍，「上一个勾」才会跟着取消。 */
+            if (filesOnly){ st.media = f.checked ? [n] : []; drawFiles(); return; }
             const i=st.media.indexOf(n);
             if (f.checked && i<0) st.media.push(n);
             if (!f.checked && i>=0) st.media.splice(i,1);
-            drawChips(); return; }
+            syncAllRow(); return; }
           if (d){ const n=d.dataset.dir, i=st.groups.indexOf(n);
             if (d.checked && i<0) st.groups.push(n);
             if (!d.checked && i>=0) st.groups.splice(i,1);
-            drawChips(); }
+            syncAllRow(); }
         });
-        $("#mClear").onclick = ()=>{ st.media=[]; st.groups=[]; drawChips(); drawPane(); };
         $("#mCancel").onclick = ()=> closeModal(mm.id);
         $("#mOk").onclick = ()=>{
           const r = {media:st.media.slice(), groups:st.groups.slice()};
@@ -496,7 +531,7 @@ function openMediaPicker(media, groups, onDone, opts){
           closeModal(mm.id);
           onDone && onDone(r);
         };
-        drawChips(); drawPane();
+        drawPane();
         if (extra && extra.mount) extra.mount(body);
       }
     }});
@@ -533,139 +568,75 @@ function shiftWord(sec){
   return "时间平移 "+sec+" 秒";
 }
 
-/* ══ 全局设置 ════════════════════════════════════════════════════════
-   时间偏移是「面板 → 服务器」方向上的差值，读回来的时候会原样减回去：
-     偏移 −60 秒 → 面板 06:00:00 写出去是 05:59:00；服务器上放着 05:59:00 时面板显示 06:00:00
-   两个方向成对，所以「读回来不动它、直接再存一次」不会每存一次再偏一分钟。
-   写走 offsetHMS，读走 unoffsetHMS（在 normBell / normTask 里）。
-   ═════════════════════════════════════════════════════════════════ */
-function setOffsetSec(v){
-  S.offsetSec = Number(v)||0;
-  LS.set("offsetSec", S.offsetSec);
-  /* 偏移也在那份共享配置里（05-config.js）—— 换台电脑打开得是同一个口径。
-     输入框每敲一下都走这儿，攒着推的那套会把它们并成一趟。 */
-  S.cfg.offsetSec = S.offsetSec;
-  cfgSave("offsetSec");
-  reapplyOffset();
-  renderTopbar();
-  /* 设置页上不整页重画 —— 正在敲的那个数字框会被换掉，光标和输入法就飞了。
-     只把右边那条说明改掉，数字该算的（b.times、_base）上面已经算完了。 */
-  if (S.mode==="settings") drawOffsetNow(); else renderMain();
-}
+/* ══ 全局设置 ════════════════════════════════════════════════════════ */
 function setDebug(on){
   S.debug = !!on;
   LS.set("debug", S.debug);
   toast(S.debug ? "已启用调试模式：提交前将展开报文详情" : "调试模式已关闭", "ok");
 }
-/* 偏移那句说明要跟着数字变：不偏移时说「填几点写几点」，偏了就把 12:00 这个
-   例子摆出来 —— 偏移是这套东西里最容易看反的一处（正数是推后）。 */
-function offsetHintHTML(){
-  const o = Number(S.offsetSec)||0;
-  return '正数=整体推后，负数=整体提前。'+
-    (o ? '面板 <span class="mono">12:00:00</span> ↔ 报文 <span class="mono">'+esc(hm(offsetHMS("12:00:00")))+'</span>'
-       : '面板上填几点，报文里就写几点');
-}
-/* 改偏移时不重画整页，就地更新（见 setOffsetSec） */
-function drawOffsetNow(){
-  const h = $("#stOffHint"); if (h) h.innerHTML = offsetHintHTML();
-}
-/* ══ 铃声预设（全局设置里那一段）═══════════════════════════════════
-   一条预设 = 一个名字 + 一个服务器上的文件名。名字是给人看的，文件名是要写进
-   报文的 —— 所以只能从媒体库里挑，不让手打（打错一个字符，提交出去就是一段静音）。
-   预设全是本机存的，没有内置项。 */
-function presetSectionHTML(){
-  const rows = rawPresets().map((p,i)=>
-    '<div class="pre-row" data-pre-i="'+i+'">'+
-      '<input class="input" data-pre="label" placeholder="预设名称" value="'+esc(p.label||"")+'">'+
-      '<button class="btn btn-sm sel-file" type="button" data-pre="media" title="'+esc(p.media||"还没绑定文件")+'">'+
-        '<span class="fn">'+esc(p.media||"选择文件…")+'</span></button>'+
-      '<button class="btn btn-sm btn-quiet btn-icon" type="button" data-pre="del" title="删掉这条预设">'+ICON.del+'</button>'+
-    '</div>').join("");
-  return rows+
-    '<div style="margin-top:10px"><button class="btn btn-sm" type="button" id="preNew">'+ICON.plus+' 新建预设</button></div>';
-}
-function wirePresets(body, redraw){
-  body.querySelectorAll("[data-pre-i]").forEach(row=>{
-    const i = Number(row.dataset.preI);
-    /* 每次改动都整份写回并重算 PRESETS —— 别的地方（打开中的选择器）也跟着变 */
-    const put = fn => { const l = rawPresets().slice(); fn(l); setUserPresets(l); };
-    row.querySelector('[data-pre="label"]').oninput = e =>
-      put(l=>{ l[i] = Object.assign({}, l[i], {label:e.target.value}); });
-    row.querySelector('[data-pre="media"]').onclick = ()=>{
-      const cur = (rawPresets()[i]||{}).media;
-      openMediaPicker(cur?[cur]:[], [], r=>{
-        put(l=>{ l[i] = Object.assign({}, l[i], {media:(r && r.media[0]) || ""}); });
-        redraw();
-      }, {filesOnly:true, title:"选择预设音源", sub:"预设绑定的那一个铃音文件"});
-    };
-    row.querySelector('[data-pre="del"]').onclick = ()=>{ put(l=>{ l.splice(i,1); }); redraw(); };
-  });
-  const nu = body.querySelector("#preNew");
-  if (nu) nu.onclick = ()=>{ const l = rawPresets().slice(); l.push({label:"", media:""}); setUserPresets(l); redraw(); };
-}
-
 /* 设置页尾部那张「版本信息」。五行键值，用 .kv —— 它本来就是给这种表准备的
    （两列网格、值那列等宽），一直没人用过，正好。
 
    有两行其实不是「版本」，但少了这张表就不完整：
      · 广播服务器 —— 地址和厂商版本，出问题时报的是这两样
-     · 运行方式 —— 设置到底存在哪儿。这是这张表里唯一会改变人行为的答案：
-       本地模式下在这台设备上改的东西，换台设备打开是看不见的。
+     · 环境检测 —— 这个页面跑在不在安全上下文里（见下面最后一段）。
 
-   值那一列是等宽的（.kv 定的），所以「运行方式」只放两个词，那半句解释摆在
-   表格下面的 .hint 里 —— 一整句中文塞进等宽列里字形会打架。 */
+   值那一列是等宽的（.kv 定的），所以「环境检测」只放两个词（安全 / 非安全上下文），
+   后果那整句摆在表格下面的 .hint 里 —— 一整句中文塞进等宽列里字形会打架。
+
+   「环境检测」问的是 window.isSecureContext，也就是浏览器自己那一条：https，以及
+   **本机回环上的 http**（localhost / 127.0.0.1 / [::1]）和 file:// 算安全，别的
+   明文 http 算非安全。这条线是有后果的 —— 安全上下文里才拿得到麦克风和 AudioWorklet，
+   「实时对讲」「在线播放」那两个页签出不出现问的是同一个值（见 75-view-live.js 的
+   liveUsable）—— 所以它值得写在这一页上：对讲用不了的时候，人第一眼该看到的是
+   「非安全上下文」，而不是去查是不是代理没起。
+   这一格排在最后一行：它是个**诊断**读数，不是要天天看的信息。 */
 function versionInfoHTML(){
-  const local = location.protocol === "file:";
   const addr  = S.server ? S.server.replace(/^https?:\/\//,"") : "—";
   const kv = (k,v)=> '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>';
   return '<dl class="kv">'+
       kv("面板版本",   PANEL_VERSION)+
-      kv("运行方式",   local ? "本地模式" : "服务器模式")+
       kv("广播服务器", addr)+
       /* 这一格 id 是给 setSrvVersion 用的：刷新页面时它是本机存的那份画的，
          /language 回来之后由那边就地补上（见 10-data.js），整页不重画。 */
       '<dt>服务器版本</dt><dd id="verSrv">'+esc(S.srvVersion || "—")+'</dd>'+
       kv("登录用户",   userNameText() || "—")+
+      /* 排最后一行：它是个**诊断**读数，不是要天天看的信息。 */
+      kv("环境检测",   window.isSecureContext ? "安全上下文" : "非安全上下文")+
     '</dl>'+
+    /* 这句只在**真的**处在非安全上下文时才出现（用户定的）——
+       安全的时候它是句用不上的警告，白占一行。 */
+    (window.isSecureContext ? "" :
     '<div class="hint" style="margin-top:10px">'+
-      (local
-        ? "本地模式：设置只保存在这台设备的浏览器里，换台设备打开看不到。"
-        : "服务器模式：配置信息保存在服务器端，可在多个客户端间自动同步。")+
-    '</div>';
+      "在非安全上下文中无法使用「实时对讲」功能, 请本机运行或使用 HTTPS 托管。"+
+    '</div>');
 }
 
 /* ══ 全局设置（一整页）═══════════════════════════════════════════════
-   以前是个模态框。改成页面是因为里面能改的东西越攒越多（偏移、草稿、调试、
-   预设的增删改），模态一窄就得上下滚；而且它和另外三个视图本来就是平级的
-   —— 顶栏那个齿轮现在就是切换组里的第四个按钮。 */
+   以前是个模态框。改成页面是因为里面能改的东西越攒越多（草稿、调试），
+   模态一窄就得上下滚；而且它和另外三个视图本来就是平级的 —— 顶栏那个齿轮
+   现在就是切换组里的第四个按钮。 */
 function renderSettings(){
   const el = $("#main"); if (!el) return;
-  el.classList.add("headfix");   /* 「全局设置」那一行钉住，下面三张面板自己滚 */
-  const o = Number(S.offsetSec)||0;
+  /* headfix = 「全局设置」那一行钉住，下面几张面板自己滚。
+     setpage = 这一页自己的内边距（左右 20 / 顶部 16，见 css）。它和考试模式页共用
+     headfix，而用户要的只是**设置这一页**收一收，所以另起一个类名，别去改 headfix
+     那条基线 —— 那一条一改，考试模式页跟着变。 */
+  el.classList.add("headfix","setpage");
   el.innerHTML =
     '<div class="sec-head">'+
       '<div class="title-row">'+
         '<h2 class="serif">全局设置</h2>'+
       '</div>'+
+      /* 这一页的出口，和顶栏那枚「‹ 返回」是同一件事：退到**进设置之前**那一页
+         （lastMode，见 30-view-list.js），不是退回首页。
+         它是**两栏并排那一份**：窄到一次只显示一栏（≤980px）就收起来
+         （css 里 `.acts.set-close` 那条），那儿顶上已经有返回键了，
+         两个出口并排站着是同一件事说两遍。 */
+      '<div class="acts set-close"><button class="btn btn-primary" id="setClose">关闭设置</button></div>'+
     '</div>'+
 
     '<div class="page-body">'+
-
-    '<div class="panel">'+
-      '<div class="panel-head"><h3>时间偏移</h3></div>'+
-      '<div class="panel-body">'+
-        '<div class="set-row">'+
-          '<div class="set-lab">'+
-            '<div class="set-t">全局时间偏移</div>'+
-            '<div class="hint" id="stOffHint">'+offsetHintHTML()+'</div>'+
-          '</div>'+
-          '<div class="set-ctl">'+
-            '<input class="input mono" id="stOff" type="number" step="1" style="width:64px" value="'+o+'">'+
-            '<span class="dimmer">秒</span>'+
-          '</div>'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
 
     /* 「发送方式」这张面板 = 草稿模式 + 调试模式两个开关，也就是这两个模式在界面上
        仅有的入口。两个入口一起收着的时候（SHOW_MODE_SWITCHES，见 00-core.js）
@@ -697,10 +668,50 @@ function renderSettings(){
       '</div>'+
     '</div>' : "")+
 
+    /* 「播放代理」：实时对讲 / 在线播放要用的那个本机进程在哪（源码见仓库的
+       play-agent/，为什么非有它不可写在 00-core.js 的 agentURL 上面）。
+       地址**留空 = 127.0.0.1**（代理默认就和浏览器装在同一台机器上），所以正常
+       情况下这两个框一个字都不用填；远程托管（代理装在别的机器上）才填那一台的地址。
+       改一下就地写进 S 和本机存储，不提交、也不重画这一页 —— 它是本机设置，
+       服务器上压根没这个东西，下一次「呼叫」时才用到（agentURL 现读）。 */
     '<div class="panel">'+
-      '<div class="panel-head"><h3>铃声预设</h3>'+
-        '<span class="sub">'+PRESETS.length+' 个</span></div>'+
-      '<div class="panel-body">'+presetSectionHTML()+'</div>'+
+      '<div class="panel-head"><h3>播放代理</h3></div>'+
+      '<div class="panel-body">'+
+        '<div class="set-row">'+
+          '<div class="set-lab">'+
+            '<div class="set-t">通过播放代理在网页端使用实时对讲和在线播放功能</div>'+
+            '<div class="hint">运行 ITC-PlayAgent 的服务器地址, 默认为本机, 远程托管用户可自行修改</div>'+
+          '</div>'+
+          '<div class="set-ctl agent">'+
+            '<div class="field"><label for="stAgentHost">Agent 服务地址</label>'+
+              '<input class="input mono" id="stAgentHost" value="'+esc(S.agentHost||"")+
+                '" spellcheck="false" autocomplete="off" placeholder="127.0.0.1"></div>'+
+            '<div class="field"><label for="stAgentPort">端口</label>'+
+              '<input class="input mono" id="stAgentPort" value="'+esc(S.agentPort||"")+
+                '" spellcheck="false" autocomplete="off" inputmode="numeric" placeholder="'+AGENT_PORT_DEFAULT+'"></div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+
+    /* 「在线对讲」：实时对讲那两声本机提示音（res/jietong.mp3、res/guaduan.mp3）。
+       默认开着，关掉就一声不响。和上面那两格一样是**纯本机偏好**（存 localStorage），
+       服务器上没有这个概念，也不影响终端那头听不听得到。 */
+    '<div class="panel">'+
+      '<div class="panel-head"><h3>在线对讲</h3></div>'+
+      '<div class="panel-body">'+
+        '<div class="set-row">'+
+          '<div class="set-lab">'+
+            '<div class="set-t">接通/挂断时播放提示音</div>'+
+            '<div class="hint">接通和挂断对讲时在当前设备上播放提示音。</div>'+
+          '</div>'+
+          '<div class="set-ctl">'+
+            '<label class="switch" title="接通/挂断时播放提示音">'+
+              '<input type="checkbox" id="stChime" aria-label="接通/挂断时播放提示音"'+(S.chime?" checked":"")+'>'+
+              '<span class="track"></span></label>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
     '</div>'+
 
     '<div class="panel">'+
@@ -710,14 +721,21 @@ function renderSettings(){
 
     '</div>';   /* /.page-body */
 
-  const off = $("#stOff");
-  off.oninput = e => setOffsetSec(e.target.value);
   /* 两个开关都不用自己重画这一页：开关的状态在它自己那个 checkbox 上，
      草稿那个另外还会走 setDraft() → renderTopbar() + renderMain()。
      入口收着的时候两个都不在（见 SHOW_MODE_SWITCHES），判空再绑。 */
   const dbgSw = $("#stDbg");   if (dbgSw) dbgSw.onchange = e => setDebug(e.target.checked);
   const drfSw = $("#stDraft"); if (drfSw) drfSw.onchange = e => setDraft(e.target.checked);
-  wirePresets(el, renderSettings);
+  /* 「播放代理」那两格：边打边存（存的是原样的字，剥壳留给 agentURL 做 ——
+     打字打到一半不该被就地改写）。不 commit 任何东西：它只影响本机。 */
+  const aHost = $("#stAgentHost"), aPort = $("#stAgentPort");
+  if (aHost) aHost.oninput = e => { S.agentHost = e.target.value; LS.set("agentHost", e.target.value); };
+  if (aPort) aPort.oninput = e => { S.agentPort = e.target.value; LS.set("agentPort", e.target.value); };
+  /* 「在线对讲」那枚提示音开关：翻一下就存，不重画这一页（这一点只影响下一次响不响）。 */
+  const chimeSw = $("#stChime");
+  if (chimeSw) chimeSw.onchange = e => { S.chime = e.target.checked; LS.set("chime", S.chime); };
+  /* 标题行最右那枚「关闭设置」（竖屏上看不见它，见 css）。和顶栏那枚返回键同一个动作。 */
+  $("#setClose").onclick = ()=> goMode(lastMode);
 }
 
 /* ══ 月历控件（考试模式的「考试日期」和定时任务的「指定日期」共用这一个）═══
@@ -787,3 +805,43 @@ function calMount(box, st, on){
   draw();
   return draw;
 }
+
+/* ── 窄屏上胶囊条横向拖拽 ─────────────────────────────────────────────
+   竖屏那一档把 .area-chips / .grp-chips / .cal-chips 收成一行（见 css），
+   手机上用手指滑是浏览器白送的；桌面浏览器用鼠标拖不动，这里补上。
+   委托在 document 上：条子是各页现画的，逐个挂挂不住。
+   **只对鼠标/笔生效** —— 触摸交给原生滚动，两边同时改 scrollLeft 会滑出两倍速。 */
+let chipDrag = null, chipDragEndAt = 0;
+document.addEventListener("pointerdown", e=>{
+  if (e.pointerType === "touch") return;
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  const box = e.target.closest && e.target.closest(".area-chips,.grp-chips,.cal-chips");
+  if (!box || box.scrollWidth <= box.clientWidth + 1) return;
+  chipDrag = {box, x: e.clientX, left: box.scrollLeft, moved: false, id: e.pointerId};
+});
+document.addEventListener("pointermove", e=>{
+  const d = chipDrag;
+  if (!d || e.pointerId !== d.id) return;
+  const dx = e.clientX - d.x;
+  if (!d.moved && Math.abs(dx) < 5) return;      /* 5px 以内是点击，不是拖 */
+  d.moved = true;
+  d.box.scrollLeft = d.left - dx;
+  e.preventDefault();
+});
+const chipDragEnd = e=>{
+  const d = chipDrag;
+  if (!d || (e && e.pointerId !== d.id)) return;
+  chipDrag = null;
+  if (d.moved) chipDragEndAt = Date.now();
+};
+document.addEventListener("pointerup", chipDragEnd);
+document.addEventListener("pointercancel", chipDragEnd);
+/* 拖完松手时落点还在某颗胶囊上，浏览器会补一个 click —— 那一下不该删东西/切页。
+   用时间窗而不是 once：拖出容器再松手不会产生 click，once 就会扣住下一次正常点击。 */
+document.addEventListener("click", e=>{
+  if (Date.now() - chipDragEndAt > 350) return;
+  if (e.target.closest && e.target.closest(".area-chips,.grp-chips,.cal-chips")){
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}, true);

@@ -2,6 +2,19 @@
    广播控制台 · 替代厂商后台的打铃配置面板
    ////////////////////////////////////////////////////////////// */
 
+/* ══ 媒体库里那两样老东西 ═══════════════════════════════════════════
+   面板早期版本的设置是挂在媒体库里一个 1 秒静音 mp3 的屁股后面传的，传进一个叫
+   custom_config 的文件夹。设置本身早就搬到别处、现在更是哪都不存了，可这两样
+   东西还留在服务器的媒体库里 —— 挑音源的面板列的是整个媒体库，让人能挑中它们
+   既没意义，也会把「这里为什么有个 custom_config」摆到台面上。
+   这两个名字只用来把它们滤掉（见 loadAll / refreshMediaLib）。 */
+const LEGACY_MEDIA_FOLDER = "custom_config";
+const LEGACY_MEDIA_FILE   = "custom_config.mp3";
+function legacyMediaHide(x){
+  const n = String((x && x.name) || "");
+  return n !== LEGACY_MEDIA_FOLDER && n !== LEGACY_MEDIA_FILE;
+}
+
 /* ══ 登录 · 会话 ═════════════════════════════════════════════════════
    登录成功、并且勾了「记住登录状态」，就把**用户名、密码、令牌**三样一起落进本机，
    外加一个到期时刻 —— 和原版后台存在自己 localStorage 里的那几样是同一个意思
@@ -27,9 +40,14 @@ function rememberLogin(on, name, password){
   LS.set("userPassword", password);
   LS.set("tokenExpireMonitor", Date.now() + SESSION_MIN*60000);
 }
-/* 只丢令牌和到期时刻，**用户名密码留着** —— 它们的作用就是到期后把登录页填好。 */
+/* 只丢令牌和到期时刻，**用户名密码留着** —— 它们的作用就是到期后把登录页填好。
+   外加**上次看的页签**（bc.lastMode，见 30-view-list.js）：那个记忆属于「这一趟登录」，
+   不属于这台机器 —— 注销之后换个人接着用，或者令牌过期重登，都该从铃声计划起步，
+   而不是把上一趟停在哪儿捡回来。
+   （草稿开关、上次看的列表那些是本机偏好，照旧不动。） */
 function forgetLogin(){
-  LS.del("token"); LS.del("tokenExpireMonitor");
+  LS.del("token"); LS.del("tokenExpireMonitor"); LS.del("lastMode");
+  lastMode = "list";     /* 30-view-list.js 那个变量：内存里那份也得跟着忘掉 */
   S.token = null;
 }
 /* ══ 退出登录 ════════════════════════════════════════════════════════
@@ -42,7 +60,7 @@ function forgetLogin(){
 
    用户名密码**留着**：登录页要靠它们填好，再点一次「连接」就回来 —— 这正是
    「退出登录」和「关掉页面」的区别。
-   本机偏好（草稿开关、时间偏移、设置里那份配置、上次看的列表）都不动，它们
+   本机偏好（草稿开关、设置里那份配置、上次看的列表）都不动，它们
    属于这台机器，不属于哪一次登录。 */
 function doLogout(){
   forgetLogin();
@@ -50,7 +68,7 @@ function doLogout(){
   S.user = null; S.conn = "idle"; S.view = undefined;
   S.mode = "list"; S.showDetail = false;
   S.data = {groups:[], terminals:[], termGroups:[], medias:[], mediaGroups:[], strategies:[]};
-  S.groupId = null; S.bells = []; S.bellsListId = null;
+  S.groupId = null; S.bells = []; S.grpMeta = null;
   S.listArea = {t:[],g:[]};
   S.pending = [];
   S.sel.clear(); S.tsel.clear();
@@ -98,6 +116,7 @@ function reLogin(){
       S.token = String(r.token);
       if (r.user) S.user = r.user;
       setSrvVersion(r);
+      noteSrvClock(r.config && r.config.timestamp);   /* 顺手跟服务器对一次钟（见 00-core.js） */
       S.conn = "ok";
       rememberLogin(LS.get("remember", true), name, password);   /* 本机那张到期表跟着往后拨 */
       reLoginDead = false;
@@ -145,6 +164,12 @@ function setSrvVersion(r){
 }
 
 async function doLogin(name, password){
+  /* 一趟新登录 = 从铃声计划起步，**不是**把上一趟停在哪儿捡回来（用户定的）。
+     本机那份页签记忆（bc.lastMode）在 forgetLogin() 里已经跟着令牌一起抹了 ——
+     这里收拾的是**内存里**这份：三条回登录页的路（开机没令牌、注销、令牌过期被
+     送回）都过 forgetLogin()，可它只管凭证，S.mode 还停在上一趟那一页，详情页
+     都可能是开着的。 */
+  S.mode = "list"; S.showDetail = false; lastMode = "list";
   S.conn = "busy"; renderAll();
   reLoginDead = false;                 /* 人手登了一趟，那扇「送回登录页」的门重新开张 */
   try{
@@ -153,6 +178,7 @@ async function doLogin(name, password){
     S.token = String(r.token);
     S.user  = r.user || {};
     setSrvVersion(r);
+    noteSrvClock(r.config && r.config.timestamp);     /* 顺手跟服务器对一次钟（见 00-core.js） */
     S.tenant = (r.config && r.config.apiBaseUrl) ? r.config.apiBaseUrl : null;
     S.conn = "ok";
     /* 地址不在这儿存 —— 点「连接」的时候就存过了（见 30-view-list 的登录卡片），
@@ -182,15 +208,15 @@ async function loadAll(){
   S.data.groups      = unwrap(groups).filter(g=>g.id!==0);
   S.data.terminals   = unwrap(terms);
   S.data.termGroups  = unwrap(tgs);
-  /* 配置借媒体库存着（见 js/05-config.js），那个专用文件夹和静音壳子从这儿就滤掉 ——
-     在源头滤一次，挑铃音、媒体库页签上的计数、别处任何按名字找媒体的地方，
-     全都不会再撞见它们，比在每个用到的地方各拦一道可靠。 */
-  S.data.medias      = unwrap(medias).filter(cfgMediaHide);
-  S.data.mediaGroups = unwrap(mgs).filter(cfgMediaHide);
+  /* 媒体库里那两样老东西从这儿就滤掉 —— 在源头滤一次，挑音源、媒体库页签上的
+     计数、别处任何按名字找媒体的地方，全都不会再撞见它们，比在每个用到的地方
+     各拦一道可靠。见下面 legacyMediaHide。 */
+  S.data.medias      = unwrap(medias).filter(legacyMediaHide);
+  S.data.mediaGroups = unwrap(mgs).filter(legacyMediaHide);
   S.data.strategies  = unwrap(strategies);
 
-  S.exam = loadExam();
-  cfgSyncOnce();                     /* 服务器上那份配置只在登录后对一次账 */
+  /* 考试模式那一份不存，照服务器上真实摆着的铃声读回来（见 40-view-exam.js） */
+  S.exam = await readExamState();
   loadTasks();                       /* 定时任务是独立资源，不阻塞主流程 */
   const def = S.user && S.user.users_config && S.user.users_config.default_ringing_scheme;
   const want = DEFAULT_GROUP || def;
@@ -218,24 +244,43 @@ function snapshotBells(){
   S.bells.forEach(b=>{ if (b.id) b._base = JSON.stringify(buildPayload(b)); });
 }
 
+/* 选中一张列表，把它的铃声拉回来。**不动 S.mode** —— 这件事两个地方做，意思不一样：
+   侧栏上点一下是「回到列表视图」（那一句写在点击处理里，见 30-view-list.js），
+   而开机这趟（loadAll）只是恢复上次看的那张列表，页签得留在用户原来待的那一页上。 */
 async function selectGroup(gid){
   S.groupId = Number(gid); LS.set("lastGroup", S.groupId);
   S.sel.clear();
-  S.mode = "list";                 /* 从侧栏点列表 = 回到列表视图 */
+  /* 标题上的名字是现成的（S.data.groups），铃声得等这一趟。中间这段标成 gLoad，
+     右栏正文就只画一句「正在读取」—— 不标的话，页面会拿手上那份**上一条任务的**
+     S.bells / S.listArea / S.grpMeta 在新名字底下摆出来，网慢的时候那就是一整屏
+     别人的内容（用户实测报的就是这个）。 */
+  S.gLoad = "busy";
   renderAll();
-  const rows = await fetchBells(S.groupId);
-  S.bells = rows.map(normBell).sort((a,b)=> hmsToSec(a.time)-hmsToSec(b.time));
-  S.bellsListId = S.groupId;      /* 这份 bells 是哪张列表的，分组清账时要用（见 00-core.js） */
+  let rows;
+  try{
+    rows = await fetchBells(S.groupId);
+  }catch(e){
+    /* 失败也把这一页交出去：正文换成一句「读取失败」，卡着「正在读取」不放比报错
+       更难受。**照旧往上抛** —— 开机那条路（loadAll → doLogin）就指着这个异常
+       把「连不上服务器」报出来（侧栏那条路由调用点自己接，见 30-view-list.js）。 */
+    S.gLoad = "bad"; renderAll();
+    throw e;
+  }
+  const g = grpAdoptRows(rows);
+  S.grpMeta = g.meta;
+  S.bells = g.bells.sort((a,b)=> hmsToSec(a.time)-hmsToSec(b.time));
   recomputeListArea();
   snapshotBells();
+  S.gLoad = "";
   renderAll();
 }
 
 async function reloadBells(){
   if (S.groupId==null) return;
   const rows = await fetchBells(S.groupId);
-  S.bells = rows.map(normBell).sort((a,b)=> hmsToSec(a.time)-hmsToSec(b.time));
-  S.bellsListId = S.groupId;      /* 这份 bells 是哪张列表的，分组清账时要用（见 00-core.js） */
+  const g = grpAdoptRows(rows);
+  S.grpMeta = g.meta;
+  S.bells = g.bells.sort((a,b)=> hmsToSec(a.time)-hmsToSec(b.time));
   recomputeListArea();
   snapshotBells();
 }
@@ -248,9 +293,9 @@ async function reloadGroups(){
   renderMain(); renderRail();
 }
 
-/* ══ 媒体库：每次挑铃音都重拉一遍 ═══════════════════════════════════
+/* ══ 媒体库：每次挑音源都重拉一遍 ═══════════════════════════════════
    S.data.medias 是开面板时（loadAll）拉的一份快照，但音频文件是**在厂商原后台上传**
-   的 —— 拿着那份快照去开「挑铃音」，刚传上去的文件在这儿根本不存在，人会觉得
+   的 —— 拿着那份快照去开「挑音源」，刚传上去的文件在这儿根本不存在，人会觉得
    「面板没同步」。所以每次打开选择器前重拉一次。
 
    顺带把时长也刷新了：听力铃声的 life_time 就是从这张表里量出来的（lifeTimeOf），
@@ -266,8 +311,8 @@ function refreshMediaLib(){
     api("GET","/medias/all",{params:{check:"true"}}),
     api("GET","/medias-groups/all")
   ]).then(([medias, mgs])=>{
-    S.data.medias      = unwrap(medias).filter(cfgMediaHide);   /* 同上：把配置那个壳子滤掉 */
-    S.data.mediaGroups = unwrap(mgs).filter(cfgMediaHide);
+    S.data.medias      = unwrap(medias).filter(legacyMediaHide);   /* 同上：把那两样滤掉 */
+    S.data.mediaGroups = unwrap(mgs).filter(legacyMediaHide);
   }).catch(()=>{}).then(()=>{ mediaRefreshing = null; });
   return mediaRefreshing;
 }
@@ -281,7 +326,7 @@ function refreshMediaLib(){
     const rows = Array.isArray(r) ? r : (r && Array.isArray(r.data) ? r.data : []);
     S.tasks = rows.map(normTask).sort((a,b)=> hmsToSec(a.time)-hmsToSec(b.time));
     S.tasks.forEach(t=>{ if (t.id) t._base = JSON.stringify(taskPayload(t)); });
-    renderTopbar(); renderMain();      /* 顶栏的「定时任务 N」跟着更新 */
+    renderTopbar(); renderMain();      /* 定时任务那一页的表身跟着更新（人不在那一页时，这一趟就是照常重画） */
   }catch(e){
     toast("定时任务拉取失败：" + e.message, "err");
   }

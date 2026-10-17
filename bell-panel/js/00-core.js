@@ -6,7 +6,7 @@
    就这一个手写的常量，**发版时改它** —— 这项目没有构建步骤，浏览器也读不到 .git，
    没有别的地方能自动拿到版本号。设置页尾部「版本信息」那张表显示的就是它。
    （厂商那套的版本号不在这儿：那是服务器报上来的，见 S.srvVersion。） */
-const PANEL_VERSION = "1.0.1";
+const PANEL_VERSION = "1.0.2";
 
 
 /* ══ utils ══════════════════════════════════════════════════════════ */
@@ -15,6 +15,18 @@ const $$ = (s,r)=> Array.prototype.slice.call((r||document).querySelectorAll(s))
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const pad = n => String(n).padStart(2,"0");
 const uniq = a => Array.from(new Set(a));
+/* 「现在是不是竖屏」—— 全项目**唯一**一处 matchMedia。布局那一层（什么地方折行、
+   哪一档收起来）一直由 css 的媒体查询说了算，这个函数管的是另一件事：js 得在动手
+   之前知道该把东西画进哪个容器。眼下有两处要问它，两处都是同一个岔路口 ——
+   宽屏弹模态、竖屏整页顶掉当前视图：
+
+     · 「更多功能 → 查询结果」（70-view-more，moreNarrow 只是它的别名）
+     · 考试模式标题旁那枚眼镜后面的「改动预览」（40-view-exam）
+
+   断点是 980px，和 css 里竖屏那一档同一个值（见 app.css 文件末尾那段）。
+   判据只在**点下去的那一下**看一眼，不挂 resize / matchMedia 监听 ——
+   窗口在结果页上被拉宽了，靠下一次重画收场（各页自己那一句）。 */
+const isNarrow = ()=> window.matchMedia("(max-width:980px)").matches;
 const LS = {
   get(k,d){ try{ const v=localStorage.getItem("bc."+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem("bc."+k, JSON.stringify(v)); }catch(e){} },
@@ -44,6 +56,37 @@ const WEEK = ["","周一","周二","周三","周四","周五","周六","周日"]
 /* 本地日期，不用 toISOString —— 那是 UTC，东八区早上 8 点前会差一天 */
 const isoOf = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const todayISO = () => isoOf(new Date());
+
+/* ══ 服务器现在几点 ═════════════════════════════════════════════════
+   面板上其它地方一律读本机时钟（todayISO 那一套）—— 只有考试模式那条
+   「所有科目都已结束」要用**打铃服务器自己那口钟**：它比的是服务器上排着的铃声
+   时刻，两边得是同一个钟，否则本机钟慢几分钟就会早报或晚报。
+
+   取法：登录（含自动续登）那一趟 /auth 的响应里带着 result.config.timestamp，
+   是服务器生成那一刻的 Unix 秒。拿它跟本机时钟对一次表，存下差值，之后一律用
+   「本机时钟 + 差值」。厂商前端自己也是这么干的：它侧栏那个服务器时钟就是
+   setTime = AppConfig.timestamp 起，再每秒 +1。
+
+   为什么不用响应头里那个 Date（那才是每次请求都能拿到的服务器时间）：服务器没给
+   Access-Control-Expose-Headers，跨域下浏览器不让 JS 读它 —— 实测拿不到。
+   /auth 里这个字段是唯一一条路。
+
+   差值存在本机（bc.srvSkew）：刷新页面时手上那张旧令牌还没过期，那一趟不经过
+   /auth（见 90-boot.js），不存的话一刷新就退回本机钟了。
+   从来没对上过表（差值 0）就老老实实用本机时钟 —— 和面板别处一个口径。 */
+function noteSrvClock(ts){
+  const sec = Number(ts);
+  if (!sec) return;                       /* 空值忽略：宁可留着上次对好的，也别抹成 0 */
+  S.srvSkew = sec*1000 - Date.now();
+  LS.set("srvSkew", S.srvSkew);
+}
+const srvNow = () => Date.now() + (Number(S.srvSkew)||0);
+/* 定宽的一行 "YYYY-MM-DD HH:MM:SS"，跟服务器上那些时刻一个写法 ——
+   日期和时间都补了零，所以字符串比大小就是比时间先后（同 isListExpired）。 */
+const srvStamp = () => {
+  const d = new Date(srvNow());
+  return isoOf(d)+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
+};
 
 /* ══ 快速时间输入框 ═════════════════════════════════════════════════
    不用 <input type="time">。原生那个打完一位数就自作主张补零、并把焦点跳到
@@ -145,7 +188,7 @@ function wireQuickTime(el, opt){
    挂 <body> 下的 #layers 里，position:fixed —— 不这样会被 .modal-body 的
    overflow 裁掉，也会被表格的 .tbl-wrap 裁掉。位置按锚点那枚「▾」算，超出视口
    就往回收，实在放不下就翻到上方。
-   ≤640px 不再当 popover：css 把它盖成一块带遮罩的居中模态（位置那两下用
+   ≤980px 不再当 popover：css 把它盖成一块带遮罩的居中模态（位置那两下用
    !important 压掉）。三列加起来才 216px 宽，竖屏上贴在输入框边上根本按不准。
    同时只开一个：再点别的「▾」先把前一个收了。 */
 let TP = null;
@@ -180,7 +223,7 @@ function openTimePicker(anchor, el, fix){
     '<div class="tp-head"><span>时</span><span>分</span><span>秒</span></div>'+
     '<div class="tp-cols">'+ tpColumn("h",c[0],23) + tpColumn("m",c[1],59) + tpColumn("s",c[2],59) +'</div>'+
     '<div class="tp-foot"><button type="button" class="btn btn-sm" data-tp-done>完成</button></div>';
-  /* 遮罩：宽屏上 display:none，纯粹是给 ≤640px 那份「当作模态」用的 */
+  /* 遮罩：宽屏上 display:none，纯粹是给 ≤980px 那份「当作模态」用的 */
   const scrim = document.createElement("div");
   scrim.className = "tp-scrim";
   const layers = $("#layers") || document.body;
@@ -258,30 +301,6 @@ function openTimePicker(anchor, el, fix){
   });
 }
 
-/* ══ 全局时间偏移 ═══════════════════════════════════════════════════
-   偏移量是「面板 → 服务器」这个方向上的差值：
-
-     偏移 −60 秒 · 面板上设 06:00:00 → 报文里出去的是 05:59:00
-     偏移 +60 秒 · 面板上设 06:00:00 → 报文里出去的是 06:01:00
-
-   反过来读的时候必须减回去：服务器上躺着 05:59:00，面板里就得显示 06:00:00。
-   这一步不能省 —— 读回来如果原样显示 05:59:00，用户不动它、直接保存，写出去就
-   成了 05:58:00，每存一次再偏一分钟，来回几趟时间就跑没了。所以读写成对：
-     offsetHMS   写：面板 → 报文
-     unoffsetHMS 读：报文 → 面板
-   ══════════════════════════════════════════════════════════════════ */
-const wrapHMS = sec => secToHMS(((sec % 86400) + 86400) % 86400);   /* 秒 → HH:MM:SS，跨零点绕回来 */
-function offsetHMS(t){                     /* 面板 → 服务器 */
-  if (!S.offsetSec) return t;
-  return wrapHMS(hmsToSec(t) + Number(S.offsetSec));
-}
-function unoffsetHMS(t){                   /* 服务器 → 面板 */
-  if (!S.offsetSec) return t;
-  return wrapHMS(hmsToSec(t) - Number(S.offsetSec));
-}
-/* 这里原本还有个 offsetLabel()（「不偏移」「−1分」这种给人看的短标签），
-   只喂给设置页数字框旁边那行「当前 ⋯」。那行去掉了，函数跟着走 —— 留着没人调。 */
-
 /* ══ 共享常量 ═══════════════════════════════════════════════════════
    放在 S 前面 —— S 的初始值要用到 PREP_MIN_DEFAULT，而 const 有 TDZ，
    声明在下面的话 S 求值时会直接抛 ReferenceError。 */
@@ -313,6 +332,12 @@ const S = {
      写死在默认值里。人在登录页填一次就行，填过之后浏览器自己记着（见
      30-view-list 的登录卡片，端口默认 81）。 */
   server : LS.get("server",""),
+  /* 播放代理在哪（见下面的 agentURL）。两条都**默认留空**：留空 = 代理在本机
+     （127.0.0.1）、端口 8181 —— 代理默认就和浏览器装在同一台机器上，那样
+     设置页那两个框一个字都不用填。装在别处的才填地址。
+     和服务器地址一样记在本机浏览器里。 */
+  agentHost : LS.get("agentHost",""),
+  agentPort : LS.get("agentPort",""),
   token  : null,
   tenant : null,
   user   : null,
@@ -326,37 +351,87 @@ const S = {
   /* 调试模式：按「提交」时先摊开提交队列让你看一眼报文，再点「发送」才真发。
      平时不摊，直接二次确认后提交走。入口同样收着。 */
   debug  : SHOW_MODE_SWITCHES ? LS.get("debug", false) === true : false,
+  /* 实时对讲接通／挂断的提示音（res/jietong.mp3、res/guaduan.mp3），默认**开着**。
+     纯本机偏好，只响给自己听，和服务器一点关系没有；关掉就是一声不响，
+     见 75-view-live.js 的 liveChime。 */
+  chime  : LS.get("chime", true) !== false,
   conn   : "idle",
   data   : {groups:[], terminals:[], termGroups:[], medias:[], mediaGroups:[], strategies:[]},
   groupId: null,
   bells  : [],
-  /* bells 是**哪张列表**的。selectGroup 是先改 groupId、renderAll 一次、才去拉铃声的，
-     中间那一帧里 groupId 已经指向新列表、bells 还是旧列表的 —— 分组要按 bells 清账
-     （见 js/35-groups.js 的 grpReconcile），认错了就会把新列表的分组当成死账抹掉。 */
-  bellsListId: null,
+  /* 这条任务的铃声正在路上："" | "busy" | "bad"。点了侧栏另一条任务之后，名字
+     当场就换（它在 S.data.groups 里是现成的），铃声得等 fetchBells 那一趟回来
+     —— 网速不好的时候这一会儿不短，用户实测报的就是这个。
+     这一位非空时，右栏正文只画一句「正在读取」，**不画**手上那份
+     S.bells / S.listArea / S.grpMeta：那三样还是上一条任务的，照着画出来就是在
+     新的名字底下摆别人的内容（比空着更容易看错）。见 10-data.js 的 selectGroup。 */
+  gLoad  : "",
+  /* 当前列表的「名单」—— 那条存着分组名的静默铃铛（面板对象，见 35-groups.js）。
+     **不在 S.bells 里**：它不算一条铃声，表格、计数、搜索都看不见它。
+     selectGroup / reloadBells 拉完铃声顺手填上，null = 这张列表还没有分组。 */
+  grpMeta: null,
   listArea: {t:[], g:[]},
   pending: [],
   sel    : new Set(),
   tsel   : new Set(),          // 定时任务表里勾中的行（存 taskKey，不是 id）
   view   : undefined,          // undefined | "app"
-  mode   : "list",             // "list" | "tasks" | "exam" | "settings" | "more" —— 主区显示哪个视图
+  mode   : "list",             // "list" | "tasks" | "exam" | "settings" | "more" | "live" | "online" —— 主区显示哪个视图
   /* 「铃声计划」页窄到一次只能显示一栏时，现在看的是哪一栏。
-     true = 详情（用户点过某条任务），false = 任务列表。桌面/平板并排显示时
-     这个值不起作用（CSS 只在 ≤640px 认它），所以不用跟着视口宽度去改它。
+     true = 详情（用户点过某条任务），false = 任务列表。两栏并排显示时
+     这个值不起作用（CSS 只在 ≤980px 认它），所以不用跟着视口宽度去改它。
      不落 localStorage：这是「这次点开了哪一条」，不是偏好设置。 */
   showDetail: false,
   tasks  : [],                 // 定时任务（不属于任何铃声列表）
   wsIp   : null,               // 状态推送的 WebSocket 地址（/language 返回）
   link   : "off",              // 状态推送连接：off | busy | ok | bad
   termStat: {},                // 点位名 → "online" | "offline"（见 15-status.js）
-  offsetSec: Number(LS.get("offsetSec", 0)) || 0,   // 全局时间偏移（秒，可为负）
+  srvSkew: Number(LS.get("srvSkew", 0)) || 0,       // 本机钟 → 服务器钟 的差值（毫秒，见 noteSrvClock）
   settingsOpen: false,
-  exam   : null,               // 考试模式（loadExam() 在 loadAll() 之后填充）
+  exam   : null,               // 考试模式（readExamState() 在 loadAll() 里从服务器读回来）
   /* dt = 各种「对话框开到一半」的临时状态。medQ/medG/medSel 曾经也在这儿，
-     是旧那套批量改铃音选择器的 —— 换成 openMediaPicker 之后它自己管自己的
+     是旧那套批量改音源选择器的 —— 换成 openMediaPicker 之后它自己管自己的
      st，全局这份没人问了，删掉。 */
-  dt: {fq:"", areaTab:"term", areaQ:"", areaGroup:"all", area:{t:[],g:[]}}
+  dt: {fq:"", tkq:"", areaTab:"term", areaQ:"", areaGroup:"all", area:{t:[],g:[]},
+       /* 竖屏上「改动预览」是不是正整页开着（宽屏那一支走模态，用不上它）。
+          见 40-view-exam 的 openExamPreview / renderExamPreviewFull。 */
+       exPreview:false}
 };
+
+/* ══ 播放代理在哪 ════════════════════════════════════════════════════
+   实时对讲那条音频是 UDP，浏览器里没有原始套接字；面板要是挂在 https 上，
+   连 `ws://` 都出不去（混合内容拦截）。这两件事都得由跑在**操作员这台机器**上的
+   「播放代理」进程替网页走完，源码在仓库的 play-agent/。
+
+   设置页只问两件事：地址、端口。**地址默认跟着打铃服务器走** —— 代理通常就和
+   服务器装在同一台机器上，登录页填过服务器地址之后这两个框一个字都不用填。
+   两条都记在本机浏览器里（和 S.server 一个待遇），换台设备要重填。 */
+const AGENT_PORT_DEFAULT = 8181;
+
+/* S.server 形如 "http://192.168.1.100:81"（登录页拼的），也可能只存了个主机名。
+   这儿只要主机那一段 —— 端口是打铃服务器自己的，跟代理没有关系。 */
+function serverHost(){
+  const m = /^(?:[a-z]+:\/\/)?([^\/?#]+)/i.exec(String(S.server||""));
+  return m ? m[1].split("@").pop().split(":")[0] : "";
+}
+
+/* 设置页那两个框 → 一条能连的地址。地址框里允许直接粘整串（人会顺手从别处拷
+   `http://主机:端口` 过来），所以这儿要剥壳；端口以框里填的为准，框里没写就认
+   地址自带的那一个，都没有才落到 8181。主机留空 = **本机 127.0.0.1**（默认代理
+   就和浏览器装在同一台机器上）；要连装在别处的代理，在设置页填那一台的地址。 */
+function agentURL(){
+  let host = String(S.agentHost||"").trim(), port = String(S.agentPort||"").trim();
+  host = host.replace(/^[a-z]+:\/\//i, "").split("/")[0];       /* 剥掉协议和路径 */
+  const c = host.lastIndexOf(":");
+  if (c > -1 && /^\d+$/.test(host.slice(c+1))){                 /* 地址自带端口 */
+    if (!port) port = host.slice(c+1);
+    host = host.slice(0, c);
+  }
+  if (!host) host = "127.0.0.1";
+  const n = Number(port);
+  if (!/^\d+$/.test(port) || !(n >= 1 && n <= 65535)) port = String(AGENT_PORT_DEFAULT);
+  return "ws://" + host + ":" + port;
+}
+
 const DEFAULT_GROUP = LS.get("lastGroup", null);
 
 /* ══ 图标 ════════════════════════════════════════════════════════════
@@ -383,6 +458,9 @@ const ICON = {
   x   : svgIcon('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
   /* plus */
   plus: svgIcon('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+  /* search —— 搜索框里那个放大镜。它贴在框子**里面**、文字前头（排版见 css 的
+     .sbox），不是一枚按钮，所以只做记号、不接点击。 */
+  search: svgIcon('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
   /* zap */
   zap : svgIcon('<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>'),
   /* refresh-cw */
@@ -398,10 +476,15 @@ const ICON = {
   /* info —— 定时任务表「详情」那一栏的圈 i：点开看任务信息与执行区域。
      原来是放大镜，可这儿的语义不是「搜索」而是「关于这一条」，圈 i 才对得上。 */
   info: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'),
+  /* eye —— 「考试模式」标题旁那枚：点开看改动预览（这一场排下去之后，常规列表里
+     哪些铃声会在考试时段自动闪避）。它只是**看一眼**，不改任何东西，所以没跟
+     右边那两个动作键（清空 / 启用、关闭）摆在一起，而是挨着标题 —— 说的是
+     「关于这一页」，不是「对服务器做点什么」。 */
+  eye : svgIcon('<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>'),
   /* check —— 批量条上的「启用」。和 x（停用）成对，两个都是只做一件事的图标键，
      文字写在 title/aria-label 里。 */
   check: svgIcon('<path d="M20 6 9 17l-5-5"/>'),
-  /* music —— 批量编辑菜单里「改铃音」那一行。系统里没有第二个地方需要乐器记号，
+  /* music —— 批量编辑菜单里「改音源」那一行。系统里没有第二个地方需要乐器记号，
      但那一列四个动作总得各自有个记号，光靠文字排一行分不出层次。 */
   music: svgIcon('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
   /* user —— 顶栏那个头像圈里的人头。**这是个图标，不是谁的照片**：面板拿不到
@@ -417,7 +500,48 @@ const ICON = {
      分得开：一个是「到点做事」，一个是「这一场考试」。 */
   exam : svgIcon('<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>'),
   /* layout-grid —— 更多功能（四方格）。「还有别的」这件事，四方格是最短的说法。 */
-  grid : svgIcon('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')
+  grid : svgIcon('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>'),
+  /* phone —— 实时对讲（一个电话听筒）。这一页做的是拨号对讲，听筒是最短的说法；
+     用 ICON.live（那道往外发的波）会跟铃声表里「采播」那个记号撞脸。 */
+  phone: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>'),
+  /* mic —— 对讲页顶上那枚大话筒，说的是「你这会儿在不在往外说」。
+     和 phone 分得开：听筒是「打电话找谁」，话筒是「我正在说」。 */
+  mic  : svgIcon('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>'),
+  /* play —— 在线播放（一个三角）。拨号页那枚「继续」也用它：
+     继续就是播放的那个三角，不必再刻一枚长相差不多的。 */
+  play : svgIcon('<path d="M6 3v18l14-9z"/>'),
+  /* phone-off —— 拨号页那枚「挂断」。就是上面那支听筒加一道斜杠，一眼认得出
+     是「把这通电话掐了」而不是「再打一个」。 */
+  hangup: svgIcon('<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/>'),
+  /* pause —— 拨号页那枚「暂停」（两根竖条）。它和「继续」是同一个键的两副面孔，
+     字换、记号跟着换。**没用话筒划线那类记号**：那说的是「你这边的麦克风关了」，
+     而暂停在这一页的意思是「正在说的这句先掐住」，两根竖条是通用的那个说法。 */
+  pause: svgIcon('<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>'),
+  /* stop —— 在线播放那枚「停止」（一个方块）。和 pause 是两件事，所以是两枚记号：
+     暂停是「先掐住、待会儿接着说」，停止是「这一条到此为止、从头再来」
+     （停止之后进度条回零，见 75-view-live.js 的 playStop）。 */
+  stop : svgIcon('<rect x="4" y="4" width="16" height="16" rx="2"/>'),
+  /* volume —— 在线播放那根音量滑杆前头的记号（喇叭 + 两道声波）。它旁边那一行字
+     写的才是这一页的关键：这个音量管的是**终端听见的那一份**，不是这台电脑。 */
+  volume: svgIcon('<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'),
+  /* delete —— 拨号盘号码行最右边那枚退格：向前删掉一位。
+     它只在这一处用，所以没跟上面那两枚页签记号摆在一起说。 */
+  bksp : svgIcon('<path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2"/><path d="m18 9-6 6"/><path d="m12 9 6 6"/>'),
+  /* 下面三枚是铃声「播放模式」的记号（厂商字段 play_model：0 列表 / 1 循环 /
+     2 采播），挂在铃声表「播放时长」那一列的时长前头。三个字一列排下来每行都
+     要重读一遍，一枚记号扫过去就认得了 —— 字没丢，挪进 title。
+     列表是一张单子逐条走，循环是那两支绕着转的箭头，采播是往外发的波。 */
+  list : svgIcon('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>'),
+  loop : svgIcon('<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>'),
+  /* 下面两枚是**在线播放**那一页播放模式的记号（五档，见 75-view-live.js 的 playModeNext）：
+     列表播放用上面那枚 list、单曲播放用 music、列表循环用 loop，剩下两档在这儿。
+     五档就差在「一遍还是绕圈」和「一张单子还是这一首」两件事上：
+       · repeat-1 = loop 那两支绕圈箭头 + 中间立一个「1」—— 绕的还是这一首；
+       · shuffle = 两条交叉的箭头（各带一个回头的小尖）—— 顺序被打乱了。
+     和上面那三枚一样照 lucide.dev 原样抄，不自己画。 */
+  repeat1: svgIcon('<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/>'),
+  shuffle: svgIcon('<path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/>'),
+  live : svgIcon('<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/>')
 };
 
 /* ══ api ════════════════════════════════════════════════════════════ */
@@ -566,15 +690,12 @@ const mediaJunc = (m, mg) => ({
 
 /* ══ normalize a server bell → panel bell ═══════════════════════════ */
 function normBell(b){
-  /* 报文的时刻先减掉全局偏移，还原成用户当初设的那一刻（见上面的 offsetHMS/unoffsetHMS） */
-  const raw = String(b.execute_time||"").split(",").filter(Boolean);
-  const times = raw.map(unoffsetHMS);
+  const times = String(b.execute_time||"").split(",").filter(Boolean);
   return {
     id: b.id,
     name: b.name,
     times: times.length ? times : ["08:00:00"],
     time: times[0] || "08:00:00",
-    _rawTimes: raw,          /* 服务器上原样躺着的时刻，改偏移量时靠它重算显示 */
     strategyId: b.timing_bells_strategy_id,
     isDone: Number(b.is_done)||0,
     type: b.type==null?1:b.type,
@@ -657,7 +778,9 @@ function weekNumOf(dstr){
 /* ══ payload builder — the "format to vendor" layer ═════════════════ */
 function buildPayload(b){
   return {
-    name: b.name,
+    /* 有分组的话，名字尾巴上要带着 ¤分组名 —— 那才是服务器上存的那份（见
+       35-groups.js）。b.name 是给人看的显示名，两者只在这一个地方合流。 */
+    name: grpFullName(b),
     timing_bells_strategy_id: Number(b.strategyId),
     timing_bells_groups_id: Number(S.groupId),
     terminals_light_id: Number(b.lightId),
@@ -667,7 +790,7 @@ function buildPayload(b){
     sound_source: b.sound,
     is_done: Number(b.isDone),
     timing_bells_mode: String(b.mode),
-    execute_time: b.times.map(offsetHMS).join(","),   /* ← 全局时间偏移在这里生效 */
+    execute_time: b.times.join(","),
     terminals:        b.termNames.map(n=>junction(b.termIds, n, "terminals_id", S.data.terminals)),
     terminals_groups: b.groupNames.map(n=>junction(b.groupIds, n, "terminals_groups_id", S.data.termGroups)),
     medias:           b.mediaNames.map(n=>junction(b.mediaIds, n, "medias_id", S.data.medias)),
@@ -763,28 +886,6 @@ function queueToggle(b, on){
     sub: on ? "启用" : "停用"
   });
 }
-const pendingFor = id => S.pending.filter(o=>o.bellId===id && o.status==="pending");
-
-/* 偏移量一改，所有时刻的显示都得重算 —— 面板上的时刻是「服务器上那一刻」减掉偏移
-   得来的，光重画没用，b.times 里躺的还是老偏移算出来的值（服务器上 6:49、偏移改成
-   −60 之后，面板该显示 6:50，不是 6:49）。 */
-function reapplyOffset(){
-  const fix = (o, payload) => {
-    if (!o._rawTimes) return;                    /* 本地新建的，时刻本来就是面板里的 */
-    if (pendingFor(o.id).length){                /* 用户手改过的，面板上的时刻说了算 */
-      o._rawTimes = o.times.map(offsetHMS);
-      return;
-    }
-    const t = o._rawTimes.map(unoffsetHMS);
-    if (!t.length) return;
-    o.times = t;
-    o.time = t[0];
-    if (o.id) o._base = JSON.stringify(payload(o));
-  };
-  S.bells.forEach(b=> fix(b, buildPayload));
-  S.tasks.forEach(t=> fix(t, taskPayload));
-  S.bells.sort((a,b)=> hmsToSec(a.time)-hmsToSec(b.time));
-}
 /* 提示语得跟着模式走：草稿模式下是「攒着」，即时模式下是「已经写进去了」 */
 const wroteWord = () => S.draft ? "已加入待提交" : "已写入服务器";
 const tailFor   = () => S.draft ? "，改动待提交" : "，已写入服务器";
@@ -811,16 +912,12 @@ function setDraft(on){
 function normTask(t){
   const medias = (t.medias||[]).map(m=>m.name);
   const groups = (t.terminals_groups||[]).map(g=>g.name);
-  /* 同样要把全局偏移减回去，不然编辑框里显示的是服务器上的那一刻 */
-  const raw = String(t.execute_time||"00:00:00").split(",").filter(Boolean);
-  const tms = raw.map(unoffsetHMS);
-  const times = tms.length ? tms : ["00:00:00"];
+  const times = String(t.execute_time||"00:00:00").split(",").filter(Boolean);
   return {
     id: Number(t.id), isNew:false,
     name: t.name || "",
-    time: times[0],
-    times: times,
-    _rawTimes: raw,
+    time: times[0] || "00:00:00",
+    times: times.length ? times : ["00:00:00"],
     volume: Number(t.volume)||70,
     priority: Number(t.priority)||50,
     lightId: Number(t.terminals_light_id)||1,
@@ -850,7 +947,7 @@ function taskPayload(t){
     priority: Number(t.priority),
     time_type: Number(t.timeType),
     terminals_light_id: Number(t.lightId),
-    execute_time: offsetHMS(t.time),                  /* ← 全局时间偏移 */
+    execute_time: t.time,
     type: Number(t.type),
     sound_source: t.sound,
     /* 写进去的是裸数组，读回来是带 id 的对象（厂商自己的前端也这么不对称：
@@ -921,7 +1018,7 @@ function taskWhen(t){
    两条互不相干的铃声。以前编辑上课铃会跟着挪搭档（还顺带改名、改音量），
    删上课铃还会把搭档一起删掉 —— 用户单独调过搭档之后，再动一下上课铃，
    那些调整就被悄悄抹了。现在两条各管各的：搭档改名、挪时间、单独删，
-   都由用户在铃音列表里自己决定，面板不再认领它。
+   都由用户在铃声列表里自己决定，面板不再认领它。
 
    「提前几分钟」是**每条铃声自己的**属性（b.prepMin），不是全局设置 ——
    同一天里第一节和第五节想要的提前量可能不一样。3 分钟只是新建时的默认值。
@@ -1022,29 +1119,6 @@ function lifeTimeOf(names){
   names.forEach(n=>{ const sec = mediaSeconds(n); if (sec!=null) s += sec + 2; });
   return secToHMS(s);
 }
-/* 铃音预设：一个名字 + 一个服务器上的文件名，全部由用户自己在全局设置里加。
-   这里**没有内置项** —— 一条都没有的时候，「选择铃音」的预设页签和
-   考试铃声那一格各自有一套空态（见 drawPresets、examSectionHTML 里的「无」）。
-   注意上课铃那条「要不要一起建预备铃」认的是文件名（isClassBell），和预设无关。
-
-   存在**面板配置**里（S.cfg.presets，见 js/05-config.js）—— 和分组同一份、同一条路：
-   在一台电脑上建的预设，换一台电脑打开面板也在。 */
-/* 设置面板要能看见填了一半的新预设，所以原始列表和参与选择的列表分开：
-   没填全的（缺名字或缺文件）先不进 PRESETS。 */
-const rawPresets = ()=>{ const r = S.cfg && S.cfg.presets; return Array.isArray(r) ? r : []; };
-const filledPreset = p => !!(p && p.label && p.media);
-let PRESETS = [];
-/* 配置一换就重算 —— 开机对账拿回服务器那份、自己改完、以及下面 setUserPresets
-   都要走这儿。PRESETS 是选择器直接拿来画的那一份。 */
-function loadPresets(){ PRESETS = rawPresets().filter(filledPreset); }
-function setUserPresets(list){
-  S.cfg.presets = list;
-  cfgSave("presets");              /* 本机当场写，静默一会儿再推给服务器 */
-  loadPresets();
-}
-/* 这儿原来有个 presetFor(文件名) → 预设。它只伺候定时任务那个「音源」下拉
-   （要把当前值反查成哪一条预设好选中）。那个下拉换成和铃声一样的音源控件之后，
-   没人再问了 —— 预设现在是选择器里的一个页签，勾的是文件名本身，不用反查。 */
 /* 一次播放可能选了多个文件、或者几个整个文件夹，显示时拼成一行 */
 const mediaLabel = s => [].concat((s.media||[]), (s.groups||[]).map(x=>x+"（文件夹）")).join("、");
 

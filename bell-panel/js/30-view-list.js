@@ -122,7 +122,7 @@ function shellHTML(){
        不用给页面另加 padding-bottom，也不会有最后一行铃声被它压在底下。
        宽屏上它整根不显示（css 里 `.navbar{display:none}`），顶栏右上那排页签照旧。
        （它叫 navbar 不叫 tabbar：`.tabbar` 这个名字已经被弹窗里那种横向文字页签
-       占着了 —— 区域编辑器、铃音选择器、铃声编辑框里各有一条，是另一样东西。） */
+       占着了 —— 区域编辑器、音源选择器、铃声编辑框里各有一条，是另一样东西。） */
     '<nav class="navbar" id="navbar"></nav>'+
   '</div>';
 }
@@ -140,15 +140,69 @@ const userNameText = ()=> ((S.user && S.user.name) || LS.get("userName","") || "
    （这句提示语跟着格子上的字样走：按钮现在写「注销」，提示语就不能还叫「退出登录」。） */
 const logoutTitle = ()=>{ const n = userNameText(); return "点击注销" + (n ? "："+n : ""); };
 
+/* 哪一格该带角上那颗小圆点。三件事同一个意思：这一项**正在跑**，人不在那一页
+   也看得见 —— 「考试模式」启用中、「实时对讲」接通中、「在线播放」连接/播放/暂停中。
+   与 syncSessionBadge 用的判据是同一套（通话的 calling/talking、播放的三档），
+   两边别各写各的。 */
+function modeDotOn(m){
+  if (m === "exam") return !!(S.exam && S.exam.on);
+  if (m === "live"){
+    const lv = S.dt.live;
+    return !!(lv && (lv.phase === "calling" || lv.phase === "talking"));
+  }
+  if (m === "online"){
+    const pl = S.dt.play;
+    return !!(pl && (pl.phase === "connecting" || pl.phase === "playing" || pl.phase === "paused"));
+  }
+  return false;
+}
+
+/* 圆点只增删那一颗 span，不重画整条顶栏／导航栏 —— 会话状态每变一次都会走
+   renderMain，而顶栏上是连接读数、导航栏上是选中态，整条重写一遍纯属白费，
+   还会把别人挂在按钮上的东西冲掉。顶栏页签用的是 .seg-dot（跟在字后面），
+   底部导航栏用的是 .navbar-dot（钉在图标右上角），同一个色、同一个意思。 */
+function syncModeDots(){
+  const put = (host, cls, m, title)=>{
+    if (!host) return;
+    const has = host.querySelector(":scope > ." + cls);
+    const want = modeDotOn(m);
+    if (want && !has){
+      const s = document.createElement("span");
+      s.className = cls;
+      if (title) s.title = title;
+      host.appendChild(s);
+    } else if (!want && has){
+      has.remove();
+    }
+  };
+  const seg = $("#modeSeg");
+  const nav = $("#navbar");
+  put(seg && seg.querySelector('button[data-mode="exam"]'),   "seg-dot", "exam",   "考试模式启用中");
+  put(seg && seg.querySelector('button[data-mode="live"]'),   "seg-dot", "live",   "正在通话中");
+  put(seg && seg.querySelector('button[data-mode="online"]'), "seg-dot", "online", "正在播放中");
+  const ni = m=>{
+    const b = nav && nav.querySelector('.navbar-btn[data-mode="'+m+'"]');
+    return b && b.querySelector(".navbar-ic");
+  };
+  put(ni("exam"),   "navbar-dot", "exam");
+  put(ni("live"),   "navbar-dot", "live");
+  put(ni("online"), "navbar-dot", "online");
+}
+
 function renderTopbar(){
   const el = $("#topbar"); if (!el) return;
   const np = S.pending.filter(o=>o.status==="pending").length;
   /* 「‹ 返回」该不该出现。竖屏上它和左边那个标题是**同一个位置的两种占法**
      （那一格只够站一个），所以先算出来，标题照着它决定收不收 —— css 只管
      `.brand.has-back{display:none}`，不去猜「这一页有没有返回」。
-     哪两处需要它，见下面 .tb-r 里那段老注释。 */
+     哪几处需要它，见下面 .tb-r 里那段老注释。
+     「定时任务」也在里头：它和铃声计划的详情页是同一个版式（左栏 + 右栏），
+     窄屏一栏时左栏让位，出口就只剩这一枚。 */
   const showBack = ((!S.mode||S.mode==="list") && S.showDetail) ||
-                   (S.mode==="more" && S.dt.more && S.dt.more.full);
+                   S.mode==="tasks" ||
+                   (S.mode==="more" && S.dt.more && S.dt.more.full) ||
+                   (S.mode==="exam" && S.dt.exPreview) ||
+                   S.mode==="settings";
   /* 里面再套一层 .topbar-inner：横条本身通栏（分隔线要顶到两边），
      但内容跟下面 .main-inner 用同一套左右边距，上下边缘才对得齐。
      再往里分 .tb-l / .tb-r 两组，只为窄屏折行用 —— 桌面上这两层是
@@ -160,7 +214,7 @@ function renderTopbar(){
          这一档一行装不下时四格读数整组折到第二行、靠右；见 css 里 .tb-stats 那段。
          需要「‹ 返回」时整块让位（.has-back），两者同一时刻只站一个。 */
       '<div class="brand'+(showBack?" has-back":"")+'"><h1>广播控制台</h1></div>'+
-      /* 四格读数包成一组（.tb-stats）。宽屏和 641–820 上这一层是 display:contents，
+      /* 四格读数包成一组（.tb-stats）。宽屏（>980px）上这一层是 display:contents，
          等于不存在；只有竖屏上它才成为真的盒子，四格整体右对齐地贴在顶栏右端 ——
          「右对齐」这件事于是只写在这一个盒子上，不用给某一格挂 margin。
          顺带把**折行**也管住了：窄到四格一行放不下时，这一组自己往下折、而且组内
@@ -180,10 +234,10 @@ function renderTopbar(){
         '<span class="dotstat '+S.conn+'" id="connDot"></span>'+
         '<button class="dimmer chip-link" id="connBtn">'+connText()+'</button></span>'+
       /* 终端在线状态是另一条 WebSocket，跟 REST 通不通是两回事，分开报。
-         这一格点开一张终端列表（在线 / 离线两页签，见 15-status.js 的 openTermList）。
+         这一格点开「终端管理」（在线 / 离线两页签，见 15-status.js 的 openTermList）。
          推送没连上时它照样点得开 —— 那张表会照实写「状态未知」，比一个点不动的读数有用；
-         「推送连没连上」这句交代跟着搬进了那张表的副标题（提示语让给「点击查看终端列表」了）。 */
-      '<span class="stat cellbtn" id="termCell" title="点击查看终端列表">'+
+         「推送连没连上」这句交代跟着搬进了那张表的副标题（提示语让给「点击查看终端管理」了）。 */
+      '<span class="stat cellbtn" id="termCell" title="点击查看终端管理">'+
         '<span class="icostat '+(S.link==="ok"?"ok":S.link==="busy"?"busy":"bad")+'" id="linkDot">'+ICON.monitor+'</span>'+
         '<button class="dimmer chip-link" id="linkText">'+esc(linkText())+'</button></span>'+
       /* 头像 + 「注销」。头像就是图标库里那个人头（ICON.user），不套圈、绿的那颗，
@@ -208,20 +262,29 @@ function renderTopbar(){
       /* 「‹ 返回」= 以前详情页里那个「‹ 任务列表」，搬到顶栏里、改叫「返回」。
          只有竖屏上才显示（.rail-back 那条规则），而且占的是**左端标题那一格**：
          标题和它二选一，同一时刻只站一个（见 css 里 `.brand.has-back` 那条）。
-         两个地方要用它：
+         三个地方要用它：
 
-           1. 铃声计划的详情页 —— 宽屏时侧栏一直摆在左边，点一下列表名就回来了，
-              顶栏再来一个是同一个动作的第二遍，所以那里只管竖屏。
-           2. 「更多功能」查到结果之后（70-view-more 的 st.full）—— 竖屏上结果视图
-              是**整块顶掉浏览区**的，这一页没有别的出口；页签虽然还在，但页签是
-              「去别页」，不是「回到刚才那张表」。宽屏那一支走的是模态，弹窗自带关闭，
-              所以这一条照样进不来。
+           1. 铃声计划的详情页，以及**定时任务那一页** —— 这两个是同一个版式
+              （左边一栏列表、右边一栏详情），宽屏时侧栏一直摆在左边，点一下
+              列表名就回来了，顶栏再来一个是同一个动作的第二遍，所以只管竖屏。
+              （定时任务的入口是侧栏底部那张卡片，窄屏上它跟着侧栏一起让位，
+              没有这一枚就退不出来了。）
+           2. 「更多功能」查到结果之后（70-view-more 的 st.full），以及考试模式那枚
+              眼镜后面的「改动预览」（40-view-exam 的 S.dt.exPreview）—— 竖屏上这两份
+              结果视图都是**整块顶掉浏览区**的，那一页没有别的出口；页签虽然还在，
+              但页签是「去别页」，不是「回到刚才那张表 / 刚才那份配置」。这两处宽屏
+              那一支走的都是模态，弹窗自带关闭，所以这一条照样进不来。
+           3. 设置页 —— **这一条横竖屏都判真，只是横屏上看不见它**（.rail-back 基线
+              就是 display:none）：横屏的出口长在设置页自己那一行标题的最右边
+              （「关闭设置」，见 20-ui.js 的 renderSettings），竖屏上那枚收起来，
+              改用这一枚。竖屏没有这条退路的话就出不来了 —— 底部那条导航栏里
+              压根没有「设置」这一格（它当初就是为这个从页签里搬走的）。
 
          它在顶栏里，不在 #main 里，而 lockDetail 只遍历 .wb-main 的控件 ——
          所以被考试模式锁住的那张详情页照样退得出来。这一条是刻意的，别改成
          「顺手也锁上」。 */
       (showBack ? '<button class="btn rail-back" id="tbBack">'+ICON.chevL+' 返回</button>' : "")+
-      /* 页签和「提交」包成一组（.tb-act）。它在宽屏和 641–820 上是 display:contents，
+      /* 页签和「提交」包成一组（.tb-act）。它在宽屏（>980px）上是 display:contents，
          等于不存在 —— 排出来和包之前一模一样；在竖屏上整组收起来（页签搬去了底下
          那条导航栏，见 renderNavbar）。所以这一层现在的用处只有一个：给「竖屏上把
          这两样一起收掉」一个抓手。
@@ -229,12 +292,29 @@ function renderTopbar(){
       '<div class="tb-act">'+
       '<div class="seg" id="modeSeg">'+
         '<button data-mode="list"'+(!S.mode||S.mode==="list"?' class="on"':"")+'>铃声计划</button>'+
-        '<button data-mode="tasks"'+(S.mode==="tasks"?' class="on"':"")+'>定时任务</button>'+
+        /* 「定时任务」原来在这儿（竖屏那条底部导航栏里也有一格）。两处都撤了：
+           它不是一个和「铃声计划」平级的视图，而是**铃声计划这一页里**的另一种内容
+           —— 入口改成长在侧栏底部的那张常驻卡片（见 renderRail 的 #railTasks），
+           点了它之后右边那一栏从「某张列表」换成「定时任务」，左边那份列表照旧站着。 */
         '<button data-mode="exam"'+(S.mode==="exam"?' class="on"':"")+'>考试模式'+
-          (S.exam&&S.exam.on?'<span class="seg-dot" title="考试模式启用中"></span>':"")+'</button>'+
+          (modeDotOn("exam")?'<span class="seg-dot" title="考试模式启用中"></span>':"")+'</button>'+
+        /* 「实时对讲」和「在线播放」：这两件是**对着终端说话／放东西**，
+           和左边那两个「排班打铃」是两种活，所以单摆一段。位置在「更多功能」之前
+           —— 那两个是日常会用的，更多功能是「其余」，谁在后头谁更边缘。
+
+           「实时对讲」那一个**只在能拿到麦克风的页面里才摆**（见 75-view-live.js
+           的 liveUsable）：明文 http 打开时浏览器根本不给 mediaDevices，摆出来
+           就是个按下去必然失败的页签。「在线播放」不受这条管 —— 它不要麦克风，
+           AudioWorklet 在明文 http 下虽然没有，但那条路还有 ScriptProcessorNode
+           可以退，所以它在非安全上下文里**照样摆得出来**（见 playUsable）。 */
+        (liveUsable() ?
+          '<button data-mode="live"'+(S.mode==="live"?' class="on"':"")+'>实时对讲'+
+            (modeDotOn("live")?'<span class="seg-dot" title="正在通话中"></span>':"")+'</button>' : "")+
+        (playUsable() ?
+          '<button data-mode="online"'+(S.mode==="online"?' class="on"':"")+'>在线播放'+
+            (modeDotOn("online")?'<span class="seg-dot" title="正在播放中"></span>':"")+'</button>' : "")+
         /* 「更多功能」：装那些一年用不上两回、但不该没有的东西（眼下是终端任务
-           反查）。放在考试模式右边、齿轮左边 —— 左边三个是「日常在用的」，
-           右边这个齿轮是「设置」，它夹在中间，正是「其余」的位置。 */
+           反查）。它排在最右边 —— 左边那些是「日常在用的」，这一个装的是「其余」。 */
         '<button data-mode="more"'+(S.mode==="more"?' class="on"':"")+'>更多功能</button>'+
         /* 齿轮原来住在这儿（这一排里唯一一个光有图标没有字的项）。现在搬去左边
            「注销」右边那一格，改叫「设置」，竖屏那条底部导航栏里也不放它 ——
@@ -363,35 +443,76 @@ function renderTopbar(){
      再点一次「开始查询」就重新出来；查过的东西是这一趟会话的事，不是错误，
      没有理由顺手清掉。（真正要清的是「日期/终端改了」，那条路走 moreInvalidate。） */
   if (tbBack) tbBack.onclick = ()=>{
+    /* 定时任务那一页：退回「铃声计划」，侧栏（那张卡片就在它底下）跟着回来。
+       S.showDetail 一个字不碰 —— 进来之前那一位是真是假，退回去就还是哪一位：
+       从某张列表的详情页点卡片进来的，退回那张详情页；从左侧那份列表点进来的，
+       退回那份列表。 */
+    if (S.mode==="tasks"){ S.mode = "list"; renderAll(); return; }
     if (S.mode==="more" && S.dt.more && S.dt.more.full){ S.dt.more.full = false; renderAll(); return; }
+    /* 考试模式那份「改动预览」同一个道理：收掉这一格，退回**考试模式这一页**，
+       手上那份安排（S.exam）一个字都没动过 —— 预览是只读的，退出来就是原来那一页。 */
+    if (S.mode==="exam" && S.dt.exPreview){ S.dt.exPreview = false; renderAll(); return; }
+    /* 设置页退**来的那一页**（见下面 lastMode），不是退回首页 —— 从考试模式进设置、
+       一按返回落到铃声计划，那是走丢了，不是返回。 */
+    if (S.mode==="settings"){ goMode(lastMode); return; }
     S.showDetail = false; renderAll();
   };
   /* 「设置」那一格：整格可点（和左边三格一样），点图标和点字是同一件事。 */
   el.querySelector("#setCell").onclick = ()=> goMode("settings");
-  /* 顶栏这一排页签（宽屏和 641–820px 上用它；竖屏上它整排收起来，改用下面那条
+  /* 顶栏这一排页签（宽屏（>980px）上用它；竖屏上它整排收起来，改用下面那条
      底部导航栏 —— 见 css 里 `.topbar .seg{display:none}` 那一档）。 */
   $$("#modeSeg button", el).forEach(b => b.onclick = ()=> goMode(b.dataset.mode));
 }
 
 /* 换页签 = 换 S.mode 再整页重画。三个地方走这一条路：顶栏那排页签、竖屏底部那条
    导航栏、还有「设置」那一格。
-   「定时任务」那一页的数据是懒加载的（切过去才拉，见 60-view-tasks.js），这一句留着。 */
+   「定时任务」那一页的数据是懒加载的（切过去才拉，见 60-view-tasks.js），这一句留着。
+
+   lastMode 记的是「上次待的那个页签」，一件事两个用处：
+     · 刷新页面停回原来那一页 —— 90-boot.js 拿它当第一帧的 S.mode（**在第一帧之前**，
+       不是等数据回来再切：晚一步人先看见一整页铃声计划加一句「正在连接广播服务器」，
+       然后才跳走）。只在进得了主界面那一支；停在登录页时不走，见那边的注释 ——
+       那一支改造了三处地方才站得住，别把哪一处改回去。
+     · 从设置里退出来，退到**进来的那一页** —— 从考试模式进设置、一按返回落到
+       铃声计划，那是走丢了，不是返回。横竖屏两个出口都是它（见 20-ui.js 的
+       「关闭设置」和上面那枚返回键）。
+
+   **它同时记在本机（bc.lastMode）**，不然刷新一下就回默认页了。两个视图**不算页签**
+   （见下面那句判断）：设置是「这台面板怎么配」、定时任务是「铃声计划这一页的另一种
+   内容」，都不是「去哪一页干活」，记成它们会让上面两件事都失去意义（退设置退到设置；
+   刷新停在定时任务上，而它连页签都没有，退出去只能靠顶栏那枚返回键）。
+   本机那一份**跟着登录会话走**，forgetLogin() 会把它抹掉 —— 注销或令牌过期重登，
+   从铃声计划起步。初值是 list（S.mode 一开始是空串，那也是铃声计划）。 */
+let lastMode = LS.get("lastMode", "list");
 function goMode(m){
+  if (m !== "settings" && m !== "tasks"){ lastMode = m; LS.set("lastMode", m); }
   S.mode = m;
   if (m === "tasks") loadTasks();
   renderAll();
 }
 
+/* 点侧栏底部那张「定时任务」卡片。**不走 goMode**：那一趟会把页签记进 lastMode，
+   刷新一下就又停在定时任务上了（用户明确不要这一条）。
+   数据是懒加载的（切过去才拉，见 60-view-tasks.js），所以在这儿补一句 loadTasks()；
+   它回来时会自己 renderMain() 一趟，表身就填上了。 */
+function openTasks(){
+  S.mode = "tasks";
+  loadTasks();
+  renderAll();
+}
+
 /* ══ 竖屏那条底部导航栏 ══════════════════════════════════════════════
-   四个业务页签从顶栏搬到这里：图标在上、文字在下，像 iOS 的 tab bar。
-   **只有竖屏（≤640px）看得见** —— 宽屏上这整根是 display:none，顶栏右上那排页签
+   顶栏那排业务页签在这儿各有一份：图标在上、文字在下，像 iOS 的 tab bar。
+   **只有竖屏（≤980px）看得见** —— 宽屏上这整根是 display:none，顶栏右上那排页签
    一个字没动。
 
    它在 DOM 里一直在（不靠 js 判断屏幕宽窄去增删）：面板里**布局**这一层的断点全由
    css 的媒体查询说了算 —— 全项目唯一一处 matchMedia 在 70-view-more.js，它决定的是
    「结果画在哪个容器里」，不是布局 —— 这里也不破例。
 
-   四格等宽（flex:1 1 0），所以底部这一条不管屏幕多宽都是平均分。
+   每一格等宽（flex:1 1 0），所以底部这一条不管屏幕多宽都是平均分 —— 格数跟着
+   顶栏那排页签走（「实时对讲」拿不到麦克风时两边一起少一格；「定时任务」那格
+   已经撤了，它的入口是侧栏底部那张常驻卡片，不在这一条上）。
    当前这一页染主色、下面的字加粗 —— 颜色之外还有字重这一层，不只靠颜色说话。
    「考试模式」那一格在它启用时角上带一颗小圆点，和顶栏那排页签上的 seg-dot 是同一件事。 */
 function renderNavbar(){
@@ -400,12 +521,16 @@ function renderNavbar(){
   const item = (m, ic, tx)=> '<button class="navbar-btn'+(on(m)?" on":"")+'" data-mode="'+m+'"'+
       ' title="'+esc(tx)+'"'+(on(m)?' aria-current="page"':"")+'>'+
       '<span class="navbar-ic">'+ic+
-        (m==="exam" && S.exam && S.exam.on ? '<span class="navbar-dot"></span>' : "")+
+        (modeDotOn(m) ? '<span class="navbar-dot"></span>' : "")+
       '</span><span class="navbar-tx">'+esc(tx)+'</span></button>';
   el.innerHTML =
     item("list",  ICON.bell,  "铃声计划")+
-    item("tasks", ICON.clock, "定时任务")+
     item("exam",  ICON.exam,  "考试模式")+
+    /* 「实时对讲」和顶栏那排页签同一条规矩：拿不到麦克风就不摆（liveUsable）；
+       「在线播放」只要浏览器有 Web Audio 就能放（明文 http 下退到
+       ScriptProcessorNode），所以它一般都在（playUsable）。 */
+    (liveUsable() ? item("live", ICON.phone, "实时对讲") : "")+
+    (playUsable() ? item("online",ICON.play,  "在线播放") : "")+
     item("more",  ICON.grid,  "更多功能");
   $$("[data-mode]", el).forEach(b => b.onclick = ()=> goMode(b.dataset.mode));
 }
@@ -414,7 +539,7 @@ function renderNavbar(){
    共用一条通路的地方都问它一句，省得给每个入口单独写判断。 */
 let LOCK_NOW = false;
 
-/* 侧栏只列「人该管的」列表。考试模式造出来的 Exam 和 xxx_E 副本是它自己的
+/* 侧栏只列「人该管的」列表。考试模式造出来的 ¤exam_task 和 xxx¤temp 副本是它自己的
    中间产物，不在这里露面（见 40-view-exam.js 的 isExamHiddenList）。 */
 const railGroups = () => S.data.groups.filter(g=> !isExamHiddenList(g));
 
@@ -423,7 +548,9 @@ function renderRail(){
   const vis = railGroups();
   const items = vis.map(g=>{
     const on = Number(g.id)===Number(S.groupId);
-    const n = on ? S.bells.length : null;
+    /* 正在换任务时这一格写「—」：手上那份 S.bells 还是上一条任务的，数出来是
+       别人家的条数（见 00-core.js 的 gLoad）。 */
+    const n = (on && !S.gLoad) ? S.bells.length : null;
     const off = !isListEnabled(g);      /* is_done≠1 → 服务器上这张列表是停用的 */
     const dead = isListExpired(g);      /* 执行年份已经过去了 */
     const lock = isExamLocked(g);       /* 原件被考试模式锁着（接管它的那份正在发声） */
@@ -433,7 +560,7 @@ function renderRail(){
        没被接管的列表 —— queueExamCopies 只复制 isListEnabled 的那些，所以「被锁住」和
        「本来就停用」互斥，那种列表 lock 为 false，off 照旧生效。 */
     const shownOff = off && !lock;
-    /* 提示语里**不能出现「_E」「副本」**，也不提那个替它发声的列表叫什么 ——
+    /* 提示语里**不能出现服务器上的列表名**，也不提那个替它发声的列表叫什么 ——
        用户只该知道「考试期间这一条归面板管，闪避的时段和区域是它算出来的」。
        替它发声的那份叫什么名字是实现细节，写出来只会让人去服务器上找它。 */
     const tip = (lock ? "已被考试模式锁定，将自动计算闪避时段和区域"
@@ -458,41 +585,84 @@ function renderRail(){
   el.innerHTML =
     '<div class="rail-head">任务列表 · '+vis.length+'</div>'+
     '<div class="rail-list">'+(items||'<div class="hint" style="padding:10px">没有可用的铃声列表</div>')+'</div>'+
+    /* 常驻在侧栏底部的「定时任务」卡片 —— 它原来在顶栏那排页签和竖屏底部导航栏里
+       各占一格，两处都撤了，入口只剩这一张。
+       它在 .rail-list **外面**（不跟着列表滚），外形就是一条 .rail-item（同一个圆角、
+       边框、白底），只有一处不同：**右边那枚不是开关，是「›」**。开关说的是「这条
+       列表启不启用」，而定时任务不是一个列表 —— 点它是换一页，所以给路标不给开关。
+       当前就停在定时任务上时它同样染主色（.on），和左边选中的那条列表一个意思。 */
+    '<div class="rail-tasks">'+
+      '<button class="rail-card'+(S.mode==="tasks"?" on":"")+'" id="railTasks" title="打开定时任务">'+
+        '<span class="nm">定时任务</span>'+
+        '<span class="chev">'+ICON.chevR+'</span>'+
+      '</button>'+
+    '</div>'+
     '<div class="rail-foot">'+
+      /* 刷新在左、「新建任务」在右（用户定的）：主操作贴着右端那一边，
+         它又占着 flex:1，于是左边那颗刷新键被稳稳顶到最前头。 */
+      '<button class="btn btn-sm btn-quiet btn-icon" id="reloadAll" title="重新拉取" aria-label="重新拉取">'+ICON.refresh+'</button>'+
       '<button class="btn btn-sm" id="newGroup" style="flex:1;justify-content:center">'+ICON.plus+' 新建任务</button>'+
-      '<button class="btn btn-sm btn-quiet btn-icon" id="reloadAll" title="重新拉取">'+ICON.refresh+'</button>'+
     '</div>';
-  /* 窄屏上「点列表」= 要去看它的详情，所以那一栏也切过去。宽屏上这个值不参与布局
-     （CSS 只在 ≤640px 认它），写它没有副作用。
+  /* 窄屏上「点列表」= 要去看它的详情，所以那一栏也切过去。并排显示时这个值不参与
+     布局（CSS 只在 ≤980px 认它），写它没有副作用。
      注意是**点这里**才置位，不是写在 selectGroup() 里 —— 启动时 loadAll() 也会调
      selectGroup() 恢复上次那个列表，写在里面的话手机上开机就直接落在详情页上，
-     而这条路的起点应该是列表。 */
+     而这条路的起点应该是列表。
+     下一句同理（S.mode = "list" 原来就住在 selectGroup 里）：点列表 = 回到列表视图，
+     是**这个动作**的意思，不是「凡是选中一张列表就回列表页」—— 刷新页面时
+     loadAll() 也走 selectGroup()，那一趟得把页签留在用户原来待的那一页上。 */
   $$(".rail-pick", el).forEach(b=> b.onclick = ()=>{
+    S.mode = "list";
     S.showDetail = true;
-    selectGroup(Number(b.dataset.gid));
+    /* 「读取失败」那句正文不解释原因（它只管说清下一步），原因由这儿报一声。
+       也**必须**接住这一下：不接的话它就是个没人管的 Promise 拒绝 —— 开机那条
+       （loadAll → doLogin）自己带 catch，这一条没有。 */
+    selectGroup(Number(b.dataset.gid))
+      .catch(e=> toast((e && e.message) || "读取铃声列表失败", "err"));
   });
   $$(".sw-mini", el).forEach(b=> b.onclick = ()=>{
     const g = S.data.groups.find(x=>Number(x.id)===Number(b.dataset.gid));
     if (!g) return;
     const to = !isListEnabled(g);                 /* 当前停用 → 点一下启用 */
-    queueListToggle(g, to);                       /* 本地先改并重画 rail，再排队提交给服务器 */
-    /* 两个方向都走 ok，也就是**都不弹**：停用不是警告，不该提醒（用户定的）；
-       「启用」那条报喜也早就被 toast() 那道闸拦着了（00-core.js 里 `if(kind==="ok")return`）。
-       改没改成，看那一行的开关和旁边的状态就够了。
-       文案照旧拼全 —— 哪天要把「启用」放回来，只改那道闸，这里一个字都不用动。 */
-    toast((to?"已启用「":"已停用「")+g.name+"」"+tailFor(), "ok");
+    /* 考试期间「启用」要先问一句（考试模式那份提醒，见 40-view-exam 的 examGuard）。
+       停用不问：多停一条只会让考试少受干扰，那不是需要提醒的事。
+       被考试模式锁住的那种列表压根到不了这儿 —— 它们渲染出来的是 disabled 的开关，
+       没有 data-gid（见上面 renderRail 那一段）。 */
+    const go = ()=>{
+      queueListToggle(g, to);                     /* 本地先改并重画 rail，再排队提交给服务器 */
+      /* 两个方向都走 ok，也就是**都不弹**：停用不是警告，不该提醒（用户定的）；
+         「启用」那条报喜也早就被 toast() 那道闸拦着了（00-core.js 里 `if(kind==="ok")return`）。
+         改没改成，看那一行的开关和旁边的状态就够了。
+         文案照旧拼全 —— 哪天要把「启用」放回来，只改那道闸，这里一个字都不用动。 */
+      toast((to?"已启用「":"已停用「")+g.name+"」"+tailFor(), "ok");
+    };
+    if (to) examGuard(go); else go();
   });
-  el.querySelector("#newGroup").onclick = openNewGroup;
+  el.querySelector("#newGroup").onclick = ()=> examGuard(openNewGroup);
+  el.querySelector("#railTasks").onclick = openTasks;
   el.querySelector("#reloadAll").onclick = async ()=>{ try{ await loadAll(); toast("数据已刷新","ok"); }catch(e){ toast(e.message,"err"); } };
 }
 
 function renderMain(){
+  /* 会话胶囊（通话中／播放中切到别的页时挂在顶栏下面那枚，见 75-view-live.js 的
+     syncSessionBadge）在**这个函数的最前头**同步一次。放这儿是因为「哪一页」和
+     「哪条会话还活着」这两件事最后都汇到 renderMain 上：换页签走 goMode→renderAll，
+     通话/播放的每一次状态变更也都以 renderMain() 收尾。包一层壳不如加这一行 ——
+     底下那六个 if(...) return renderX() 的早退，一行就全绕过去了。
+     放在 $("#main") 那句守卫**之前**：登录页上根本没有 #main，可胶囊该收起来。 */
+  syncSessionBadge();
+  /* 页签／导航栏上那几颗「正在跑」的小圆点（考试模式启用、对讲接通、在线播放
+     在放）跟着会话状态走。和胶囊同一条理由：它们的每一次状态变更也都以
+     renderMain() 收尾，挂在这儿一分钱不用多花。 */
+  syncModeDots();
   const el = $("#main"); if (!el) return;
-  el.classList.remove("pane","fill","headfix"); /* 三种「整页不滚」的布局，见下面的 add */
+  el.classList.remove("pane","fill","headfix","setpage"); /* 这几种「整页不滚」的布局，见下面的 add */
   if (S.mode==="exam") return renderExam();
   if (S.mode==="tasks") return renderTasks();
   if (S.mode==="settings") return renderSettings();
   if (S.mode==="more")     return renderMore();
+  if (S.mode==="live")     return renderLive();
+  if (S.mode==="online")   return renderPlayback();
   const vis = railGroups();
   const g = vis.find(x=>Number(x.id)===Number(S.groupId));
   el.classList.add("pane");
@@ -506,7 +676,10 @@ function renderMain(){
     return;
   }
   const listKey = JSON.stringify([S.listArea.t.slice().sort(), S.listArea.g.slice().sort()]);
-  const nEmpty = S.bells.filter(isEmptyArea).length;
+  /* 铃声还在路上（S.gLoad）时这几样一律按「还不知道」算：手上那份 S.bells 还是
+     上一条任务的，照着它数出来的条数、空区域都是别人家的 —— 那条「有 N 条铃声
+     没有任何执行区域」的红横幅尤其不能这么冒出来。 */
+  const nEmpty = S.gLoad ? 0 : S.bells.filter(isEmptyArea).length;
   const dead = isListExpired(g);
   /* 原件被考试模式锁着：整页只读，加一条说明为什么 */
   const lock = isExamLocked(g);
@@ -542,25 +715,51 @@ function renderMain(){
       '</div>'+
     '</div>'+
 
-    /* .lock-banner 这个类是 css 的锚点：`.wb-main.is-locked > .lock-banner ~ *`
+    /* 顶上这两条横幅都挂 .banner（css 里「提醒横幅长这样」的那个锚点，扁的），
+       并且**包在同一个 .banner-group 里**（缝 8px、下面 16px，见 css）——
+       和考试模式页那两条是同一套：不包的话两条之间那道 14px 压不掉，因为它是
+       `.panel + .panel` 给的，不是哪一条自己的边距。两条都在时才有那 8px；
+       只有一条时这个壳就是个透明容器（一条都没有时整个壳不渲染，省得白留 16px）。
+       .lock-banner 另有一份差事：`.wb-main.is-locked > .banner-group > .lock-banner ~ *`
        灰的是**它之后的兄弟**，横幅本身和上面的标题栏不灰。锁定时这条必定渲染，
-       别把类名去掉。 */
-    (lock?'<div class="panel lock-banner" style="border-color:var(--warn);margin-bottom:14px"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
-      '<span class="pill-lock">已锁定</span>'+
-      '<span style="font-size:13px"><b>此计划已被锁定</b>，关闭考试模式后可修改</span>'+
-    '</div></div>':"")+
+       别把类名去掉，也别把壳拆了 —— 那条选择器认的就是这个壳。 */
+    ((lock||nEmpty)? '<div class="banner-group">'+
+      (lock?'<div class="panel banner lock-banner" style="border-color:var(--warn)"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
+        '<span class="pill-lock">已锁定</span>'+
+        '<span style="font-size:13px"><b>此计划已被锁定</b>，关闭考试模式后可修改</span>'+
+      '</div></div>':"")+
 
-    (nEmpty?'<div class="panel" style="border-color:var(--crit);margin-bottom:14px"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
-      '<span class="badge" style="background:var(--crit-soft);color:var(--crit)">需处理</span>'+
-      '<span style="font-size:13px">有 '+nEmpty+' 条铃声<b>没有任何执行区域</b>，到点不会响。</span>'+
-      '<button class="btn btn-sm" id="fixEmpty" style="margin-left:auto"'+(lock?" disabled":"")+'>设为列表区域</button>'+
-    '</div></div>':"")+
+      /* .banner-btn = 这条横幅里带一枚按钮。按钮比旁边那行字高一头，靠它这一格 css
+         会把上下内边距再收一档，两条横幅才一样高（见 css 里 .banner-btn 那段）。 */
+      (nEmpty?'<div class="panel banner banner-btn" style="border-color:var(--crit)"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
+        '<span class="badge" style="background:var(--crit-soft);color:var(--crit)">需处理</span>'+
+        '<span style="font-size:13px">有 '+nEmpty+' 条铃声<b>没有任何执行区域</b>，到时间不会响。</span>'+
+        '<button class="btn btn-sm" id="fixEmpty" style="margin-left:auto"'+(lock?" disabled":"")+'>设为列表区域</button>'+
+      '</div></div>':"")+
+    '</div>' : "")+
 
-    /* 正文那三块（区域 / 分组 / 铃声）收进一个盒子：标题栏和上面那两条横幅
+    /* 正文那三块（打铃区域 / 铃声分组 / 铃声）收进一个盒子：标题栏和上面那两条横幅
        留在盒子外面，竖屏上因此钉得住，只有这里面的东西跟着滚。
        和「全局设置」「考试模式」两页的 .headfix 是同一件事，只是这一页的正文
        长在右栏里，所以这类规则挂在 .wb-main 下面而不是 .main-inner 上（见 css）。 */
     '<div class="page-body">'+
+    /* 铃声还在路上（S.gLoad）：正文整块让位给一句话。**三块一起让** —— 手上那份
+       S.bells / S.listArea / S.grpMeta 都还是上一条任务的，只把表身换掉的话，
+       上面「打铃区域」「铃声分组」两块照旧摆着别人家的内容。
+       「读取失败」那句没有第二处交代（侧栏那条路由调用点弹一声报错，见 renderRail
+       末尾的 .rail-pick），所以这句自己得说清楚下一步：再点一次这一条就是了。 */
+    (S.gLoad
+      ? '<div class="hint" style="padding:28px 4px">'+
+          (S.gLoad==="bad"
+            ? '<span style="color:var(--crit)">铃声列表读取失败，请重新打开这一条</span>'
+            : '正在读取铃声…')+
+        '</div>'
+      :
+    /* 「打铃区域」和「铃声分组」装在一个盒子里：横屏（>980px）两块并排一行，省下的
+       高度全给下面那张表；竖屏还是上下两条。左边那块管「这些铃声在哪儿响」，右边
+       那块管「它们分成几段管」，再往下才是逐条的明细 —— 从粗到细。
+       等高那件事在 css 的 .duo 里（矮的跟高的齐平）。 */
+    '<div class="duo">'+
 
     '<div class="panel">'+
       '<div class="panel-head">'+
@@ -569,17 +768,22 @@ function renderMain(){
       '</div>'+
       '<div class="panel-body">'+
         /* 空区域原来这儿是两行：一句「各条铃声的区域不一致」，下面 chips 那儿再
-           跟一句「未设置区域 — 这些铃声到点不会响」。同一件事说两遍，还都没告诉
-           人该怎么办。现在合成一行，空就是空，顺手指着右上那枚「编辑区域」。 */
-        (S.listArea.t.length+S.listArea.g.length
-          ? '<div class="area-chips">'+ areaChips(S.listArea) +'</div>'
-          : '<div class="hint">未设置打铃区域，点击「编辑区域」来添加</div>')+
+           跟一句「未设置区域 — 这些铃声到时间不会响」。同一件事说两遍，还都没告诉
+           人该怎么办。现在合成一行，空就是空，顺手指着右上那枚「编辑区域」。
+           **那句说明装在 .area-chips 里面**（和编辑面板、考试模式那几处一个写法）：
+           那一格自带「一行胶囊高」的下限（见 css），句子搁在外头当兄弟，
+           这一块就会在空态和一行胶囊之间 18px ↔ 24.6px 地跳。 */
+        '<div class="area-chips">'+
+          (S.listArea.t.length+S.listArea.g.length
+            ? areaChips(S.listArea)
+            : '<span class="hint">未设置打铃区域，点击「编辑区域」来添加</span>')+
+        '</div>'+
       '</div>'+
     '</div>'+
 
-    /* 分组夹在「区域」和「铃声表格」中间：上面那块说这些铃声在哪儿响，
-       这块说它们分成几段管，再往下才是逐条的明细 —— 从粗到细。（见 js/35-groups.js） */
     grpPanelHTML(lock)+
+
+    '</div>'+          /* /.duo */
 
     '<div class="panel grow">'+
       /* 右上角这块是「一栏两态」：没勾选时是筛选+添加铃声，一勾选就原地换成
@@ -587,9 +791,11 @@ function renderMain(){
       '<div class="panel-head"><h3>铃声</h3><span class="sub" id="tableFoot"></span>'+
         '<span class="acts" id="hdActs">'+
           '<span class="hd-seg" id="hdNormal">'+
-            '<input class="input" id="f-q" placeholder="筛选名称 / 时间" style="width:150px;padding:4px 9px;font-size:12px" value="'+esc(S.dt.fq||"")+'">'+
+            /* 宽度钉在 css 的 `.hd-seg > .sbox` 上（竖屏要收窄，内联的 width 收不动） */
+            '<span class="sbox sbox-sm">'+ICON.search+
+              '<input class="input" id="f-q" placeholder="筛选名称 / 时间" value="'+esc(S.dt.fq||"")+'"></span>'+
             /* 手机上这枚只写「添加」——「铃声」两个字由 .wide-only 藏起来（见
-               app.css 的 ≤640px）。它和左边那个筛选框是这一行里最宽的两样，
+               app.css 的 ≤980px）。它和左边那个筛选框是这一行里最宽的两样，
                加起来约 345px，而 390px 的手机只有 328px 可用，不收就折成两行。
                外面这层 <span> 不是多余的：.btn 是 inline-flex + gap:6px，写成
                「添加<span>铃声</span>」的话那两截会各自变成一个 flex 项，中间多
@@ -605,12 +811,23 @@ function renderMain(){
            不写成行内 style：竖屏上要改的正是这两列，而行内样式只输给 !important,
            挪进 CSS 之后那边一条普通规则就压得住。宽度值见 css/app.css 的
            `.tbl-bells .c-sw` / `.tbl-bells .c-act`（60px / 106px）。 */
-        '<th style="width:92px">时间</th><th>名称</th><th>铃音</th><th>区域</th><th class="c-sw">状态</th><th class="c-act"></th>'+
+        /* 「时间属性」「播放时长」这两列只在横屏上露头 —— 竖屏按列号一起收掉
+           （见 css 的 ≤980px 那一档），那时候「时间属性」回到名称底下、
+           「播放时长」连同「音源」整列不显示。两套写法都在 DOM 里，谁说谁不显示
+           由断点定，JS 里没有分支。 */
+        '<th style="width:92px">时间</th><th>名称</th>'+
+        '<th class="c-stg">时间属性</th><th>音源</th><th class="c-dur">播放时长</th>'+
+        '<th>区域</th><th class="c-sw">状态</th><th class="c-act"></th>'+
       '</tr></thead><tbody id="rows"></tbody></table></div>'+
-    '</div>'+
+    '</div>')+         /* ← 这个右括号收的是上面那个三元：gLoad 为真时，正文只有那一句 */
     '</div>'+          /* /.page-body */
     '</div>'+          /* .wb-main */
     '</div>';          /* .wb */
+
+  /* 铃声还在路上：正文那儿只有一句「正在读取」，底下这些绑定一个都找不到自己的
+     元素（#mArea / #f-q / #rows …），整段跳过。侧栏照画 —— 换任务靠的正是它，
+     而且它底下那颗刷新键是这条路唯一的出口。 */
+  if (S.gLoad){ renderRail(); return; }
 
   el.querySelector("#mArea").onclick = ()=> openAreaEditor("list");
   el.querySelector("#mAddBell").onclick = ()=> openBellEditor(null);
@@ -683,12 +900,39 @@ function lockDetail(el){
   if (wm) wm.classList.add("is-locked");
 }
 
-function areaChips(a){
+/* 区域胶囊。`rm` 为真时每颗末尾带一枚 ×（点掉自己）—— 只有**改得动**的地方才给：
+   铃声编辑器「特例区域」下那排、定时任务编辑器的执行区域。跟着列表默认走的那几份
+   （「默认区域」、列表页顶上那块、只读的弹窗）一律不带：那儿点掉一颗等于顺手改了
+   整张列表的区域，而列表的区域只该在列表页上改。 */
+function areaChips(a, rm){
   /* 点位前面的点一律是「在线状态」，别再拿它做装饰 */
-  const t = a.t.map(n=>'<span class="chip chip-term" title="'+statusTitle(n)+'">'+statusDot(n)+esc(n)+'</span>').join("");
-  const g = a.g.map(n=>'<span class="chip chip-group"><span class="dot"></span>'+esc(n)+'</span>').join("");
-  if (!t && !g) return '<span class="hint">未设置区域 — 这些铃声到点不会响</span>';
+  const x = rm ? '<button class="x" aria-label="移除">'+ICON.x+'</button>' : "";
+  /* data-rm / data-n 挂在**胶囊自己**身上，不挂在末尾那枚 × 上 —— 整颗都是热区，
+     点名字、点空白、点 × 一个样（用户要的）。末尾那枚 × 只剩个样子（还按 <button>
+     写：它是键盘的落点，在它身上敲回车，click 冒泡到胶囊，照样删得掉）。
+     不可删的那种（跟着列表默认走的那几份）还是老样子，一个 data-rm 都没有。 */
+  const attr = (k, n, tip)=> rm
+    ? ' data-rm="'+k+'" data-n="'+esc(n)+'" title="'+esc(tip)+'"'
+    : (tip ? ' title="'+esc(tip)+'"' : "");
+  const t = a.t.map(n=>'<span class="chip chip-term"'+
+      /* 可删的那种，提示语就说这一下要干什么（用户定的：「点击移除此区域」）。
+         原来那句是「点一下从这条里移除 · 点位名 · 状态未知」—— 三种信息挤在一条
+         提示里，反倒看不出最要紧的那件；在线状态本来就由前头那颗点表示
+         （红绿灰的说明见 statLegend）。 */
+      attr("t", n, rm ? "点击移除此区域" : statusTitle(n))+
+      '>'+statusDot(n)+esc(n)+x+'</span>').join("");
+  /* 分组那颗原来没有 title（名字就是全部信息），可删的那种补一句同样的提示 */
+  const g = a.g.map(n=>'<span class="chip chip-group"'+
+      attr("g", n, rm ? "点击移除此区域" : "")+
+      '><span class="dot"></span>'+esc(n)+x+'</span>').join("");
+  if (!t && !g) return '<span class="hint">未设置区域 — 这些铃声到时间不会响</span>';
   return t + g;
+}
+/* 挂上那些热区：onRemove(kind, name)，kind 是 "t"（点位）或 "g"（分组）。
+   选择器是 `[data-rm]` —— 它就是胶囊本身（见上面那个 attr()），
+   和音源那对（mountSoundChips）一个做法。 */
+function mountAreaChips(box, onRemove){
+  $$("[data-rm]", box).forEach(b => b.onclick = ()=> onRemove(b.dataset.rm, b.dataset.n));
 }
 
 /* 表格里那枚「特例」胶囊点开：这条铃声实际会响在哪些点位 / 分组。
@@ -709,10 +953,21 @@ function visibleBells(){
   return S.bells.filter(b=> (b.name+" "+hm(b.time)+" "+(b.mediaNames.join(" "))).toLowerCase().indexOf(q)>=0);
 }
 
+/* 播放模式（厂商字段 play_model：0 列表 / 1 循环 / 2 采播）→ 一枚记号 + 它的名字。
+   表里只画记号，名字挂在 title 上。
+   0 和 1 之外一律当「采播」：编辑器里只给得出这两个选项，采播是厂商前端那边才有
+   的第三种，面板认得出来就行 —— 这条也是原来那行「时长 · 播放方式」的口径。 */
+function pmodeOf(m){
+  m = Number(m);
+  if (m === 0) return {word:"列表", icon:ICON.list};
+  if (m === 1) return {word:"循环", icon:ICON.loop};
+  return {word:"采播", icon:ICON.live};
+}
+
 function renderRows(){
   const tb = $("#rows"); if (!tb) return;
   const rows = visibleBells();
-  if (!rows.length){ tb.innerHTML = '<tr><td colspan="7"><div class="empty" style="padding:36px">没有匹配的铃声</div></td></tr>'; }
+  if (!rows.length){ tb.innerHTML = '<tr><td colspan="9"><div class="empty" style="padding:36px">没有匹配的铃声</div></td></tr>'; }
   else tb.innerHTML = rows.map(b=>{
     const ov = isOverride(b), em = isEmptyArea(b);
     /* 「特例」是能点的：这一格只放得下一枚胶囊，写不下是哪几个点位，
@@ -728,10 +983,10 @@ function renderRows(){
        占掉半行、每行还都不一样，扫一眼看不出差别；名字是给人认的，认名字比认星期快。
        具体哪几天挪进 title —— 「周二到周五」这种名字本来就写着，鼠标停一下更清楚。 */
     const sName = strategyName(b.strategyId), sWeeks = strategyWeeks(b.strategyId);
+    const pm = pmodeOf(b.sound.play_model);
     return '<tr data-id="'+b.id+'" class="'+(S.sel.has(b.id)?"sel ":"")+(b.isDone?"":"off")+'">'+
       '<td class="selcell"><input type="checkbox" class="rowsel" '+(S.sel.has(b.id)?"checked":"")+'></td>'+
       '<td class="t">'+esc(hm(b.time))+
-        (S.offsetSec?'<div class="shift" title="服务器实际储存的时间值">'+ICON.clock+esc(offsetHMS(b.time))+'</div>':"")+
         (b.times.length>1?'<div class="sub">+'+(b.times.length-1)+'</div>':"")+'</td>'+
       /* 这里以前还有一枚「含预备」胶囊，标出这条上课铃带着一条预备铃搭档。
          现在没有了：预备铃只是新建时顺手建出来的另一条普通铃声，面板建完就撒手，
@@ -740,9 +995,18 @@ function renderRows(){
          缀上条数之后同一行时短时长（攒一条就冒出来），而且哪几条攒着、攒的是哪一
          类改动，抽屉里一条条列着 —— 那儿才说得清楚。 */
       '<td class="n">'+esc(b.name)+
+        /* 名称底下这一行**只在竖屏看得见**（横屏收掉它，同样的话搬到右边
+           「时间属性」那一列去说了，见 css 的 min-width:981px 那一段）。 */
         '<div class="sub" title="'+esc("执行周期："+(sWeeks||sName||"—"))+'">'+esc(sName||"—")+'</div></td>'+
-      '<td>'+(b.mediaNames.length? esc(b.mediaNames.join("、")) : (b.mediaGroupNames.length? esc(b.mediaGroupNames.join("、")) : '<span class="sub">无音源</span>'))+
-        '<div class="sub mono">'+esc(b.sound.life_time||"")+' · '+(Number(b.sound.play_model)===0?"列表":Number(b.sound.play_model)===1?"循环":"采播")+'</div></td>'+
+      '<td class="stg" title="'+esc("执行周期："+(sWeeks||sName||"—"))+'">'+esc(sName||"—")+'</td>'+
+      /* 「音源」这一格只剩音频文件的名字了。原来底下还压着一行「时长 · 播放方式」，
+         两行一叠，整张表就按两行的高度排 —— 那是行高压不下去的根子。
+         这一格挂 `.med` 只为了 css 里那一条字重（和名称、时间属性、播放时长一档）。 */
+      '<td class="med">'+(b.mediaNames.length? esc(b.mediaNames.join("、")) : (b.mediaGroupNames.length? esc(b.mediaGroupNames.join("、")) : '<span class="sub">无音源</span>'))+'</td>'+
+      /* 播放时长：整串走等宽（`.mono`，日期那几个数字在这张表里一直是等宽的），
+         播放模式缩成图标挂在时长**后头**（见 pmodeOf），模式的名字挪进 title。 */
+      '<td class="dur mono">'+esc(b.sound.life_time||"")+
+        '<span class="pmode" title="'+pm.word+'">'+pm.icon+'</span></td>'+
       '<td>'+areaCell+'</td>'+
       '<td class="swcell"><button class="sw-mini r-sw'+(b.isDone?" on":"")+'" role="switch" aria-checked="'+!!b.isDone+'"'+
         ' title="'+esc(b.isDone?"停用这一条":"启用这一条")+'"></button></td>'+
@@ -809,10 +1073,11 @@ function renderRows(){
        底下一行，一眼看过去分不清哪个是状态哪个是计数；而它本来就是形容下面这张
        表的，就该长在表的标题上。数的是**当前显示的这些行**，跟「共 N」同一个
        口径 —— 筛过之后说「共 5 · 特例 3」比说「共 5 · 特例 12」讲得通。
-       两个数里的名词都省了（不写「条铃声」「个特例」）：标题「铃声」就在左边，
-       这一行只是它后面的一行小字，再说一遍「铃声」是重复。 */
+       「共 N 条」那个「条」是用户要的：左边标题写着「铃声」，可这一格在标题右边、
+       隔着一段距离，「共 5」孤零零一个数，量词得自己带上；「特例」那半截跟在后面，
+       后面还有数，读起来不缺东西，就照旧省着。 */
     const nOv = rows.filter(isOverride).length;
-    tf.textContent = "共 "+rows.length+
+    tf.textContent = "共 "+rows.length+" 条"+
       (nOv ? " · 特例 "+nOv : "")+
       (rows.length!==S.bells.length ? "（已筛选，全部 "+S.bells.length+" 条）" : "");
   }
@@ -832,7 +1097,7 @@ function renderSelbar(){
      窄屏要折两行，折完还看不出哪几个是一组。 */
   bulk.innerHTML =
     '<span class="bulk-n">'+n+'</span><span class="dimmer">条已选</span>'+
-    '<button class="btn btn-icon" data-act="edit" title="批量编辑：改区域 / 改铃音 / 改时间 / 恢复默认" aria-label="批量编辑">'+ICON.edit+'</button>'+
+    '<button class="btn btn-icon" data-act="edit" title="批量编辑：改区域 / 改音源 / 改时间 / 恢复默认" aria-label="批量编辑">'+ICON.edit+'</button>'+
     '<button class="btn btn-icon" data-act="on" title="启用这些铃声" aria-label="启用">'+ICON.check+'</button>'+
     '<button class="btn btn-icon" data-act="off" title="停用这些铃声" aria-label="停用">'+ICON.x+'</button>'+
     '<button class="btn btn-icon btn-danger" data-act="del" title="删除这些铃声" aria-label="删除">'+ICON.del+'</button>';
@@ -843,10 +1108,10 @@ function onSelbarClick(e){
   const list = S.bells.filter(x=>S.sel.has(x.id));
   if (act==="edit") return openBulkMenu("批量编辑 "+list.length+" 条铃声", "这些改动会一起写进服务器", [
     {icon:ICON.monitor, label:"改区域",   sub:"统一改成同一组点位和分组",     onPick:()=>openAreaEditor("bulk", list)},
-    {icon:ICON.music,   label:"改铃音",   sub:"换掉这些铃声的音源",           onPick:()=>openMediaBulk(list)},
+    {icon:ICON.music,   label:"改音源",   sub:"换掉这些铃声正在放的音频文件", onPick:()=>openMediaBulk(list)},
     {icon:ICON.clock,   label:"改时间",   sub:"平移时刻，或整批换成同一个周期", onPick:()=>openTimeBulk(list)},
-    /* 分组不是服务器上的字段，是面板自己记的（见 js/35-groups.js），所以这一项
-       当场就生效、不进待提交。 */
+    /* 分组存在服务器上（写进铃声名字的尾巴里，见 js/35-groups.js），所以这一项
+       和别的批量动作一样要发报文、一样能撤销。 */
     {icon:ICON.copy,    label:"改分组",   sub:"把这些铃声一起归到某个分组",   onPick:()=>openGrpBulk(list)},
     /* 「恢复默认」不用再弹框问参数，所以它自己就是终点：点完当场做掉 */
     {icon:ICON.refresh, label:"恢复默认", sub:"区域回到列表默认的那一组",
@@ -901,8 +1166,11 @@ function openBellEditor(bell){
   b.prepMin  = prepMinOf(b);
 
   let tab = "one";
+  /* up / down 是生成的「上课」「下课」两条各放哪个音源文件（默认就是那两个名字）。
+     预备铃不放这儿：它的名字写死在 PREP_MEDIA 上，除了这个页签它别处不出现。 */
   const gen = { start:"08:00", dur:40, gap:10, n:4, strat:Number(b.strategyId),
-                vol:Number(b.volume)||70, prep:true, prepMin:prepMinOf(b), rows:[] };
+                vol:Number(b.volume)||70, prep:true, prepMin:prepMinOf(b), rows:[],
+                up:"上课铃.mp3", down:"下课铃.mp3" };
   /* 模板页签的那份状态。rows / errs 是**解析结果**，不是输入 —— 输入本身text 才是
      唯一权威，每次重画都从它重新解析一遍（见 parseBellTemplate）。 */
   const tpl = { text:"", rows:[], errs:[] };
@@ -930,44 +1198,84 @@ function openBellEditor(bell){
             '<button data-areamode="custom" class="'+(b.inheritArea?"":"on")+'">特例区域</button>'+
           '</div><div id="bAreaBox"></div>'+
         '</div></div>';
-      /* 只有「特例区域」才有「编辑区域」—— 跟着列表默认走的时候没什么可编辑的 */
+      /* 只有「特例区域」才有东西可编辑。但这颗键**一直画着**，默认区域下只是藏起来
+         （.is-ghost，见 css）：撤掉不画的话，.sect-h 这一行会矮掉一颗键的高度
+         （.btn-sm 约 28.6px 撑起的一行 vs 12px 字撑出的 18.6px 行盒），
+         「默认 / 特例」来回切的时候整块面板跟着抖 10px —— 就是用户实测那个抖动。 */
       const drawAreaActs = ()=>{
         const box = q("#bAreaActs"); if (!box) return;
-        box.innerHTML = b.inheritArea ? "" : '<button class="btn btn-sm" id="bPickArea">编辑区域</button>';
-        const btn = q("#bPickArea"); if (btn) btn.onclick = pickArea;
+        box.innerHTML = '<button class="btn btn-sm'+(b.inheritArea?" is-ghost":"")+'" id="bPickArea">编辑区域</button>';
+        q("#bPickArea").onclick = pickArea;
       };
       const drawAreaBox = ()=>{
         const box = q("#bAreaBox"); if (!box) return;
         /* 盒子自己就是那一格 chips（不再往里面套一层）：标红（markErr）挂在它身上，
-           重画一次红自己就掉了 —— 挑完区域回来，红不该还留着。 */
+           重画一次红自己就掉了 —— 挑完区域回来，红不该还留着。
+           「特例区域」下每颗胶囊自带一枚 ×：删一个点位／分组不用再开一遍选择器
+           （它本来就得先点「编辑区域」、再在几十行里找到那一项、再取消勾选）。
+           跟着列表走的那份是只读的，rm 传 false。 */
+        const editable = !b.inheritArea;
         box.className = "area-chips";
-        box.innerHTML = areaChips(b.inheritArea ? S.listArea : {t:b.termNames,g:b.groupNames});
+        box.innerHTML = areaChips(editable ? {t:b.termNames,g:b.groupNames} : S.listArea, editable);
+        if (!editable) return;
+        mountAreaChips(box, (k,n)=>{
+          if (k==="t") b.termNames  = b.termNames.filter(x=>x!==n);
+          else         b.groupNames = b.groupNames.filter(x=>x!==n);
+          drawAreaBox();
+        });
+      };
+
+      /* 「按节次生成」那两格音源（上课 / 下课）：长得像下拉，点开是那个单选的文件
+         选择器（filesOnly —— 一节铃声就放一个音源，多选了也没处放）。
+         挑空了（把唯一勾着的那一格又取消掉）就当没改：这一栏不给空着，
+         空了生成出来的铃声到点没东西可放。 */
+      const genPickHTML = (id, key, label)=>
+        '<div class="field"><label>'+label+'</label>'+
+          '<button class="select-btn" type="button" id="'+id+'">'+
+            '<span class="v">'+esc(gen[key])+'</span><span class="chev">'+ICON.chevD+'</span>'+
+          '</button></div>';
+      const drawGenMedia = ()=>{
+        const set = (id,key)=>{ const el = q("#"+id); const v = el && el.querySelector(".v");
+                                if (v) v.textContent = gen[key]; };
+        set("gUp","up"); set("gDown","down");
+      };
+      const pickGenMedia = (title, key)=>{
+        const cur = gen[key];
+        openMediaPicker(cur?[cur]:[], [], r=>{
+          const m = (r && r.media[0]) || "";
+          if (m) gen[key] = m;
+          drawGenMedia();
+        }, {filesOnly:true, title:title, sub:"从服务器的媒体库里挑一个音源文件"});
       };
 
       /* ── 单条 ──
          上面五格是**一个** grid（.bell-top），不是原来那两行 —— 横屏和竖屏的
          分组方式不一样，一个 grid 才排得出两种：宽屏「时间 + 名称(占2格)」/「周期 +
-         音量 + 优先级」两行；≤640px 靠 [data-bf] 上的 order 和 span 重排成
+         音量 + 优先级」两行；≤980px 靠 [data-bf] 上的 order 和 span 重排成
          「时间 + 周期」/「名称 + 音量 + 优先级」两行。DOM 顺序按宽屏写。 */
       const oneHTML = ()=>
         '<div class="grid3 bell-top">'+
           '<div class="field" data-bf="time"><label>执行时间</label>'+quickTimeHTML('id="bTime"', b.time)+'</div>'+
-          '<div class="field bf-name" data-bf="name"><label>名称</label><input class="input" id="bName" value="'+esc(b.name)+'" placeholder="例如：第一节课上课"></div>'+
+          '<div class="field bf-name" data-bf="name"><label>名称</label><input class="input" id="bName" value="'+esc(b.name)+'" placeholder="铃声1"></div>'+
           '<div class="field" data-bf="strat"><label>执行周期</label><select class="select" id="bStrat">'+
             S.data.strategies.map(s=>'<option value="'+s.id+'"'+(Number(b.strategyId)===Number(s.id)?" selected":"")+'>'+esc(s.name)+'</option>').join("")+
           '</select></div>'+
           '<div class="field" data-bf="vol"><label>音量</label><input class="input mono" id="bVol" type="number" min="0" max="100" value="'+Number(b.volume)+'"></div>'+
           '<div class="field" data-bf="pri"><label>优先级</label><input class="input mono" id="bPri" type="number" value="'+Number(b.priority)+'"></div>'+
         '</div>'+
-        /* 音源区：一行**已选清单**（多个铃音 / 多个文件夹 / 混着选，各自都能点掉），
-           右上「选择铃音」开多选器。这里不再摆一排「常用」快捷按钮 —— 预设现在是
-           选择器的第一个页签，挑预设和挑别的铃音走同一条路，不用记两套说法。
+        /* 音源区：一行**已选清单**（多个音源 / 多个文件夹 / 混着选，各自都能点掉），
+           右上「选择音源」开多选器。这里不再摆一排「常用」快捷按钮 —— 挑音源
+           统一走选择器，不用记两套说法。
            定时任务那边是同一个控件（soundChipsHTML / mountSoundChips，在 20-ui.js）。 */
-        '<div class="sect"><div class="sect-h">铃音 <span class="mono" id="bLen"></span>'+
-          '<span class="acts"><button class="btn btn-sm" id="bSoundPick">选择铃音</button></span></div>'+
+        '<div class="sect"><div class="sect-h">音源 <span class="sub" id="bLen"></span>'+
+          '<span class="acts"><button class="btn btn-sm" id="bSoundPick">选择音源</button></span></div>'+
           '<div class="sect-b"><div class="stack">'+
-            '<div class="sel-chips" id="bSoundChips"></div>'+
-            '<div class="grid3 bell-play">'+
+            /* 一层素排布，不带边框底色 —— 它得跟下面「播放模式/播放时长」并排，
+               所以留着自己这一格；箱子那圈虚线去掉了，胶囊直接排在这一行上。 */
+            '<div class="area-chips" id="bSoundChips"></div>'+
+            /* 分隔线：上面是「放什么」，下面是「怎么放」（见 css 的 .divider）。 */
+            '<div class="divider"></div>'+
+            '<div class="bell-play">'+
               '<div class="field"><label>播放模式</label><select class="select" id="bMode">'+
                 '<option value="0"'+(Number(b.sound.play_model)===0?" selected":"")+'>列表播放</option>'+
                 '<option value="1"'+(Number(b.sound.play_model)===1?" selected":"")+'>循环播放</option>'+
@@ -1007,6 +1315,13 @@ function openBellEditor(bell){
               '<span class="track"></span></label></div>'+
           '<div class="field"><label>预备铃提前(分)</label><input class="input mono" id="gPrepMin" type="number" min="1" max="60" value="'+gen.prepMin+'"></div>'+
         '</div>'+
+        /* 音源：一整天的课表就是这么三条一轮一轮排出来的（预备 / 上课 / 下课），
+           所以这儿只挑「上课」和「下课」两条各放什么 —— 两格，一格一个文件。
+           从前这两条是写死的两个文件名，服务器上那条叫别的名字就一点辙没有。 */
+        '<div class="sect"><div class="sect-h">音源</div>'+
+          '<div class="sect-b"><div class="grid2">'+
+            genPickHTML("gUp","up","上课铃")+genPickHTML("gDown","down","下课铃")+
+          '</div></div></div>'+
         areaHTML()+
         '<div class="sect"><div class="sect-h">预览 <span class="mono" id="gCount"></span></div>'+
           '<div class="sect-b" id="gPrev" style="max-height:300px;overflow:auto"></div>'+
@@ -1027,7 +1342,7 @@ function openBellEditor(bell){
           '<div class="sect-b"><div class="stack">'+
             '<div class="hint">点「复制提示词」，把复制到的这段连同你的打铃计划一起发给任意一个 AI'+
               '（豆包、DeepSeek、ChatGPT 都行），它会按我们的格式给你一份模板，再把那份模板粘到'+
-              '下面「模板」那一栏。提示词里的周期名和铃音名是从这台服务器上读出来的，AI 照着抄就写不歪。</div>'+
+              '下面「模板」那一栏。提示词里的周期名和音源名是从这台服务器上读出来的，AI 照着抄就写不歪。</div>'+
           '</div></div></div>'+
         '<div class="sect"><div class="sect-h">模板</div>'+
           '<div class="sect-b"><div class="stack">'+
@@ -1084,7 +1399,7 @@ function openBellEditor(bell){
         function drawSound(){
           drawChips(); lenEl(); drawPrepSect();
         }
-        /* 多选器：铃音文件、媒体文件夹、混着选都行 —— 它本来就是这个能力，
+        /* 多选器：音源文件、媒体文件夹、混着选都行 —— 它本来就是这个能力，
            以前被一个「自定义…」的下拉选项藏着，只有点进去才看得见。 */
         function openSoundPicker(){
           openMediaPicker(b.mediaNames, b.mediaGroupNames, r=>{
@@ -1092,7 +1407,7 @@ function openBellEditor(bell){
             drawSound(); syncLife(true);
           });
         }
-        /* 「创建预备铃」只对上课铃有意义 —— 别的铃音下这块不出现。
+        /* 「创建预备铃」只对上课铃有意义 —— 别的铃声下这块不出现。
            编辑已有铃声时整块都不存在（见 oneHTML），q("#bPrepSect") 取不到就退出。 */
         function drawPrepSect(){
           const sect = q("#bPrepSect"); if (!sect) return;
@@ -1173,7 +1488,7 @@ function openBellEditor(bell){
         } else {
           box.innerHTML = '<table class="prev-tbl"><thead><tr><th style="width:26px">'+
             '<input type="checkbox" id="gAll"></th>'+
-            '<th>时间</th><th>名称</th><th>铃音</th></tr></thead><tbody>'+
+            '<th>时间</th><th>名称</th><th>音源</th></tr></thead><tbody>'+
             rows.map((r,i)=> '<tr class="'+(r.on?"on":"")+'"><td><input type="checkbox" data-qi="'+i+'"'+(r.on?" checked":"")+'></td>'+
               '<td>'+esc(hm(r.time))+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.label)+'</td></tr>').join("")+
             '</tbody></table>';
@@ -1203,8 +1518,8 @@ function openBellEditor(bell){
         let t = hmsToSec(st);
         for (let i=1;i<=n;i++){
           if (gen.prep) out.push(genRow(t-pm*60, "第"+i+"节-预备", PREP_MEDIA));
-          out.push(genRow(t, "第"+i+"节-上课", "上课铃.mp3"));
-          out.push(genRow(t+dur*60, "第"+i+"节-下课", "下课铃.mp3"));
+          out.push(genRow(t, "第"+i+"节-上课", gen.up));
+          out.push(genRow(t+dur*60, "第"+i+"节-下课", gen.down));
           t += (dur+gap)*60;
         }
         return out;
@@ -1243,6 +1558,8 @@ function openBellEditor(bell){
           cb.closest("tr").classList.toggle("on", cb.checked);
           syncPrevHead();
         };
+        q("#gUp").onclick   = ()=> pickGenMedia("选择上课铃音源", "up");
+        q("#gDown").onclick = ()=> pickGenMedia("选择下课铃音源", "down");
         drawPreview();
         wireQuickTime(q("#gStart"));
       }
@@ -1267,7 +1584,7 @@ function openBellEditor(bell){
         if (tpl.rows.length){
           html += '<table class="prev-tbl"><thead><tr><th style="width:26px">'+
             '<input type="checkbox" id="tAll"></th>'+
-            '<th>时间</th><th>名称</th><th>周期</th><th>铃音</th></tr></thead><tbody>'+
+            '<th>时间</th><th>名称</th><th>周期</th><th>音源</th></tr></thead><tbody>'+
             tpl.rows.map((r,i)=> '<tr class="'+(r.on?"on":"")+'">'+
               '<td><input type="checkbox" data-ti="'+i+'"'+(r.on?" checked":"")+'></td>'+
               '<td>'+esc(hm(r.time))+'</td><td>'+esc(r.name)+'</td>'+
@@ -1298,7 +1615,7 @@ function openBellEditor(bell){
       function bindTpl(){
         const tt = q("#tText");
         /* 提示词正文不再摆在页面上了（那个框删了），就留在这个闭包里给复制按钮用。
-           每次进这个页签都重算一遍：周期名和铃音名是从服务器读出来的，外面刷过就得跟上。 */
+           每次进这个页签都重算一遍：周期名和音源名是从服务器读出来的，外面刷过就得跟上。 */
         const prompt = bellTemplatePrompt();
         tt.value = tpl.text;
         q("#tCopy").onclick = ()=> copyText(prompt, "提示词已复制");
@@ -1375,11 +1692,10 @@ function openBellEditor(bell){
 /* ══ 从模板添加：解析 ════════════════════════════════════════════════
    模板是拿去给 AI 生成的纯文本，一行一条铃声、四列：
 
-       时间,名称,周期,铃音
+       时间,名称,周期,音源
 
    时间走 parseQuickTime（08:00:00 / 080000 / 8:00 都收，规范成 HH:MM:SS）；
-   名称是这条铃的名字；周期必须是系统里现成的周期方案名；铃音以 .mp3 结尾就当
-   音频文件名，否则当预设名。
+   名称是这条铃的名字；周期必须是系统里现成的周期方案名；音源是媒体库里的文件名。
 
    **认不出来就整份拒绝**（用户定的）。模板是 AI 出的，错一行就该把行号报回去让它
    重出，而不是留下另一半 —— 打铃计划少一条，到点就是不响，比整份没进去难发现得多。
@@ -1390,7 +1706,6 @@ function openBellEditor(bell){
 function parseBellTemplate(text){
   const rows = [], errs = [], seenAt = {};
   const stratByName = {}; S.data.strategies.forEach(s=>{ stratByName[String(s.name).trim()] = s; });
-  const presetByName = {}; PRESETS.forEach(p=>{ presetByName[String(p.label).trim()] = p; });
 
   String(text==null?"":text).split(/\r?\n/).forEach((raw, i)=>{
     const ln = i + 1;
@@ -1401,7 +1716,7 @@ function parseBellTemplate(text){
 
     const c = line.split(",");
     if (c.length !== 4){
-      errs.push("第 "+ln+" 行：应该是「时间,名称,周期,铃音」四列，这行切出来是 "+c.length+" 列");
+      errs.push("第 "+ln+" 行：应该是「时间,名称,周期,音源」四列，这行切出来是 "+c.length+" 列");
       return;
     }
     const [tRaw, nm, stName, mdRaw] = c.map(x=>x.trim());
@@ -1415,19 +1730,11 @@ function parseBellTemplate(text){
     const st = stratByName[stName];
     if (!st){ errs.push("第 "+ln+" 行：周期「"+stName+"」不在系统的周期方案里"); return; }
 
-    /* 铃音。文件名那一路**必须**在媒体库里查得到 —— 查不到的名字会建出一条
-       **不发声**的铃声：服务器照收，列表上也看不出毛病，到点就是一片安静。
-       预设那一路取的是预设绑定的那个文件名（和在选择器里勾这条预设完全等价）。 */
-    let media;
-    if (/\.mp3$/i.test(mdRaw)){
-      const m = mediaByName(mdRaw);
-      if (!m){ errs.push("第 "+ln+" 行：音频文件「"+mdRaw+"」在媒体库里找不到"); return; }
-      media = m.name;
-    } else {
-      const p = presetByName[mdRaw];
-      if (!p){ errs.push("第 "+ln+" 行：铃音「"+mdRaw+"」既不是音频文件名（要以 .mp3 结尾），也不是预设名"); return; }
-      media = p.media;
-    }
+    /* 音源**必须**在媒体库里查得到 —— 查不到的名字会建出一条**不发声**的铃声：
+       服务器照收，列表上也看不出毛病，到点就是一片安静。 */
+    const found = mediaByName(mdRaw);
+    if (!found){ errs.push("第 "+ln+" 行：音频文件「"+mdRaw+"」在媒体库里找不到"); return; }
+    const media = found.name;
 
     seenAt[nm] = ln;
     rows.push({ on:true, time:time, name:nm, stratId:st.id, stratName:String(st.name).trim(),
@@ -1442,12 +1749,10 @@ function parseBellTemplate(text){
 }
 
 /* 交给用户去喂 AI 的那段提示词。
-   周期名和预设名是**从这台服务器现读的**，不是写死在代码里的 —— 用户自己加的预设、
-   厂商后台里改过的周期名，都会跟着变。AI 照着这份清单抄，第四列就不会写出
-   「上课铃.mp3」和「上课铃」混着来的东西。 */
+   周期名是**从这台服务器现读的**，不是写死在代码里的 —— 厂商后台里改过的周期名
+   会跟着变。AI 照着这份清单抄，第三列就不会写出对不上的名字。 */
 function bellTemplatePrompt(){
   const stratList = S.data.strategies.map(s=>"- "+s.name).join("\n");
-  const presetList = PRESETS.map(p=>"- "+p.label+"（音源文件："+p.media+"）").join("\n");
   const fallback = S.data.strategies.length ? String(S.data.strategies[0].name) : "";
   return [
     "你是一个校园广播打铃计划的排版助手。下面我会给你一份打铃计划（可能是上级通知、",
@@ -1455,30 +1760,20 @@ function bellTemplatePrompt(){
     "",
     "【输出格式】",
     "纯文本，一行一条铃声，每行正好四列，用英文逗号分隔：",
-    "时间,名称,周期,铃音",
+    "时间,名称,周期,音源",
     "",
     "【四列分别怎么写】",
     "1. 时间：24 小时制，写成 8 位 HH:MM:SS，例如 08:00:00、14:05:30。",
     "2. 名称：这条铃叫什么，例如「第一节课上课」。整份模板里不能重名。",
     "3. 周期：必须从下面这份清单里原样复制一个，一个字都不要改：",
     stratList,
-    /* 一条预设都没有时，整段「二选一」塌成只写文件名那一路 —— 留着 (b) 后面跟一片
-       空白，AI 会去猜一个不存在的预设名，导进来每一行都报错。 */
-    ...(PRESETS.length
-      ? ["4. 铃音：二选一 ——",
-         "   (a) 音频文件名，必须以 .mp3 结尾；",
-         "   (b) 下面这份预设名之一，原样复制：",
-         presetList]
-      : ["4. 铃音：音频文件名，必须以 .mp3 结尾。"]),
+    "4. 音源：音频文件名，必须以 .mp3 结尾。",
     "",
     "【硬性要求】",
     "· 只输出模板本身。不要表头、不要序号、不要标题、不要解释、不要 Markdown 代码块。",
     "· 每行必须正好四列，不要用中文逗号「，」。",
     "· 按时间从早到晚排列。",
-    "· 周期和铃音只能用上面清单里出现过的写法，不要自己编。",
-    /* 这句点名的两条预设现在是用户自己加的了 —— 一条预设都没有时也别写，
-       写了他也得先建出叫这个名字的预设才能导得进去。 */
-    ...(PRESETS.length ? ["· 计划里没说用什么铃时：上课的节点用「上课铃」，放学的节点用「下课铃」。"] : []),
+    "· 周期只能用上面清单里出现过的写法，不要自己编。",
     /* 服务器上一条周期方案都没有时，这句「没说就用 X」会变成「一律用「」」——
        一句读不通的话。那种情况下周期清单本身也是空的，AI 无解，索性不写这一条。 */
     fallback ? "· 计划里没说周期时，一律用「"+fallback+"」。" : "",
@@ -1502,7 +1797,7 @@ function openNewGroup(){
   const m = openModal({ title:"新建任务", sub:"一个任务 = 打铃方案的一套完整配置", width:"520px",
     mount(b,f,mm){
       b.innerHTML = '<div class="stack">'+
-        '<div class="field"><label>名称</label><input class="input" id="ngName" placeholder="例如：期中考试"></div>'+
+        '<div class="field"><label>名称</label><input class="input" id="ngName" placeholder="任务1"></div>'+
         '<div class="grid2">'+
           '<div class="field"><label>开始日期</label><input class="input mono" id="ngStart" type="date" value="'+today+'"></div>'+
           '<div class="field"><label>结束日期</label><input class="input mono" id="ngEnd" type="date" value="'+today.slice(0,4)+"-12-31"+'"></div>'+
@@ -1542,9 +1837,9 @@ function deleteGroup(g){
         sub:"删除任务"+(n?("（含 "+n+" 条铃声）"):""),
         onOk: ()=>{ S.data.groups = S.data.groups.filter(x=>Number(x.id)!==Number(g.id)); }
       });
-      /* 任务删掉了，详情页也就没有「当前任务」可看了。竖屏下详情页整个是靠
-         S.showDetail 这个开关撑着的（≤640px 那套 CSS 只认它），不清掉的话人就停在
-         一个「任务不存在」的空壳上，还得自己摸返回键。宽屏那些规则不看这个值，清掉没事。 */
+      /* 任务删掉了，详情页也就没有「当前任务」可看了。一次只显示一栏的那些宽度下，
+         详情页整个是靠 S.showDetail 这个开关撑着的（≤980px 那套 CSS 只认它），不清掉的
+         话人就停在一个「任务不存在」的空壳上，还得自己摸返回键。并排显示时不看这个值。 */
       S.bells = []; S.showDetail = false; renderAll();
       toast(wroteWord(),"ok");
     }, "删除", true);
@@ -1579,11 +1874,11 @@ function openEditGroup(){
 }
 
 /* ══ bulk helpers ═══════════════════════════════════════════════════ */
-/* 批量改铃音：和单条编辑框开的是**同一个**多选器（预设 · 音频文件 · 媒体库），
+/* 批量改音源：和单条编辑框开的是**同一个**多选器（音频 · 媒体库），
    底下借 opts.extra 挂一格「播放模式」。
    播放时长**没有**了 —— 它是跟着音源总长算出来的，一批几十条各算各的，在这儿填
    一个数字等于把它们全抹成同一个值。要改时长去单条编辑框里改。
-   以前这套是另一个实现（mediaPickerHTML 那三件套），顶上一排预设按钮，正是
+   以前这套是另一个实现（mediaPickerHTML 那三件套），顶上一排「常用」按钮，正是
    这一轮从别处删掉的那种「常用行」。 */
 function openMediaBulk(list){
   const first = list[0] || {};
@@ -1597,15 +1892,18 @@ function openMediaBulk(list){
       /* 时长只有「只挑文件」时算得出来：选了整个媒体库文件夹的话，本地不知道里面
          有多少、多长，那就沿用原来的值 —— 和批量改音源（tkBulkMedia）同一条规矩。 */
       if (ms.length && !gs.length) x.sound.life_time = lifeTimeOf(ms);
-      queueUpdate(x,"改铃音");
+      queueUpdate(x,"改音源");
     });
     S.sel.clear(); renderAll(); toast(wroteWord(),"ok");
   }, {
-    title:"批量修改铃音（"+list.length+" 条）",
+    title:"批量修改音源（"+list.length+" 条）",
     sub:"这些铃声统一改用这些音源",
     validate(r){ if (r.media.length || r.groups.length) return true; toast("请选择音源","err"); return false; },
     extra:{
-      html:'<div class="field" style="max-width:220px"><label>播放模式</label>'+
+      /* 这一格占满整行宽（从前钉着 max-width:220px）—— 它和铃声/任务编辑器里那格
+         「播放模式」是同一件事，那两处现在各占半行、把整行分掉，这里只有它一格，
+         就自己把整行占了；钉着 220px 会显得是另一套排法。 */
+      html:'<div class="field"><label>播放模式</label>'+
         '<select class="select" id="mbMode"><option value="0">列表播放</option><option value="1">循环播放</option></select></div>',
       mount(box){
         const s = box.querySelector("#mbMode"); if (!s) return;

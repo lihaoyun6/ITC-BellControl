@@ -1,15 +1,25 @@
 # ── 可执行文件（自己下，见 README）────────────────────────────────
 dufs
 dufs.exe
-
-# ── 面板自己的设置：每台部署机器一份，不该进仓库 ──────────────────
-# 里面是分组、铃音预设、时间偏移、考试模式那一份（换台机器打开就是另一个样）。
-bell-panel/config.json
-bell-panel/config.json.tmp
+# 编出来的可执行文件。**不能写成 `play-agent`** —— 那一条同时也匹配同名的
+# 目录，整个 play-agent/ 的源码会被一起忽略掉（编译产物落在目录里面）。
+play-agent/play-agent
+play-agent/play-agent.exe
+# 分平台编的那几份（play-agent-linux-x86 / play-agent-macos-x64 / …）
+# 前缀一样，一条通配就够；这条匹配不到目录（目录名是 play-agent，没有尾巴）。
+play-agent/play-agent-*
 
 # ── 面板的开发笔记 ────────────────────────────────────────────────
 # 一长串改动记录，写的时候是对着自己这台机器写的，不适合当仓库的文档。
 bell-panel/README.md
+
+# ── 别往外发的本地东西 ────────────────────────────────────────────
+# 抓包里是**明文令牌**和学校内网地址；config.json 是这台机器跑起来之后的实时
+# 配置（真实的终端名、考试安排）。两样都只在本地留着，绝不要进仓库。
+*.pcapng
+udp.txt
+bell-panel/config.json
+bell-panel/config.json.tmp
 
 # ── 本地备份 / 系统文件 ──────────────────────────────────────────
 bell-panel_副本/
