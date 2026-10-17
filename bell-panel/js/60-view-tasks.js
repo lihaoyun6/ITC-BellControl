@@ -421,11 +421,11 @@ function taskWhenRaw(t){
 
 /* ══ 编辑 / 新建 ═════════════════════════════════════════════════════ */
 function blankTask(){
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayISO();
   return {
     id:null, name:"", time:"08:00:00", times:["08:00:00"], volume:70, priority:50,
     lightId:1, ledCfgId:1, ledText:"", type:1,
-    timeType:3, startDate:today, endDate:today, isDone:1,
+    timeType:3, startDate:today, endDate:isoAddYears(today, 2), isDone:1,
     sound:{life_time:"00:00:10", play_model:0}, mode:0,
     mediaNames:[], mediaGroupNames:[], termNames:[], groupNames:[],
     weeks:[], dates:[today]

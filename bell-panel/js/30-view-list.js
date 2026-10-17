@@ -1793,14 +1793,14 @@ function genRow(sec, name, media){
 }
 /* ══ group (list) create / edit ═════════════════════════════════════ */
 function openNewGroup(){
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayISO();
   const m = openModal({ title:"新建任务", sub:"一个任务 = 打铃方案的一套完整配置", width:"520px",
     mount(b,f,mm){
       b.innerHTML = '<div class="stack">'+
         '<div class="field"><label>名称</label><input class="input" id="ngName" placeholder="任务1"></div>'+
         '<div class="grid2">'+
           '<div class="field"><label>开始日期</label><input class="input mono" id="ngStart" type="date" value="'+today+'"></div>'+
-          '<div class="field"><label>结束日期</label><input class="input mono" id="ngEnd" type="date" value="'+today.slice(0,4)+"-12-31"+'"></div>'+
+          '<div class="field"><label>结束日期</label><input class="input mono" id="ngEnd" type="date" value="'+isoAddYears(today, 2)+'"></div>'+
         '</div>'+
         '<div class="field"><label>从已有列表复制（可选）</label><select class="select" id="ngClone"><option value="">不复制</option>'+
           railGroups().map(g=>'<option value="'+g.id+'">'+esc(g.name)+'</option>').join("")+'</select></div>'+

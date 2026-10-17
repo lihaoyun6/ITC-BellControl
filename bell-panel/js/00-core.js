@@ -56,6 +56,12 @@ const WEEK = ["","周一","周二","周三","周四","周五","周六","周日"]
 /* 本地日期，不用 toISOString —— 那是 UTC，东八区早上 8 点前会差一天 */
 const isoOf = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const todayISO = () => isoOf(new Date());
+/* ISO 日期加年数：按日历加（2/29 落到 3/1），加完还是 YYYY-MM-DD。
+   新建铃声任务／定时任务的默认结束日期用的就是「今天 + 2 年」。 */
+const isoAddYears = (iso, n) => {
+  const y = Number(iso.slice(0,4)), mo = Number(iso.slice(5,7)) - 1, da = Number(iso.slice(8,10));
+  return isoOf(new Date(y + n, mo, da));
+};
 
 /* ══ 服务器现在几点 ═════════════════════════════════════════════════
    面板上其它地方一律读本机时钟（todayISO 那一套）—— 只有考试模式那条
