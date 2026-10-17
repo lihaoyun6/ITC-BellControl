@@ -485,6 +485,9 @@ function renderTopbar(){
    从铃声计划起步。初值是 list（S.mode 一开始是空串，那也是铃声计划）。 */
 let lastMode = LS.get("lastMode", "list");
 function goMode(m){
+  /* 每次进「实时对讲」都把拨号框清空（用户定的）：号码不该跨一次进出留在这儿，
+     不然下一次进来按呼叫，很容易把上一通拨过的号又拨出去。 */
+  if (m === "live" && S.mode !== "live" && typeof liveState === "function") liveState().num = "";
   if (m !== "settings" && m !== "tasks"){ lastMode = m; LS.set("lastMode", m); }
   S.mode = m;
   if (m === "tasks") loadTasks();
@@ -655,7 +658,14 @@ function renderMain(){
      在放）跟着会话状态走。和胶囊同一条理由：它们的每一次状态变更也都以
      renderMain() 收尾，挂在这儿一分钱不用多花。 */
   syncModeDots();
+  /* 对讲/播放中拦住息屏。和上面两行同一条理由：这两条会话的每次状态变更都
+     以 renderMain() 收尾，挂在这儿就不用去每个 playXxx/liveXxx 里补一句。 */
+  if (typeof syncKeepAwake === "function") syncKeepAwake();
   const el = $("#main"); if (!el) return;
+  /* 上一次画在 #main 里的是哪一页（只有铃声列表那一支会记）。换页时清掉，
+     免得切到别的页再切回来时把别处的滚动位置安到列表上。 */
+  const prevScrollKey = el.dataset.scrollKey || "";
+  delete el.dataset.scrollKey;
   el.classList.remove("pane","fill","headfix","setpage"); /* 这几种「整页不滚」的布局，见下面的 add */
   if (S.mode==="exam") return renderExam();
   if (S.mode==="tasks") return renderTasks();
@@ -684,6 +694,12 @@ function renderMain(){
   /* 原件被考试模式锁着：整页只读，加一条说明为什么 */
   const lock = isExamLocked(g);
   LOCK_NOW = !!lock;
+
+  /* 勾启用/停用、编辑保存都会把这一页整块重画（排队一次、落定再一次），
+     滚动盒子跟着换新，scrollTop 归零 —— 页面就往上跳两下。同一页原地重画时
+     先把位置记下来，画完接回去；换列表/换筛选/进出详情照旧顶到最上面。 */
+  const scrollKey = (S.mode||"list")+"|"+S.groupId+"|"+(S.showDetail?1:0)+"|"+listKey;
+  const scrollSnap = prevScrollKey === scrollKey ? scrollKeepSnapshot(el) : null;
 
   el.innerHTML =
     '<div class="wb'+(S.showDetail?" show-main":"")+'">'+
@@ -793,7 +809,7 @@ function renderMain(){
           '<span class="hd-seg" id="hdNormal">'+
             /* 宽度钉在 css 的 `.hd-seg > .sbox` 上（竖屏要收窄，内联的 width 收不动） */
             '<span class="sbox sbox-sm">'+ICON.search+
-              '<input class="input" id="f-q" placeholder="筛选名称 / 时间" value="'+esc(S.dt.fq||"")+'"></span>'+
+              '<input class="input" id="f-q" placeholder="搜索名称 / 时间" value="'+esc(S.dt.fq||"")+'"></span>'+
             /* 手机上这枚只写「添加」——「铃声」两个字由 .wide-only 藏起来（见
                app.css 的 ≤980px）。它和左边那个筛选框是这一行里最宽的两样，
                加起来约 345px，而 390px 的手机只有 328px 可用，不收就折成两行。
@@ -829,6 +845,13 @@ function renderMain(){
      而且它底下那颗刷新键是这条路唯一的出口。 */
   if (S.gLoad){ renderRail(); return; }
 
+  /* 点左上角标题（任务名）回到顶部：竖屏上标题这一行钉着，正文在它下面自己滚。 */
+  const headTitle = el.querySelector(".wb-main > .sec-head h2");
+  if (headTitle){
+    headTitle.classList.add("back-top");
+    headTitle.onclick = ()=> scrollPageTop(el);
+  }
+
   el.querySelector("#mArea").onclick = ()=> openAreaEditor("list");
   el.querySelector("#mAddBell").onclick = ()=> openBellEditor(null);
   grpBind(el, lock);
@@ -844,6 +867,8 @@ function renderMain(){
      以后新加的入口都从这一个地方过。 */
   if (lock) lockDetail(el);
   renderRail();      /* #rail 是刚造出来的空壳，得填。放在这里 = 单独调 renderMain() 也不会留下空侧栏 */
+  el.dataset.scrollKey = scrollKey;
+  scrollKeepRestore(el, scrollSnap);
 }
 
 /* 一条任务都没选中时的「铃声计划」页。和正常那份一样是 .wb 两栏，右栏换成一句
@@ -877,7 +902,7 @@ function renderNoGroup(vis){
 }
 
 /* 只读化一个列表详情页：除了表格里那枚「特例」胶囊（它只开一个只读弹窗），
-   一律停用 —— 包括「筛选名称 / 时间」那个框（用户实测：锁着还能打字，看着像能用）。
+   一律停用 —— 包括「搜索名称 / 时间」那个框（用户实测：锁着还能打字，看着像能用）。
    不加这一层的话，得给每个动作处理器单独写判断，漏一个就是一个能改的口子。
 
    「退出去」那一步不用在这儿放行：返回键已经搬去顶栏了（renderTopbar 的 #tbBack），
@@ -1792,6 +1817,24 @@ function genRow(sec, name, media){
           mediaNames:mn, life: lifeTimeOf(mn), model:0, label: mediaLabel({media:mn, groups:[]})};
 }
 /* ══ group (list) create / edit ═════════════════════════════════════ */
+/* 日期格：长得像输入框，但只能点 —— 点开的是面板自绘的日历（考试日期用的是
+   同一套 openDatePicker）。原生 <input type="date"> 在 Safari / iPad 上带着
+   自己那一套控件样式，和旁边的框对不齐，尺寸也不归页面管。 */
+function dateFieldHTML(id, value){
+  return '<button type="button" class="select-btn" id="'+id+'" data-date="'+esc(value)+'">'+
+    '<span class="v mono">'+esc(value)+'</span>'+
+    '<span class="chev">'+ICON.chevD+'</span></button>';
+}
+function bindDateField(el, id){
+  const btn = el.querySelector("#"+id); if (!btn) return;
+  btn.onclick = ()=>{
+    openDatePicker(btn, btn.dataset.date || todayISO(), day=>{
+      btn.dataset.date = day;
+      const v = btn.querySelector(".v");
+      if (v) v.textContent = day;
+    });
+  };
+}
 function openNewGroup(){
   const today = todayISO();
   const m = openModal({ title:"新建任务", sub:"一个任务 = 打铃方案的一套完整配置", width:"520px",
@@ -1799,19 +1842,21 @@ function openNewGroup(){
       b.innerHTML = '<div class="stack">'+
         '<div class="field"><label>名称</label><input class="input" id="ngName" placeholder="任务1"></div>'+
         '<div class="grid2">'+
-          '<div class="field"><label>开始日期</label><input class="input mono" id="ngStart" type="date" value="'+today+'"></div>'+
-          '<div class="field"><label>结束日期</label><input class="input mono" id="ngEnd" type="date" value="'+isoAddYears(today, 2)+'"></div>'+
+          '<div class="field"><label>开始日期</label>'+dateFieldHTML("ngStart", today)+'</div>'+
+          '<div class="field"><label>结束日期</label>'+dateFieldHTML("ngEnd", isoAddYears(today, 2))+'</div>'+
         '</div>'+
         '<div class="field"><label>从已有列表复制（可选）</label><select class="select" id="ngClone"><option value="">不复制</option>'+
           railGroups().map(g=>'<option value="'+g.id+'">'+esc(g.name)+'</option>').join("")+'</select></div>'+
               '</div>';
+      bindDateField(b, "ngStart");
+      bindDateField(b, "ngEnd");
       f.innerHTML = '<span class="spacer"></span><button class="btn" id="ngC">取消</button><button class="btn btn-primary" id="ngOk">创建</button>';
       $("#ngC").onclick = ()=> closeModal(mm.id);
       $("#ngOk").onclick = ()=>{
         const name = $("#ngName").value.trim();
         if (!name){ markErr(b, $("#ngName").closest(".field")); toast("请填写名称","err"); return; }
         const clone = $("#ngClone").value;
-        const start = $("#ngStart").value, end = $("#ngEnd").value;
+        const start = $("#ngStart").dataset.date, end = $("#ngEnd").dataset.date;
         closeModal(mm.id);
         /* 走队列：草稿模式下也得等提交才落到服务器上。列表先拿一个临时负数 id
            在本地用着，报文提交成功时 ensureList 会把真 id 回填进去。 */
@@ -1849,15 +1894,19 @@ function openEditGroup(){
   const g = S.data.groups.find(x=>Number(x.id)===Number(S.groupId)) || {};
   const m = openModal({ title:"任务属性", sub:esc(g.name||""), width:"520px",
     mount(b,f,mm){
+      const start0 = (g.start_date||"").slice(0,10) || todayISO();
+      const end0   = (g.end_date||"").slice(0,10) || isoAddYears(start0, 2);
       b.innerHTML = '<div class="stack">'+
         '<div class="field"><label>名称</label><input class="input" id="egName" value="'+esc(g.name||"")+'"></div>'+
         '<div class="grid2">'+
-          '<div class="field"><label>开始日期</label><input class="input mono" id="egStart" type="date" value="'+esc((g.start_date||"").slice(0,10))+'"></div>'+
-          '<div class="field"><label>结束日期</label><input class="input mono" id="egEnd" type="date" value="'+esc((g.end_date||"").slice(0,10))+'"></div>'+
+          '<div class="field"><label>开始日期</label>'+dateFieldHTML("egStart", start0)+'</div>'+
+          '<div class="field"><label>结束日期</label>'+dateFieldHTML("egEnd", end0)+'</div>'+
         '</div>'+
         '<label class="chk"><input type="checkbox" id="egYear"'+(Number(g.is_year_repeat)?" checked":"")+'> 按年重复</label>'+
         '<label class="chk"><input type="checkbox" id="egOn"'+(isListEnabled(g)?" checked":"")+'> 启用该任务</label>'+
       '</div>';
+      bindDateField(b, "egStart");
+      bindDateField(b, "egEnd");
       f.innerHTML = '<span class="spacer"></span><button class="btn" id="egC">取消</button><button class="btn btn-primary" id="egOk">保存</button>';
       $("#egC").onclick = ()=> closeModal(mm.id);
       $("#egOk").onclick = async ()=>{
@@ -1865,7 +1914,7 @@ function openEditGroup(){
         try{
           await api("PUT","/timing-bells-groups/"+S.groupId,{body:{
             name:$("#egName").value.trim(), is_year_repeat: $("#egYear").checked?1:0,
-            start_date:$("#egStart").value, end_date:$("#egEnd").value,
+            start_date:$("#egStart").dataset.date, end_date:$("#egEnd").dataset.date,
             is_done: $("#egOn").checked?1:0 }});
           closeModal(mm.id); await loadAll(); toast("已保存","ok");
         }catch(e){ btn.disabled=false; btn.textContent="保存"; toast(e.message,"err"); }

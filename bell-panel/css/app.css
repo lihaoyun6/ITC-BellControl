@@ -1,41 +1,114 @@
-/* ── tokens ───────────────────────────────────────────────────────── */
+/* ── tokens（Apple HIG 系统色）───────────────────────────────────────
+   全部照 UIKit 的语义色取，浅色/深色各一套：--bg 用分组背景
+   （systemGroupedBackground），--surface 是卡片（secondarySystemGroupedBackground），
+   --surface-2/-3 是 systemGray6 / systemGray5；文字三档是
+   label / secondaryLabel / tertiaryLabel；分隔线取 systemGray4；
+   主色是 systemBlue（浅 #007AFF / 深 #0A84FF）。
+   状态色也各用系统的 good/crit/warn，绿色和红色取可读性够压字的深一档。 */
 :root{
-  --bg:#FAF8F4; --surface:#FFFFFF; --surface-2:#F2EEE7; --surface-3:#EAE5DB;
-  /* 长名单的**隔行底**（见下面「隔行换底」那几条）。是一层极浅的重点色，
+  --bg:#F2F2F7; --surface:#FFFFFF; --surface-2:#F2F2F7; --surface-3:#E5E5EA;
+  /* 长名单的**隔行底**（见下面「隔行换底」那几条）。是一层极浅的中性灰，
      比 --accent-soft（选中用的那档）还浅一头 —— 两个色各有各的活：
      这个只管「一行一行分开」，选中那档要在一堆交替底里跳出来。 */
-  --row-alt:#FEF9F5;
-  --fg:#1B1815; --fg-2:#57534E; --fg-3:#8A8177;
-  --border:#E6E0D6; --border-strong:#D3CABB;
-  --accent:#B84A0C; --accent-fill:#C2410C; --accent-soft:#FCEFE5; --accent-line:#E8A87C;
-  --cool:#0E7490; --cool-fill:#0891B2; --cool-soft:#E4F5F9;
-  --good:#15803D; --good-soft:#E7F3EA;
-  --crit:#B3261E; --crit-soft:#FBEAE8;
-  --warn:#92640A; --warn-soft:#FBF3E0;
+  --row-alt:#F7F7FA;
+  --fg:#000000; --fg-2:rgba(60,60,67,.6); --fg-3:rgba(60,60,67,.35);
+  /* 闲置的话筒图标要**不透明**的灰：--fg-3 带 35% 透明度，话筒笔画互相
+     重叠的地方会叠深一档，看着像脏线（用户实测）。这一档只给那枚图标用。 */
+  --mic-idle:#AEAEB2;
+  --border:#D1D1D6; --border-strong:#AEAEB2;
+  --accent:#007AFF; --accent-fill:#007AFF; --accent-soft:#E9F2FF; --accent-line:#8FC0FF;
+  --cool:#30B0C7; --cool-fill:#30B0C7; --cool-soft:#E6F7FA;
+  --good:#248A3D; --good-soft:#E8F7EC;
+  --crit:#D70015; --crit-soft:#FDEBEC;
+  --warn:#B25000; --warn-soft:#FFF4E5;
   /* 分组胶囊前面那个黄点单独一个值。--warn 是照**文字**挑的深赭黄（要压在浅底上
      当字读），涂到 9px 的实心圆点上就发暗，看着像颗脏点。圆点是色块不是文字，
-     该往亮里走 —— 偏橙的琥珀色。只给圆点用，不跟着 --warn 走，
+     该往亮里走 —— 系统的 systemOrange。只给圆点用，不跟着 --warn 走，
      拿 --warn 当文字色的那些地方一个都不受影响。 */
-  --warn-dot:#F59E0B;
-  --grp:#2563EB; --grp-soft:#E7EEFE;   /* 蓝 = 「这是一个组」，不是在线状态 */
+  --warn-dot:#FF9500;
+  --grp:#5856D6; --grp-soft:#EDEDFC;   /* systemIndigo = 「这是一个组」，不是在线状态 */
   --on-accent:#FFFFFF;
-  --shadow-sm:0 1px 2px rgba(27,24,21,.06), 0 1px 3px rgba(27,24,21,.04);
-  --shadow-md:0 6px 16px rgba(27,24,21,.09), 0 2px 5px rgba(27,24,21,.05);
-  --shadow-lg:0 24px 60px rgba(27,24,21,.20), 0 4px 12px rgba(27,24,21,.08);
-  /* 滚动条（见 base）。拇指原来是最深的那个灰（#57534E、hover 到近黑 #1B1815），
-     和轨道对比 6.1:1 —— 比正文还抢眼，一条竖杠杵在每张表右边。用户说太深。
-     现在钉在「看得见、但不抢戏」那一档：#9C9385 与轨道 2.4:1（约等于 --fg-3 再浅一档），
-     hover 才落到 --fg-3 那么深。这一对**不跟着 --fg-* 走** ——
-     滚动条是装饰不是信息，按文字那套灰阶取就会一路偏深。 */
-  --sb-thumb:#9C9385; --sb-thumb-h:#8A8177; --sb-track:#EAE5DB;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
+  --shadow-md:0 6px 16px rgba(0,0,0,.08), 0 2px 5px rgba(0,0,0,.04);
+  --shadow-lg:0 24px 60px rgba(0,0,0,.18), 0 4px 12px rgba(0,0,0,.07);
+  /* 滚动条（见 base）。拇指取 systemGray（#8E8E93）、轨道 systemGray5，
+     对比 2.5:1 —— 看得见、但不抢戏；hover 落到更深的 #6C6C70。
+     这一对**不跟着 --fg-* 走** —— 滚动条是装饰不是信息。 */
+  --sb-thumb:#8E8E93; --sb-thumb-h:#6C6C70; --sb-track:#E5E5EA;
   --r-sm:6px; --r-md:10px; --r-lg:16px;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
+    --bg:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E; --surface-3:#3A3A3C;
+    --row-alt:#232325;
+    --fg:#FFFFFF; --fg-2:rgba(235,235,245,.6); --fg-3:rgba(235,235,245,.35);
+  --mic-idle:#8E8E93;
+    --border:#38383A; --border-strong:#48484A;
+    --accent:#0A84FF; --accent-fill:#0A84FF; --accent-soft:#142B45; --accent-line:#2F6FB5;
+    --cool:#40C8E0; --cool-fill:#40C8E0; --cool-soft:#0E2A30;
+    --good:#30D158; --good-soft:#122C19;
+    --crit:#FF453A; --crit-soft:#3A1916;
+    --warn:#FF9F0A; --warn-soft:#33260A; --warn-dot:#FF9F0A;
+    --grp:#5E5CE6; --grp-soft:#1C1B38;
+    --on-accent:#FFFFFF;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    --shadow-md:0 6px 16px rgba(0,0,0,.45);
+    --shadow-lg:0 24px 60px rgba(0,0,0,.6);
+    /* 暗色下拇指要比轨道**亮**才看得见，所以这两个值跟浅色那套正好反过来 */
+    --sb-thumb:#636366; --sb-thumb-h:#8E8E93; --sb-track:#2C2C2E;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E; --surface-3:#3A3A3C;
+  --row-alt:#232325;
+  --fg:#FFFFFF; --fg-2:rgba(235,235,245,.6); --fg-3:rgba(235,235,245,.35);
+  --mic-idle:#8E8E93;
+  --border:#38383A; --border-strong:#48484A;
+  --accent:#0A84FF; --accent-fill:#0A84FF; --accent-soft:#142B45; --accent-line:#2F6FB5;
+  --cool:#40C8E0; --cool-fill:#40C8E0; --cool-soft:#0E2A30;
+  --good:#30D158; --good-soft:#122C19;
+  --crit:#FF453A; --crit-soft:#3A1916;
+  --warn:#FF9F0A; --warn-soft:#33260A; --warn-dot:#FF9F0A;
+  --grp:#5E5CE6; --grp-soft:#1C1B38;
+  --on-accent:#FFFFFF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45);
+  --shadow-lg:0 24px 60px rgba(0,0,0,.6);
+  --sb-thumb:#636366; --sb-thumb-h:#8E8E93; --sb-track:#2C2C2E;
+  color-scheme:dark;
+}
+
+/* ── Summer（原来的暖色）────────────────────────────────────────────
+   <html data-palette="summer"> 时整组盖掉上面的 Klein。同样两套深浅：
+   浅色暖白纸面 + 赭橙主色，深色暖黑 + 琥珀主色。
+   这几段排在 Klein 后面，选择器也各多一档属性，所以一定会赢。 */
+:root[data-palette="summer"]{
+  --bg:#FAF8F4; --surface:#FFFFFF; --surface-2:#F2EEE7; --surface-3:#EAE5DB;
+  --row-alt:#FEF9F5;
+  --fg:#1B1815; --fg-2:#57534E; --fg-3:#8A8177;
+  --mic-idle:#8A8177;
+  --border:#E6E0D6; --border-strong:#D3CABB;
+  --accent:#B84A0C; --accent-fill:#C2410C; --accent-soft:#FCEFE5; --accent-line:#E8A87C;
+  --cool:#0E7490; --cool-fill:#0891B2; --cool-soft:#E4F5F9;
+  --good:#15803D; --good-soft:#E7F3EA;
+  --crit:#B3261E; --crit-soft:#FBEAE8;
+  --warn:#92640A; --warn-soft:#FBF3E0; --warn-dot:#F59E0B;
+  --grp:#2563EB; --grp-soft:#E7EEFE;
+  --on-accent:#FFFFFF;
+  --shadow-sm:0 1px 2px rgba(27,24,21,.06), 0 1px 3px rgba(27,24,21,.04);
+  --shadow-md:0 6px 16px rgba(27,24,21,.09), 0 2px 5px rgba(27,24,21,.05);
+  --shadow-lg:0 24px 60px rgba(27,24,21,.20), 0 4px 12px rgba(27,24,21,.08);
+  --sb-thumb:#9C9385; --sb-thumb-h:#8A8177; --sb-track:#EAE5DB;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root[data-palette="summer"]:not([data-theme="light"]){
     --bg:#1A1713; --surface:#232019; --surface-2:#2C2822; --surface-3:#37322A;
     --row-alt:#2A211A;
     --fg:#EDE8E0; --fg-2:#B3ABA0; --fg-3:#8A8177;
+  --mic-idle:#8A8177;
     --border:#3A342B; --border-strong:#4C4438;
     --accent:#E8894A; --accent-fill:#DC7209; --accent-soft:#3A2416; --accent-line:#8A5327;
     --cool:#4DD0E1; --cool-fill:#12A5C6; --cool-soft:#123039;
@@ -47,15 +120,15 @@
     --shadow-sm:0 1px 2px rgba(0,0,0,.4);
     --shadow-md:0 6px 16px rgba(0,0,0,.45);
     --shadow-lg:0 24px 60px rgba(0,0,0,.6);
-    /* 暗色下拇指要比轨道**亮**才看得见，所以这两个值跟浅色那套正好反过来 */
     --sb-thumb:#5A544A; --sb-thumb-h:#8A8177; --sb-track:#2C2822;
     color-scheme:dark;
   }
 }
-:root[data-theme="dark"]{
+:root[data-palette="summer"][data-theme="dark"]{
   --bg:#1A1713; --surface:#232019; --surface-2:#2C2822; --surface-3:#37322A;
   --row-alt:#2A211A;
   --fg:#EDE8E0; --fg-2:#B3ABA0; --fg-3:#8A8177;
+  --mic-idle:#8A8177;
   --border:#3A342B; --border-strong:#4C4438;
   --accent:#E8894A; --accent-fill:#DC7209; --accent-soft:#3A2416; --accent-line:#8A5327;
   --cool:#4DD0E1; --cool-fill:#12A5C6; --cool-soft:#123039;
@@ -95,6 +168,14 @@ body{
 }
 h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
 button,input,select,textarea{font:inherit;color:inherit}
+/* 长按不选中任何非编辑文字，也不弹 iOS 上那个「拷贝／查询」浮层（用户定的）。
+   user-select 是继承的，从根上关一次就够；真正能编辑的输入框再开回来 ——
+   那儿用户还得选字、拖光标。touch-callout 不继承，所以铺到所有元素上。 */
+html,body{-webkit-user-select:none;user-select:none}
+*{-webkit-touch-callout:none}
+input,textarea,[contenteditable=""],[contenteditable="true"]{
+  -webkit-user-select:text;user-select:text;-webkit-touch-callout:default;
+}
 button{cursor:pointer;border:0;background:none}
 a{color:var(--accent);text-decoration:none}
 :focus-visible{outline:2px solid var(--accent-fill);outline-offset:2px;border-radius:4px}
@@ -177,6 +258,12 @@ a{color:var(--accent);text-decoration:none}
   width:100%;padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--r-sm);
   background:var(--surface);font-size:13px;
 }
+/* 表单控件的盒高由我们自己定。Safari 给 <select>（以及当按钮用的 .select-btn）
+   算高度时不认继承来的 line-height，同样的内边距下比 <input> 矮一截 —— 同一行里
+   一眼就看得出来（用户实测）。高度按「一行字 + 内边距 + 边框」写，跟着字号走：
+   13px 时 36px，触屏那档字号提到 16px 时自动长到 41px，不会把字切掉。
+   紧凑场合各自覆盖：.sbox-sm 搜索框保持原样，考试表格那行见下面的 .tbl-exam。 */
+input.input,select.select,.select-btn{height:calc(1.55em + 16px)}
 .input:focus,.select:focus{outline:none;border-color:var(--accent-fill);box-shadow:0 0 0 3px var(--accent-soft)}
 /* ── 搜索框里那个放大镜 ─────────────────────────────────────────────
    图标要落在**框子里面**、文字前头，光在框子旁边并排摆一个 <span> 做不到 —— 得
@@ -191,7 +278,7 @@ a{color:var(--accent);text-decoration:none}
    太重，图标和内边距跟着缩一档。它们本来就带着自己那份 12px 的排版，一并放这儿，
    省得元素上再挂一串内联。 */
 .sbox-sm > .ic{left:7px;width:12px;height:12px}
-.sbox-sm > .input{padding:4px 9px 4px 25px;font-size:12px}
+.sbox-sm > .input{padding:4px 9px 4px 25px;font-size:12px;height:auto}
 /* 密码框里那一排黑点是**浏览器自己拿字体画的**，不是页面里的字符 —— 它要的是那个
    字体里的实心圆点（U+2022）。整页原先用的那支中文 webfont（Google 的 Noto Sans SC）
    在这一格上没有可用字形，而 Safari 认死这个框的字体、不逐字去别的字体里找，于是每个
@@ -547,9 +634,9 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
    靠那几像素的缝分，扫一眼分不出这是「五条任务」还是「一坨文字」—— 用户实测要
    的就是这个框。选中的那条换成 --accent-line，过期换 --crit，都是在这条上面改色。 */
 /* 底是**默认那个白**（--surface，和面板、按钮同一档，用户定的）：以前这条不带底，
-   直接露着页面那张暖白（--bg #FAF8F4），和旁边灰底的停用条只差一点点亮度，
+   直接露着页面那层浅灰（--bg #F2F2F7），和旁边灰底的停用条只差一点点亮度，
    看着像「没上色」而不是「正常启用」。现在三档各说各的：白 = 启用、灰 = 停用、
-   橙 = 当前选中。
+   蓝 = 当前选中。
    缝 4px（用户要的：比原来那 2px 加大一倍）—— 一条条之间分得开，才像一摞卡片。 */
 .rail-item{
   width:100%;border-radius:var(--r-sm);border:1px solid var(--border);margin-bottom:4px;
@@ -748,6 +835,9 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
 
 .sec-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:16px}
 .sec-head h2{font-size:22px;letter-spacing:-.015em}
+/* 点左上角标题回到顶部（铃声计划详情页 / 考试模式页，见 scrollPageTop）：
+   标题是可点的，光标得跟着变，不然没人知道这一下能点。 */
+.sec-head h2.back-top{cursor:pointer}
 .sec-head .meta{font-size:12px;color:var(--fg-3);display:flex;gap:10px;align-items:center;margin-top:5px;flex-wrap:wrap}
 /* 页面级的按钮组（「启用考试模式」那一排）推到最右。用**直接子元素**选择器：
    详情页标题旁那对编辑/删除图标也挂 .acts，但它是 .title-row 里的，是「这条
@@ -908,11 +998,13 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
 .set-ctl.agent{width:296px;gap:10px}
 .set-ctl.agent .field:first-child{flex:1 1 auto}
 .set-ctl.agent .field:last-child{flex:0 0 84px}
-/* 窄屏上这一行不再并排：控件那格 flex:none，标签会被压到十几像素宽（一行一个字）。
-   改成上下摞，控件占满整行。两个开关那两行也一并受益（它们和这条同一个道理）。 */
+/* 窄屏上**带输入框**的那一行不再并排：控件那格 flex:none，标签会被压到十几
+   像素宽（一行一个字）。改成上下摞，控件占满整行。
+   单个开关／色板那几行不跟着摞 —— 控件的宽度跟文字并排绰绰有余，摞下去只会让
+   第一行末尾空一大截、开关孤零零掉到第二行（用户实测的就是这个）。 */
 @media (max-width:980px){
-  .set-row{flex-direction:column;gap:10px}
-  .set-row .set-ctl{padding-top:0}
+  .set-row.agent-row{flex-direction:column;gap:10px}
+  .set-row.agent-row .set-ctl{padding-top:0}
   .set-ctl.agent{width:100%}
 }
 
@@ -1054,6 +1146,12 @@ table.tbl tbody tr:last-child td{border-bottom:0}
    照它算的（见 js/40-view-exam.js 里时刻格那段）；80 = 56+24，56 留给「100」。
    只加在宽屏这一档：≤980px 那张表整个换成 flex 行，每格在那儿有自己的
    flex 基准（见文件末尾），不要这一套。 */
+/* 考试表格这一行是紧凑档：控件自己的上下内边距只有 4px（见 40-view-exam.js 里
+   那些内联 padding）。输入框、时间框和那几个「长得像下拉」的按钮按同一个公式
+   算高 —— Safari 上按钮/下拉框不再比科目那个输入框矮一截（用户实测）。 */
+table.tbl-exam .input,
+table.tbl-exam .select-btn{height:calc(1.55em + 10px)}
+
 @media (min-width:981px){
   /* 一行九格，格与格之间的横向空当从 12+12 收到 6+6（用户要的）：原来两个控件中间
      攒着 24px，一行看下来全是空档。两头各留 12 —— 最左那格（考试科目）的左边、
@@ -1249,8 +1347,10 @@ table.tbl-bells th,table.tbl-tasks th{padding-top:5px;padding-bottom:5px}
    整页那一份不用这条：它走的是现成的 .main-inner.fill。 */
 .modal-body.grow-body{display:flex;flex-direction:column;overflow:hidden}
 .modal-body.grow-body > .grow{flex:1 1 auto;min-height:0}
-.modal-foot{padding:13px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex:none;
-  padding-bottom:calc(13px + env(safe-area-inset-bottom,0px))}
+/* 底栏**不加安全区下边距**：模态是居中摆的，.modal-host 四边各留 20px、
+   .modal 最高 88vh，底边根本碰不到 Home 指示条。加了 env(safe-area-inset-bottom)
+   以后每个模态底下都多出一截空白 —— 用户说的「大下巴」。 */
+.modal-foot{padding:13px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex:none}
 .modal-foot .spacer{flex:1}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -1518,19 +1618,22 @@ table.tbl-bells th,table.tbl-tasks th{padding-top:5px;padding-bottom:5px}
 .prev-tbl td{padding:4px 8px;border-bottom:1px solid var(--border)}
 .prev-tbl tr:not(.on) td{opacity:.4}
 
-/* toasts —— 一律右下角。
-   挑右下角是因为它是这块屏幕上唯一常年空着的地方：顶上从左到右塞着连接状态、
-   终端读数、注销、草稿开关、页签、提交按钮，左边是中栏和侧栏，正中是弹窗，
-   顶边正中被忙等提示（.busy-tip）占着。右下角平时什么也没有。
-   摞子是**往上长**的：新的贴着角出现，旧的一条条往上顶（toast() 里 append 在末尾），
-   撤也是从最上面那条开始撤，所以目光落在角上那一条就够了。
-   pop-t 是从下方升起来（pop 是从下方，位置在下面就顺着来）—— 和上面那半句一起改的。 */
-.toasts{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;
-  display:flex;flex-direction:column;gap:8px;max-width:min(420px,90vw)}
+/* toasts —— 一律压在顶栏下方、左边。
+   用户定的位置：顶栏底下那一条平时只有页面标题（.sec-head），没有要紧东西，
+   通知就临时占在那儿；它**不再飘在内容区的角落**，所以不会挡住正在操作的
+   表格或按钮。left 跟正文的边距对齐（宽屏 24px、竖屏 16px），top 由
+   js/00-core.js 的 syncToastTop() 按顶栏实测的底边写进来（顶栏在窄屏上会折行，
+   高度不是定数）；下面那个 top 只是脚本还没跑时的落点。
+   摞子是**往下长**的：新的贴着顶栏出现，旧的被往下顶（容器用 column-reverse，
+   toast() 里 append 在末尾 = 视觉上出现在最上面），最多六条。
+   pointer-events:none：通知只让人看见，不该拦住底下标题/控件的点击。 */
+.toasts{position:fixed;left:24px;top:calc(62px + env(safe-area-inset-top,0px));z-index:60;
+  display:flex;flex-direction:column-reverse;gap:8px;max-width:min(420px,90vw);
+  pointer-events:none}
 .toast{background:var(--surface);border:1px solid var(--border-strong);border-left:4px solid var(--accent-fill);
-  border-radius:var(--r-sm);padding:12px 16px;box-shadow:var(--shadow-md);
+  border-radius:var(--r-sm);padding:10px 14px;box-shadow:var(--shadow-md);
   font-size:14.5px;line-height:1.45;color:var(--fg);animation:pop-t .18s ease}
-@keyframes pop-t{from{transform:translateY(8px) scale(.985);opacity:0}to{transform:none;opacity:1}}
+@keyframes pop-t{from{transform:translateY(-8px) scale(.985);opacity:0}to{transform:none;opacity:1}}
 /* 只有 err / warn 这两种弹（外加没写 kind 的那种「这一步没做成」，用的是上面那条
    默认配色）。.ok 那条绿边不用留 —— toast() 里已经把 ok 拦在门外了。 */
 .toast.err{border-left-color:var(--crit)}
@@ -1599,6 +1702,15 @@ body.busy-slow .busy-tip{opacity:1}
 .dial-wrap{display:flex;flex-direction:column;gap:8px;
   width:100%;max-width:360px;margin:8px auto 0}   /* width:100% 的理由见上面 #liveTabs */
 
+/* 600px 以上一律用宽键盘：360 的封顶是照手机排的，放在平板/横屏/桌面上
+   键盘又长又瘦，三列键挤在中间一小条（用户看见的就是这个）。
+   **不能只写 orientation:portrait** —— 窗口横向拉过 980px 之后页面换成宽屏
+   版式，orientation 也不再是 portrait，那一瞬间键盘会从 560 跳回 360
+   （用户看见的那一下）。所以只按宽度判：够宽就给宽键盘，竖屏横屏一视同仁。 */
+@media (min-width:600px){
+  #liveTabs,.dial-wrap,.live-tip{max-width:560px}
+}
+
 /* ── 顶上那枚大话筒 ────────────────────────────────────────────────
    两个页签**共用一枚**（用户要的是「两个区域顶部都有」），所以它挂在 renderLive
    里、页签和内容之间，不属于任何一页自己的模板。
@@ -1623,14 +1735,24 @@ body.busy-slow .busy-tip{opacity:1}
    用 vh 量而不是 flex 缩：flex 缩的是主轴（这里是高），宽度还得自己跟 —— 圆
    就成椭圆了。vh 上下一量，加个 86 的上限，宽高永远相等，也不会跟着页签切换
    忽大忽小。9vh+10：常见窗口（≥844px）正好压在 86 这个上限上；
-   700px → 73px，600px → 64px，到 50px 为止（再小那枚图标就认不出了）。 */
+   700px → 73px，600px → 64px，到 50px 为止（再小那枚图标就认不出了）。
+   宽键盘那一档（见下面 ≥600px 那条）把上限提到 120 —— 键盘整体放大了，
+   话筒跟着长才成比例（用户定的）。图标是这个圆的 45%，跟着圆一起等比放大。 */
 .live-mic{display:flex;align-items:center;justify-content:center;
   /* 直径 = 原来那档 **整档 +10px**（用户要的）：上下限各 +10，中间那档写成
      `9vh + 10px` 而不是换个 vh 数 —— 换 vh 数只会在某些屏高上凑巧大 10px，
      别的屏高上多多少少都不一样。写成加法，任何窗口高度下都**正好**大 10px。 */
   width:clamp(50px,calc(9vh + 10px),86px);height:clamp(50px,calc(9vh + 10px),86px);
   margin:clamp(6px,1.5vh,14px) auto 0;border-radius:50%;
-  background:var(--surface-2);border:1px solid var(--border);color:var(--fg-3)}
+  background:var(--surface-2);border:1px solid var(--border);color:var(--mic-idle)}
+/* 宽键盘那一档：话筒跟着键盘一起等比放大。上限 86 → 120。
+   式子从 `9vh + 10px` 变成 `9vh + 5vw - 20px`：600px 宽时 5vw 是 30px，
+   30−20 正好补回 10px，两者**完全相等**，不会在 600 这道坎上多跳一下。只看高度不够 —— 横屏把窗口拉宽、高度却不高时
+   话筒原来纹丝不动（用户要的是键盘变宽、话筒也一起长），5vw 这一项补的
+   就是这个。120 封顶：再大它就开始抢键盘的高度了。 */
+@media (min-width:600px){
+  .live-mic{width:clamp(50px,calc(9vh + 5vw - 20px),120px);height:clamp(50px,calc(9vh + 5vw - 20px),120px)}
+}
 /* 图标按圈的百分比走：86px 上是 38.7px，跟着圈一起长，不用另改数。 */
 .live-mic .ic{width:45%;height:45%}
 .live-mic.on{color:var(--good);background:var(--good-soft);border-color:var(--good-soft);
@@ -1751,9 +1873,9 @@ body.busy-slow .busy-tip{opacity:1}
    跟 `background` 同值），三枚键的边一样宽，看着才是同一排东西。
    按下去（已暂停）底色不动，只有字换成「继续」—— 那一步只靠字说话。
 
-   字用**白的**（用户定的，看过实际效果之后拍的）。代价记在这儿：#F59E0B 上压
+   字用**白的**（用户定的，看过实际效果之后拍的）。代价记在这儿：#FF9500 上压
    白字对比度只有 2.2:1，压近黑是 9.6:1 —— 白字在浅色模式里偏飘。要改回去，
-   两处 `color` 换成 `#1B1815` 就行。
+   两处 `color` 换成 `#000000` 就行。
    --warn-dot 本来就是「当色块用的琥珀」（照圆点挑的，不是照文字挑的那档），
    拿它当底正合适。 */
 .dialpad .act.pause{background:var(--surface-2);border-color:var(--border);color:var(--fg-2)}
@@ -1787,8 +1909,43 @@ body.busy-slow .busy-tip{opacity:1}
 /* 拨号页：键盘五行摊开。`minmax(0,1fr)` 而不是 `1fr` —— grid 的 1fr 下限是
    auto，窗口压矮时会先撑着不缩、把 panel 撑出滚动条；0 下限让它跟着缩，
    键就压扁（用户说了压扁没关系）。 */
+/* 五行一起均分（用户定的）：三个动作键跟数字键一样高，由窗口高矮自己算。
+   直接呼叫页那三枚键的高度不写死 —— 切过去时按这边实测出来的高度把自己
+   撑成一样高（见 js/75-view-live.js 的 liveActSync），换页签底下那排不跳。 */
 .page-body.is-dial .dialpad{flex:1 1 auto;min-height:0;grid-template-rows:repeat(5,minmax(0,1fr))}
 .page-body.is-dial .dialpad .key{height:auto}
+
+/* 直接呼叫页的动作键：高度取拨号页量下来的那个数；还没量到过（一进来就停在
+   直接呼叫页）就退回原来的 56px（窄屏 52px，见下面那档的兜底）。 */
+.page-body.is-fill:not(.is-dial) .dialpad .key.act{height:var(--live-act-h,56px)}
+/* 字号和图标也照拨号页实测的那一档来（用户看见两页底下的键字号不一样）：
+   拨号页的字是按键盘高度算的，直接呼叫页没有理由各算一套。还没量到过就退回
+   15px / 1.1em —— 和拨号页在小窗口上落到的值完全相同。 */
+.page-body.is-fill:not(.is-dial) .dialpad .act{font-size:var(--live-act-fs,15px)}
+.page-body.is-fill:not(.is-dial) .dialpad .act .ic{width:1.1em;height:1.1em}
+
+/* 直接呼叫页不摆那枚大话筒（用户定的）：**不管横竖屏**。那一页摊开的是名单
+   （.live-pick 里那张 .pick，要占满剩下的高度），话筒在这儿只是装饰；
+   而「我这会儿在不在说话」这件事，拨号页顶上那枚已经说得够清楚了。
+   认「直接呼叫页」靠 `:not(.is-dial)`：两个页签都挂 `.is-fill`，只有拨号页
+   多挂一个 `.is-dial`（见 js/75-view-live.js 的 renderLive）。 */
+.page-body.is-fill:not(.is-dial) .live-mic{display:none}
+/* 话筒藏了，可它底下那行状态还在 —— 那道气口原本是话筒的 margin-top 顶出来的，
+   现在得由这行字自己顶。值和话筒那条一模一样（clamp(6px,1.5vh,14px)），
+   所以拨号页有没有话筒，这行字离页签的距离都一样。 */
+.page-body.is-fill:not(.is-dial) .live-tip{margin-top:clamp(6px,1.5vh,14px)}
+
+/* 键大了，字也跟着大（用户定的）：iPad 这类高屏上键盘会被摊得很高，字号
+   钉死 20px 的话键越大字越像个小点。按键盘自己的高度算 —— `.dialpad` 是
+   尺寸容器，cqh 是它高度的 1%；5.5cqh 在手机上正好落回 20px 的基线，往大
+   屏幕上长到 44px 封顶。动作键照原来的比例跟着走（15px 起，32px 封顶）。
+   只挂拨号页：直接呼叫页的 .dialpad 是按内容高的，做尺寸容器会把内容忽略掉。 */
+.page-body.is-dial .dialpad{container-type:size}
+.page-body.is-dial .dialpad .key{font-size:clamp(20px,5.5cqh,44px)}
+.page-body.is-dial .dialpad .act{font-size:clamp(15px,4.1cqh,32px)}
+/* 图标跟着字走（em）：数字键格里的两枚（清空/退格）和动作键上的记号，
+   原来的 22 / 16.5px 正好是 1.1em，键一大就一起长。 */
+.page-body.is-dial .dialpad .key .ic{width:1.1em;height:1.1em}
 
 /* 直接呼叫页：**名单吃剩余高度**，三个动作键按原来的高矮待在底下。
    名单能多露几行就是这一页撑满的全部意义 —— 把动作键撑大没有任何好处。
@@ -1810,6 +1967,8 @@ body.busy-slow .busy-tip{opacity:1}
    不矮这一档，390×844 的机器上「呼叫」那一排会被压到折线以下要滚一下才够得着。 */
 @media (max-width:980px){
   .dialpad .key{height:52px}
+  /* 直接呼叫页还没量到拨号页那排的高度时，按竖屏这一档的 52px 兜底。 */
+  .page-body.is-fill:not(.is-dial) .dialpad .key.act{height:var(--live-act-h,52px)}
   .dial-num{min-height:52px}
   .dial-code{font-size:24px}
   /* 按键之间的缝再收一半：16 → 8px（用户定的）。正好回到宽屏那次「200%」之前的
@@ -1817,17 +1976,6 @@ body.busy-slow .busy-tip{opacity:1}
      缝跟着收一半，五行才摊得开。**只管 .dialpad 的 gap**：键盘和上方那一块的缝
      是 .dial-wrap 的 gap，不在这儿。 */
   .dialpad{gap:8px}
-
-  /* 竖屏上「直接呼叫」页不摆那枚大话筒（用户定的）。这一档本来就矮，那一页
-     摊开的是名单（.live-pick 里那张 .pick，要占满剩下的高度），话筒在这儿
-     只是个装饰；而「我这会儿在不在说话」这件事，拨号页顶上那枚已经说得够清楚了。
-     认「直接呼叫页」靠 `:not(.is-dial)`：两个页签都挂 `.is-fill`，只有拨号页
-     多挂一个 `.is-dial`（见 js/75-view-live.js 的 renderLive）。 */
-  .page-body.is-fill:not(.is-dial) .live-mic{display:none}
-  /* 话筒藏了，可它底下那行状态还在 —— 那道气口原本是话筒的 margin-top 顶出来的，
-     现在得由这行字自己顶。值和话筒那条一模一样（clamp(6px,1.5vh,14px)），
-     所以有没有话筒，这行字离页签的距离都一样。 */
-  .page-body.is-fill:not(.is-dial) .live-tip{margin-top:clamp(6px,1.5vh,14px)}
 
   /* 会话胶囊的兜底位置在这一档要跟着顶栏走：顶栏到这一档是 50px（见上面
      .topbar-inner 那条 min-height），宽屏那档是 54px。脚本每次同步都会按顶栏
@@ -1938,13 +2086,16 @@ body.busy-slow .busy-tip{opacity:1}
    没选的那段还是灰底 —— 和原来原生那个配色一个意思。
    只换外观 —— 拖拽、方向键、无障碍朗读还是浏览器原生那一套。 */
 @media (max-width:980px) and (orientation:portrait){
-  .pl-vol input[type=range]{-webkit-appearance:none;appearance:none;height:16px}
+  /* 热区 26px：手指按得中；里头那道轨 4px 不变，靠 margin-top 把圆点居中。 */
+  .pl-vol input[type=range]{-webkit-appearance:none;appearance:none;height:26px}
   .pl-vol input[type=range]::-webkit-slider-runnable-track{
     height:4px;border-radius:4px;
     background:linear-gradient(to right,
       var(--accent-fill) var(--p,0%), var(--surface-3) var(--p,0%))}
+  /* 抓手 14 → 22px（用户定的）：触屏上 14px 的圆点太难点。轨道 4px，
+     (4−22)/2 = −9，圆点仍然压在轨道正中。 */
   .pl-vol input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
-    width:14px;height:14px;margin-top:-5px;border-radius:50%;
+    width:22px;height:22px;margin-top:-9px;border-radius:50%;
     background:var(--accent-fill)}
   /* 百分比离滑杆近一点（用户定的）：整条的 gap 收到 2px，喇叭和滑杆之间
      那 8px 拆出来补在图标自己的右边距上 —— 只动滑杆右侧那一处。 */
@@ -2084,6 +2235,9 @@ body.busy-slow .busy-tip{opacity:1}
      竖排是为了让单子吃掉这一栏的高度（.pl-deck 是 stretch）。 */
   .pl-side{display:flex;flex-direction:column;min-height:0;
     flex:0 0 clamp(260px,38vw,400px)}
+  /* 空单子时右栏只是一个占位（竖屏上靠它把控件顶到底部），宽屏上不摆它 ——
+     摆了就是一列空白，播放器白白窄一半。 */
+  .pl-deck .pl-side.empty{display:none}
   /* 横屏两栏并排，靠间距分开就够了，那条竖线不要。 */
   .pl-deck > .divider{display:none}
   /* 单子把这栏剩下的高度全用上，多出来的在它自己里面滚（这一栏高度是定死的，
@@ -2116,6 +2270,12 @@ body.busy-slow .busy-tip{opacity:1}
   .page-body.play-page > .panel:last-child > .panel-body{flex:1 1 auto;min-height:0}
   .pl-deck{display:flex;flex-direction:column;min-height:0}
   .pl-stack{flex:none}
+  /* 竖屏的排列顺序（用户定的）：播放列表 → 播放控件 → 标题栏。
+     DOM 一个字不动，只改 order —— 单子从底下挪到最上面，标题栏（音量、添加文件）
+     沉到最底下。 */
+  .page-body.play-page > .panel:last-child > .panel-head{order:2}
+  .page-body.play-page > .panel:last-child > .panel-body{order:1}
+  .pl-deck .pl-side{order:-1}
   /* 竖屏不要那条分隔线（用户定的）：上下两栈直接排着，靠单子自己的上边距分开。 */
   .pl-deck > .divider{display:none}
   .pl-side{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
@@ -2581,9 +2741,9 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
      钉在图标右上角，负的偏移让它悬出去一点，不占图标自己的位置。 */
   .navbar-dot{position:absolute;top:-1px;right:-2px;width:6px;height:6px;border-radius:50%;
               background:var(--accent-fill)}
-  /* 通知摞子（.toasts，基线里钉在右下 16px）在这一档抬到导航栏上面 ——
-     导航栏是常驻的，通知压在它上面就等于把那四个页签临时封了。 */
-  .toasts{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
+  /* 通知摞子在竖屏上跟着正文的边距走（正文是 16px，宽屏是 24px）。
+     top 由脚本按顶栏实测底边写，不在这里钉。 */
+  .toasts{left:16px}
 
   /* 铃声表「时间属性 / 音源 / 播放时长」那三列的隐藏规则在本段开头（跟着 ≤820
      那一档一起并过来的），见上面。 */
@@ -2597,6 +2757,9 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
   table.tbl th{padding:7px;letter-spacing:.04em}
   table.tbl td{padding:7px}
   td.t{font-size:13px}
+  /* 铃声计划详情页和定时任务页的「时间」列在竖屏上再小 2px（13 → 11）。
+     只圈这两张表：反查、考试那些表的时间格不动。 */
+  .tbl-bells td.t,.tbl-tasks td.t{font-size:11px}
   .rowacts .ric{width:26px;height:26px}
   .rowacts svg{width:14px;height:14px}
 
@@ -2849,3 +3012,22 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
   /* （在线播放那张单子**不换挡**：用户定的 —— 每行那两枚按钮窄屏上也独立摆着，
      不收进「⋯」。上面设备列表那一档只写给设备列表。）。 */
 }
+
+/* ── 触屏上不许页面缩放 ───────────────────────────────────────────────
+   点输入框自动放大，触发条件就是框里的字小于 16px（iOS 的行为）。
+   触屏设备上一律钉到 16px；桌面不动，那边的 13px 看着正合适。`!important`
+   是因为 `.sbox-sm > .input` 在文件中间自己钉了 12px。 */
+@media (pointer:coarse){
+  /* .select-btn 也一起提上来：不然同一行里输入框是 16px、那几个「长得像下拉」
+     的按钮还是 13px，盒高和字都差一截（高度是跟着 em 走的，见上面那条）。 */
+  .input,.select,textarea.input,.sbox-sm > .input,.select-btn{font-size:16px !important}
+}
+/* 表头里那两格搜索框（铃声 / 任务）按用户要求小两级：触屏上从 16 收到 12。
+   桌面本来就是 .sbox-sm 的 12px，不受影响。写在这条后面、同样 !important，
+   才压得住上面那行通吃的 16px。 */
+@media (pointer:coarse){
+  .sbox-sm > .input{font-size:12px !important}
+}
+/* 能认 touch-action 的浏览器（安卓 Chrome、新版 Safari）顺带把捏合和双击放大
+   关掉；Safari 上真正的兜底是 00-core.js 那组 gesture* 监听。 */
+html{touch-action:pan-x pan-y}

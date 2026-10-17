@@ -142,7 +142,7 @@ function openTermList(){
            窄屏上「添加设备」就没地方了。它和「新建任务」那一栏底下那颗是同一种键 ——
            单独一个图标、说法写在 title/aria-label 里。 */
         '<button class="btn btn-sm btn-quiet btn-icon" data-act="reload" title="刷新" aria-label="刷新">'+ICON.refresh+'</button>'+
-        '<button class="btn btn-sm" data-act="add">'+ICON.plus+' 添加设备</button>';
+        '<button class="btn" data-act="add">'+ICON.plus+' 添加设备</button>';
       const tgl = f.querySelector("#termIpTgl");
       /* 只管重画那张表：挡位不在这份名册里，底栏这一格连状态都不用改。
          拨一下就写进浏览器，下次开这张表照这一份来。 */

@@ -1270,6 +1270,13 @@ function renderExam(){
 
     '</div>';   /* /.page-body */
 
+  /* 点左上角「考试模式」回到顶部：标题这一行钉着，正文在它下面自己滚。 */
+  const exTitle = el.querySelector(".sec-head h2.serif");
+  if (exTitle){
+    exTitle.classList.add("back-top");
+    exTitle.onclick = ()=> scrollPageTop(el);
+  }
+
   el.querySelector("#exAddSec").onclick = ()=>{
     S.exam.sections.push(blankSection(S.exam.sections.length+1));
     renderAll();

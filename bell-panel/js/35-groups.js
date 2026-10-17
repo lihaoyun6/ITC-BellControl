@@ -410,7 +410,7 @@ function openGrpDetail(gname){
           '<div class="sect-h" style="border:0;background:none;padding:0 0 6px">'+
             '<span id="gdCount"></span>'+
             '<span class="acts"><span class="sbox sbox-sm" style="flex:none;width:150px">'+ICON.search+
-              '<input class="input" id="gdQ" placeholder="筛选名称/时间" value="'+esc(q)+'"></span></span>'+
+              '<input class="input" id="gdQ" placeholder="搜索名称/时间" value="'+esc(q)+'"></span></span>'+
           '</div>'+
           '<div id="gdList" style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-sm)">'+
             (rows.length ? rows.map(b=>{
@@ -513,7 +513,7 @@ function openGrpBulk(bells){
   items.push({icon:ICON.x, label:"移出分组", sub:"这些铃声不再属于任何分组",
               onPick: ()=>{ const k = grpAssign(bells, null);
                             done(k ? k + " 条铃声已移出分组" : "这些铃声本来就不在任何分组里"); }});
-  openBulkMenu("改分组 · " + bells.length + " 条铃声", "一条铃声只能在一个分组里，选新的会自动从原来的组移走", items);
+  openBulkMenu("改分组 · " + bells.length + " 条铃声", "每条铃声只能属于一个分组，修改分组是移动不是复制", items);
 
   function done(msg){
     S.sel.clear(); renderMain(); toast(msg, "ok");

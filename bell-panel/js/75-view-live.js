@@ -183,7 +183,7 @@ function liveConnect(){
       const lv = liveState();
       if (lv.phase === "calling" || lv.phase === "talking"){
         lv.phase = "idle"; lv.muted = false; lv.busy = false;
-        lv.err = "连接播放代理已断开";
+        lv.err = "与播放代理的连接已断开";
         liveMicStop();
       }
       /* 播放那一头同理：本地这条音频链路得收掉（它的 hangup 已经发不出去了），
@@ -191,7 +191,7 @@ function liveConnect(){
       const pl = playState();
       if (pl.phase === "connecting" || pl.phase === "playing" || pl.phase === "paused"){
         pl.busy = false; pl.phase = "idle"; pl.pos = 0;
-        pl.err = "连接播放代理已断开";
+        pl.err = "与播放代理的连接已断开";
         playTeardown(false);
       }
       renderMain();
@@ -276,6 +276,10 @@ function liveWorkletURL(){
 const LIVE_AUDIO_PORT = 51340;
 
 let liveCtx = null, liveStream = null, liveNode = null, liveSrc = null, liveSink = null;
+let liveCtxKick = 0;   /* 把被打断的音频上下文拉回来的重试计时器，见 liveMicStart */
+let liveChimeBusyUntil = 0;  /* 提示音要响到什么时候，期间不按拨号音，见 liveChime */
+let liveChimeStartTimer = 0; /* 等采集单元让干净的预延时，见 liveChime */
+let liveChimeWakeTimer = 0;  /* 放完把麦克风接回来的计时器，见 liveChime */
 
 /* 音频往哪台机器发：主机名跟着面板用的那台广播服务器走（S.wsIp 是 /language
    给的，没有就退到 S.server），端口写死。 */
@@ -307,6 +311,18 @@ async function liveMicStart(){
   src.connect(node); node.connect(sink); sink.connect(ctx.destination);
   if (ctx.state === "suspended") { try { await ctx.resume(); } catch(e){} }
 
+  /* iOS 上这个上下文会被「系统打断」停住（来电、别的 App 抢音频会话）。
+     停住以后 worklet 不再出帧，表现就是**接通以后怎么说对面都没声音**，
+     而且不会自己好（用户实测）。statechange 先拉一次，再挂个低频重试兜底 ——
+     打断结束时 resume() 能把它接回来。'closed' 是我们自己收的，别再拉。
+     **提示音期间不会有这个上下文**：放之前就整个关掉了，见 liveChime。 */
+  const kick = ()=>{
+    if (ctx.state === "running" || ctx.state === "closed") return;
+    try { ctx.resume().catch(()=>{}); } catch(e){}
+  };
+  ctx.addEventListener("statechange", kick);
+  liveCtxKick = setInterval(kick, 1000);
+
   /* 一帧一发。攒成整 320 字节是**代理的事**（它那头本来就有个 320 的缓冲），
      这边多发几个零头没关系 —— 硬凑整反而要在两次回调之间存半个包。 */
   node.port.onmessage = e => {
@@ -326,6 +342,8 @@ function liveMicStop(){
   if (liveSink) { try { liveSink.disconnect(); } catch(e){} }
   /* 轨道要真的 stop()，光关 AudioContext 有时候留着那个录音标记。 */
   if (liveStream) liveStream.getTracks().forEach(t => { try { t.stop(); } catch(e){} });
+  clearInterval(liveCtxKick); liveCtxKick = 0;
+  clearTimeout(liveChimeWakeTimer); liveChimeWakeTimer = 0;
   if (liveCtx) { try { liveCtx.close(); } catch(e){} }
   liveCtx = liveStream = liveNode = liveSrc = liveSink = null;
 }
@@ -346,20 +364,77 @@ async function liveEnsureAddr(){
   return "";
 }
 
-/* 接通／挂断的提示音。两个 mp3 在 res/ 里，按相对路径找 —— 面板是从 file://
+/* 接通／暂停／恢复／挂断的提示音。四个 wav 在 res/ 里，按相对路径找 —— 面板是从 file://
    或同一个静态目录打开的，跟 index.html 走。**只顾着响，不顾别的**：现建一个
    Audio 元素放一次就丢，不等它加载、不管放没放成（网速不好、文件不在、浏览器
    不让自动播，都只当没这回事），也绝不把拒绝的 Promise 漏出去带歪调用方 ——
-   提示音迟到或没响，都不能拖住呼叫／挂断本身。 */
-function liveChime(name){
+   提示音迟到或没响，都不能拖住呼叫／挂断本身。
+
+   **App 里提示音和麦克风不能共存。** 真机上只要 WebKit 的采集单元还活着，
+   提示音放到 0.3 秒左右必被系统掐断 —— 原生 AVAudioPlayer、<audio>、Web Audio
+   三种放法都一样（用户逐个实测）。所以放之前先把麦克风**整个**关掉（轨道
+   stop + 上下文 close），留 300ms 让系统那头让干净再放；放完按需要接回来：
+   呼叫／暂停／恢复时通话还在，接；挂断就让它一直关着。 */
+function nativeCmd(){
+  const h = window.webkit && window.webkit.messageHandlers;
+  return (window.__ITC_NATIVE_AGENT && h && h.itcAgentCmd) ? h.itcAgentCmd : null;
+}
+
+function liveChime(name, onFail){
   /* 设置页「在线对讲」里那个开关，默认开。 */
-  if (!S.chime) return;
+  if (!S.chime) return null;
+  /* App 里走原生播放。WKWebView 的 Audio 偶尔会整条哑掉 —— 音频会话被
+     系统打断、或者 WebKit 收完麦克风把会话 setActive(false) 了，之后 new
+     Audio 照样不报错，就是一声不响，退 App 重开才恢复（用户实测）。原生
+     AVAudioPlayer 每次播之前都会把会话重新激活，不靠网页这一层。 */
+  const native = nativeCmd();
+  if (native){
+    clearTimeout(liveChimeStartTimer); liveChimeStartTimer = 0;
+    clearTimeout(liveChimeWakeTimer); liveChimeWakeTimer = 0;
+    liveChimeBusyUntil = performance.now() + 3000;   /* 回执来之前先按最长兜底 */
+    if (liveCtx) liveMicStop();
+
+    const arm = ms => {
+      clearTimeout(liveChimeWakeTimer);
+      liveChimeBusyUntil = performance.now() + ms + 250;
+      liveChimeWakeTimer = setTimeout(()=>{
+        liveChimeWakeTimer = 0;
+        liveChimeBusyUntil = 0;
+        const st = liveState();
+        /* 挂断请求还没走完（busy）就别接 —— 这一通已经要结束了。 */
+        if (liveCtx || st.phase !== "talking" || st.busy) return;
+        liveMicStart().catch(e=>{
+          st.err = "拿不到麦克风：" + ((e && e.name === "NotAllowedError") ? "浏览器没给权限"
+                  : (e && e.message) || "打不开");
+          renderMain();
+        });
+      }, ms + 250);
+    };
+
+    liveChimeStartTimer = setTimeout(()=>{
+      liveChimeStartTimer = 0;
+      let p;
+      try { p = native.postMessage({cmd:"chime", id:0, data:{name:name}}); }
+      catch(e){ liveChimeBusyUntil = 0; return; }
+      if (p && p.catch) p.catch(()=>{ try { onFail && onFail(); } catch(e){} });
+      if (p && typeof p.then === "function"){
+        p.then(rep=>{
+          if (rep && rep.ok && rep.durationMs > 0) arm(rep.durationMs);
+          else arm(0);   /* 没放成：马上把麦克风接回来 */
+        }).catch(()=>{ arm(0); });
+      } else {
+        arm(1400);       /* 没有回执：按最长的一条兜底 */
+      }
+    }, 300);   /* 轨道 stop() 只是递了话，系统那头还要几百毫秒才真让开 */
+    return true;
+  }
   try{
-    const a = new Audio("res/" + name + ".mp3");
+    const a = new Audio("res/" + name + ".wav");
     a.preload = "auto";
     const p = a.play();
-    if (p && p.catch) p.catch(()=>{});
-  }catch(e){}
+    if (p && p.catch) p.catch(()=>{ try { onFail && onFail(); } catch(e){} });
+    return a;
+  }catch(e){ return null; }
 }
 
 async function liveCall(){
@@ -415,7 +490,7 @@ async function liveCall(){
       endpoints: tgt.ids.map(String), names: tgt.names
     });
     st.phase = "talking";
-    liveChime("jietong");
+    liveChime("call");
   } catch(e){
     liveMicStop();
     st.phase = "idle";
@@ -431,6 +506,8 @@ async function liveCall(){
 async function livePause(){
   const st = liveState();
   if (st.phase !== "talking" || st.busy) return;
+  /* 响哪一声跟这一下按下去的效果对应：正说着 → 停（pause），正停着 → 续（resume）。 */
+  liveChime(st.muted ? "resume" : "pause");
   st.busy = true; st.err = ""; renderMain();
   try {
     await liveRequest("mute", {on: !st.muted});
@@ -443,7 +520,7 @@ async function liveHangup(){
   if (st.phase !== "talking" || st.busy) return;
   /* 提示音在这一下就放，不等请求走完 —— 人按了挂断，耳朵里该立刻有个回应；
      请求成不成都不影响它已经要结束了（下面无论成败都收麦克风、回 idle）。 */
-  liveChime("guaduan");
+  liveChime("finish");
   st.busy = true; st.err = ""; renderMain();
   try {
     await liveRequest("hangup", {});
@@ -577,12 +654,107 @@ function renderLive(){
       '</div></div>'+
     '</div>';
   liveBind(st);
+  /* 直接呼叫页那三枚键的高度是「借」拨号页的，见 liveActSync。 */
+  if (!liveActResize){
+    liveActResize = true;
+    /* 转屏、改窗口大小时拨号页那排跟着变，量一次新的。只挂一次 —— 每次
+       renderLive 都挂会越积越多。 */
+    addEventListener("resize", ()=>{ if (S.mode === "live") liveActSync(); });
+  }
+  liveActSync();
+}
+
+/* ══ 直接呼叫页的动作键尺寸 ══════════════════════════════════════════
+   拨号页那排动作键的高度和字号都是算出来的（五行均分 + cqh，见 CSS 的 .is-dial），
+   不是写死的。直接呼叫页也摆着同样三枚键，可那一页的键盘不参与均分 —— 尺寸要是
+   各算一套，两个页签换着看，底下那排就会跳（用户看见的正是这一下：字号不一样）。
+   所以拨号页画完把高度和字号都量下来；切到直接呼叫页时写进 --live-act-h /
+   --live-act-fs，那边三枚键跟着这两个数走（CSS 里那两条 var()）。 */
+let liveActH = 0;           /* 拨号页实测的动作键高度，0 = 还没量过 */
+let liveActFs = 0;          /* 拨号页实测的动作键字号，0 = 还没量过 */
+let liveActResize = false;  /* 窗口尺寸的监听只挂一次 */
+
+function liveActSync(){
+  const st = liveState();
+  const page = $(".page-body.is-fill");
+  if (!page) return;
+  if (st.tab === "dial"){
+    const b = $("#liveHang");
+    if (b){
+      const h = b.getBoundingClientRect().height;
+      if (h > 0) liveActH = h;
+      const fs = parseFloat(getComputedStyle(b).fontSize);
+      if (fs > 0) liveActFs = fs;
+    }
+    return;
+  }
+  if (liveActH > 0) page.style.setProperty("--live-act-h", liveActH + "px");
+  if (liveActFs > 0) page.style.setProperty("--live-act-fs", liveActFs + "px");
 }
 /* 九枚数字键，敲下去是什么就写什么。第四行两边的**清空**和**退格**不混进这个
    数组 —— 它们不是「一位数字」，行为也各自不同，在 liveDialHTML 里单独写。
    这一行原来是「+」（多目标呼叫的连字符），现在拨号台不支持多终端了，
    那一格换成清空（用户定的）：一次拨错一位，退格要按好几下，清空一下到底。 */
 const LIVE_KEYS = ["1","2","3","4","5","6","7","8","9"];
+
+/* ══ 拨号音 ═════════════════════════════════════════════════════════
+   0–9 每个键一个双音 —— 就是电话键盘那套 DTMF 标准频率对。不用去找九个 wav：
+   九个文件要跟面板一起搬、还要处理加载失败，而这里两个正弦振荡器现合成，
+   一个字节都不用下载。系统也没有公开的「拨号音」接口（iOS 的
+   AudioServicesPlaySystemSound 只有固定的几种提示音，没有按频率来的）。
+   只在 idle（还没呼出去）时响：通话中麦克风开着，本机这声「嘀」会被它收回去
+   送给终端（对讲关掉了回声消除）。 */
+const DTMF = {
+  "1":[697,1209], "2":[697,1336], "3":[697,1477],
+  "4":[770,1209], "5":[770,1336], "6":[770,1477],
+  "7":[852,1209], "8":[852,1336], "9":[852,1477],
+  "0":[941,1336]
+};
+let dialCtx = null;
+function dialBeep(k){
+  const f = DTMF[k]; if (!f) return;
+  /* 提示音正在响（刚挂断那一秒里人可能已经在按号码了）：这一声先不响，
+     更不能去 resume 抢会话 —— 抢回来就把提示音掐断了。 */
+  if (performance.now() < liveChimeBusyUntil) return;
+  /* App 里交给原生合成、原生播。WebKit 的 AudioContext 在用过对讲（采集单元）
+     或原生提示音之后，可能停在「state 还是 running、却完全不出声」的状态 ——
+     网页这层检测不到，复用它排振荡器就是按键音时不时消失。原生每次播之前
+     都重新 setActive，和提示音走同一条已经验证可靠的路。
+     网页版没有这个桥，继续走下面那段 Web Audio。 */
+  const native = nativeCmd();
+  if (native){
+    try {
+      const p = native.postMessage({cmd:"tone", id:0, data:{freq:f}});
+      if (p && p.catch) p.catch(()=>{});
+    } catch(e){}
+    return;
+  }
+  try {
+    if (!dialCtx) dialCtx = new (window.AudioContext || window.webkitAudioContext)();
+    /* 上下文被打断/挂起时（iOS 上放完原生提示音、来电话、切后台回来）
+       直接往它里面排振荡器是没声的 —— 表现就是「拨号音时不时消失」。
+       等 resume 回来再排这一声。 */
+    const fire = ()=>{
+      if (!dialCtx || dialCtx.state !== "running") return;
+      const t = dialCtx.currentTime;
+      const g = dialCtx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.06, t + 0.01);
+      g.gain.setValueAtTime(0.06, t + 0.09);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      g.connect(dialCtx.destination);
+      for (const hz of f){
+        const o = dialCtx.createOscillator();
+        o.type = "sine"; o.frequency.value = hz;
+        o.connect(g); o.start(t); o.stop(t + 0.13);
+      }
+      /* 振荡器自己会停；增益节点在响完之后断开，别让它一直挂在 destination 上。 */
+      setTimeout(()=>{ try { g.disconnect(); } catch(e){} }, 250);
+    };
+    if (dialCtx.state === "running") fire();
+    else dialCtx.resume().then(fire).catch(()=>{});
+  } catch(e){}
+}
 
 function liveDialHTML(st, tgt){
   return ''+
@@ -809,13 +981,18 @@ function liveBind(st){
   const el = $("#main"); if (!el) return;
   $$("#liveTabs button", el).forEach(b => b.onclick = ()=>{
     if (st.tab === b.dataset.t) return;
-    st.tab = b.dataset.t; st.err = ""; renderMain();
+    st.tab = b.dataset.t; st.err = "";
+    /* 每次进拨号页都从空号开始（用户定的）：上一次拨的号不留在框里，
+       免得下一通误拨到上一台。 */
+    if (st.tab === "dial") st.num = "";
+    renderMain();
   });
   /* 数字键：一律往号码尾巴上接一位。**按 `[data-k]` 认，不按类名排** ——
      同一个 .key 类底下还住着清空、退格和三个动作键，用 `:not()` 一个个往外挑，
      下次再添一枚就又得回来补一笔，漏了就是把它的 dataset 接到号码屁股上。 */
   $$(".dialpad .key[data-k]", el).forEach(b => b.onclick = ()=>{
     if (st.num.length >= LIVE_NUM_MAX) return;
+    if (st.phase === "idle") dialBeep(b.dataset.k);
     st.num += b.dataset.k; st.err = ""; renderMain();
   });
   /* 清空：一下把号码抹光。退格是一位一位往回删，拨错一串时得按好几下。 */
@@ -893,6 +1070,55 @@ function playState(){
   };
   return S.dt.play;
 }
+
+/* ══ 屏幕别灭 ══════════════════════════════════════════════════════
+   对讲和在线播放的过程中，手机不该自己息屏（用户定的）。
+   两条路：
+     · App 里走原生 —— itcAgentCmd 的 wake 命令直接开关 idleTimer；WKWebView
+       里这条最可靠，也不受「安全上下文」限制；
+     · 浏览器里用 Screen Wake Lock —— 它只在安全上下文里有，局域网明文 http
+       打开面板时连这个接口都没有。没有就静默跳过，不影响别的功能。 */
+let awakeWant = false, awakeLock = null;
+function keepAwakeApply(){
+  const native = window.__ITC_NATIVE_AGENT && window.webkit
+              && webkit.messageHandlers && webkit.messageHandlers.itcAgentCmd;
+  if (native){
+    try {
+      const p = native.postMessage({cmd:"wake", id:0, data:{on:awakeWant}});
+      if (p && p.catch) p.catch(()=>{});
+    } catch(e){}
+    return;
+  }
+  if (awakeWant){
+    if (awakeLock || !navigator.wakeLock) return;
+    navigator.wakeLock.request("screen").then(s=>{
+      /* 请求回来的路上人已经挂断/停止了：拿到就还回去。 */
+      if (!awakeWant){ try { s.release(); } catch(e){} return; }
+      awakeLock = s;
+      s.addEventListener("release", ()=>{ if (awakeLock === s) awakeLock = null; });
+    }).catch(()=>{});
+  } else if (awakeLock){
+    try { awakeLock.release(); } catch(e){}
+    awakeLock = null;
+  }
+}
+function keepAwake(on){
+  on = !!on;
+  if (on === awakeWant) return;
+  awakeWant = on;
+  keepAwakeApply();
+}
+/* 对讲「呼叫中／已接通」和播放「连接中／播放中」都要拦息屏。
+   暂停不算 —— 那时候终端是安静的，让人家锁屏。 */
+function syncKeepAwake(){
+  const lv = liveState(), pl = playState();
+  keepAwake(lv.phase === "calling" || lv.phase === "talking"
+         || pl.phase === "connecting" || pl.phase === "playing");
+}
+/* 切回前台时 Wake Lock 可能已经被系统收走了，照着当前想要的状态再要一次；
+   App 那条路重发一遍 wake 也无害。 */
+document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) keepAwakeApply(); });
+addEventListener("pagehide", ()=>{ keepAwake(false); });
 
 /* 当前这一首（没有就是 null）。**所有原来读 st.file 的地方都换成它。** */
 function playCur(st){ return st.cur || null; }
@@ -1233,7 +1459,13 @@ function playRowsHTML(st){
    空着还占着，播放器就被挤到左边去了。 */
 function playSideDraw(st){
   const on = !!(st.list.length || st.reading);
-  const side = $("#playSide"); if (side) side.hidden = !on;
+  const side = $("#playSide");
+  if (side){
+    /* 空单子也**不藏**：竖屏上它是要吃掉剩余高度的占位（把控件顶到底部），
+       宽屏上由 CSS 那一档 display:none 收掉。 */
+    side.hidden = false;
+    side.classList.toggle("empty", !on);
+  }
   const sep  = $("#playDiv");  if (sep)  sep.hidden  = !on;
   /* 右栏一露面，播放器那一栈就变窄，进度条的位置跟着挪 —— 喇叭是照实测位置
      钉的，得在这时候重量一次，不然它会停在前一版的横坐标上。 */
@@ -1700,8 +1932,10 @@ function playDeckHTML(st){
       /* 两栈之间那条分隔线（用户定的）：横屏竖着（并排）、竖屏横着（上下）。
          空单子的时候它和右边那一栈一起收起来，由 playSideDraw 管 ——
          它只动这几处，不重画整页。 */
+      /* 空单子的时候分隔线收起来，右栏**留着** —— 竖屏上它是个占位，把播放
+         控件顶到面板底部（用户定的）；宽屏上由 CSS 把它收掉（.pl-side.empty）。 */
       '<div class="divider" id="playDiv"'+(side ? "" : " hidden")+'></div>'+
-      '<div class="pl-side" id="playSide"'+(side ? "" : " hidden")+'>'+
+      '<div class="pl-side'+(side ? "" : " empty")+'" id="playSide">'+
         '<div class="pl-list" id="playList"'+(st.list.length ? "" : " hidden")+'>'+
           playRowsHTML(st)+'</div>'+
         /* 单子底下那行小字：**只有解码进度**，不读文件的时候它整个不占地方。 */

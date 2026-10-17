@@ -27,6 +27,24 @@ const uniq = a => Array.from(new Set(a));
    判据只在**点下去的那一下**看一眼，不挂 resize / matchMedia 监听 ——
    窗口在结果页上被拉宽了，靠下一次重画收场（各页自己那一句）。 */
 const isNarrow = ()=> window.matchMedia("(max-width:980px)").matches;
+
+/* ══ 禁掉页面缩放 ═══════════════════════════════════════════════════
+   两件事都会把版面推出屏幕（用户定的：全局关掉）：
+     · 点输入框自动放大 —— iOS 的老毛病，框里的字小于 16px 就会放大页面。
+       字号在 app.css 末尾按 pointer:coarse 钉到了 16px，这儿不再处理；
+     · 双指捏合放大 —— Safari 早就不认 user-scalable=no 了（index.html 里还是
+       写上，WKWebView 认），所以另用 Safari 专有的 gesture* 事件兜一层，
+       两指以上的 touchmove 也一并挡掉。 */
+(function(){
+  const stop = e => { if (e.cancelable) e.preventDefault(); };
+  document.addEventListener("gesturestart",  stop, {passive:false});
+  document.addEventListener("gesturechange", stop, {passive:false});
+  document.addEventListener("gestureend",    stop, {passive:false});
+  document.addEventListener("touchmove", e => {
+    if (e.touches && e.touches.length > 1) stop(e);
+  }, {passive:false});
+})();
+
 const LS = {
   get(k,d){ try{ const v=localStorage.getItem("bc."+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem("bc."+k, JSON.stringify(v)); }catch(e){} },
@@ -357,10 +375,14 @@ const S = {
   /* 调试模式：按「提交」时先摊开提交队列让你看一眼报文，再点「发送」才真发。
      平时不摊，直接二次确认后提交走。入口同样收着。 */
   debug  : SHOW_MODE_SWITCHES ? LS.get("debug", false) === true : false,
-  /* 实时对讲接通／挂断的提示音（res/jietong.mp3、res/guaduan.mp3），默认**开着**。
+  /* 实时对讲的四声提示音（res/call.wav、res/pause.wav、res/resume.wav、res/finish.wav），默认**开着**。
      纯本机偏好，只响给自己听，和服务器一点关系没有；关掉就是一声不响，
      见 75-view-live.js 的 liveChime。 */
   chime  : LS.get("chime", true) !== false,
+  /* 配色主题：klein = 苹果系统色（默认），summer = 原来的暖色。
+     两套都各有浅色/深色（深浅跟着系统走，不单独设）。纯本机偏好，
+     色值在 app.css 的 tokens 段，切换只换 <html data-palette>，见 applyPalette。 */
+  palette: LS.get("palette", "klein") === "summer" ? "summer" : "klein",
   conn   : "idle",
   data   : {groups:[], terminals:[], termGroups:[], medias:[], mediaGroups:[], strategies:[]},
   groupId: null,
@@ -402,6 +424,18 @@ const S = {
           见 40-view-exam 的 openExamPreview / renderExamPreviewFull。 */
        exPreview:false}
 };
+
+/* ══ 配色主题 ════════════════════════════════════════════════════════
+   两套都各有浅色/深色：klein = 苹果系统色（默认），summer = 原来的暖色。
+   只换 <html> 上那个 data-palette，色值全在 app.css 的 tokens 段 ——
+   不用重画任何一页，切换是即时的。开局在渲染之前先钉一次，免得先闪
+   一帧默认色再跳成存着的那一套。 */
+function applyPalette(name){
+  S.palette = name === "summer" ? "summer" : "klein";
+  document.documentElement.setAttribute("data-palette", S.palette);
+  return S.palette;
+}
+applyPalette(S.palette);
 
 /* ══ 播放代理在哪 ════════════════════════════════════════════════════
    实时对讲那条音频是 UDP，浏览器里没有原始套接字；面板要是挂在 https 上，
@@ -593,6 +627,39 @@ async function api(method, path, opts){
   return json ? json.result : null;
 }
 
+/* 点左上角标题回到顶部。两种版式各滚各的：竖屏上正文（.page-body）自己滚，
+   宽屏上铃声详情页整页不滚、滚的是面板里那张表（.panel.grow > .tbl-wrap）。
+   两个都拨回 0 —— 哪一个是当前有效的那个，它自己知道。 */
+function scrollPageTop(scope){
+  const root = scope || document;
+  const boxes = root.querySelectorAll(".page-body, .panel.grow > .tbl-wrap");
+  boxes.forEach(box => {
+    if (box.scrollHeight <= box.clientHeight) return;
+    if (box.scrollTo) box.scrollTo({top:0, behavior:"smooth"});
+    else box.scrollTop = 0;
+  });
+}
+
+/* renderMain() 是整块 innerHTML 重画，滚动的那个盒子（竖屏的 .page-body、宽屏表格的
+   .tbl-wrap）跟着换成新的，scrollTop 归零。铃声表里勾一下启用/停用：排队那一下重画
+   一次、报文落定后又重画一次，页面于是往顶上弹两次（用户实测）；编辑保存也一样。
+   同一页原地重画时先把这几个盒子的位置记下来，画完照原位放回去。
+   「同一页」由 dataset.scrollKey 判断：换列表、换筛选、进出详情仍然是顶到最上面。 */
+const SCROLL_KEEP_SEL = ".page-body, .panel.grow > .tbl-wrap";
+function scrollKeepSnapshot(root){
+  const out = [];
+  if (!root) return out;
+  root.querySelectorAll(SCROLL_KEEP_SEL).forEach((box, i) => {
+    if (box.scrollTop > 0) out.push([i, box.scrollTop]);
+  });
+  return out;
+}
+function scrollKeepRestore(root, snap){
+  if (!root || !snap || !snap.length) return;
+  const boxes = root.querySelectorAll(SCROLL_KEEP_SEL);
+  snap.forEach(([i, top]) => { const box = boxes[i]; if (box) box.scrollTop = top; });
+}
+
 /* ══ toasts ═════════════════════════════════════════════════════════ */
 /* 只弹**没做成**的那两种：错误（err）、警告（warn），以及没写 kind 的那些
    「这一步没做成」（比如「请先选择执行区域」）。
@@ -601,11 +668,22 @@ async function api(method, path, opts){
    闸就在这一行：调用点照旧把 kind 写全，哪天要放回来改这儿一处。
 
    同屏最多六条。第七条进来时**最老的那条当场撤掉**，不等它自己淡出 ——
-   通知一条压一条往上摞，攒到七八条就顶出屏幕，而这一堆本来也没人一条条读完。
-   最老的在最上面：新的都 append 在末尾，摞子是往上长的（CSS 里钉在右下角）。 */
+   通知一条压一条往下摞，攒到七八条就顶到内容里，而这一堆本来也没人一条条读完。
+   最新的一条在最上面：append 在末尾，容器用 column-reverse（CSS 里钉在顶栏下方）。 */
 const TOAST_MAX = 6;
+/* 通知摞子钉在顶栏下方（位置见 app.css 的 .toasts），可顶栏在窄屏上会折行、
+   高度不是定数 —— 每次弹之前按它**实测**的底边写一个 top，和会话胶囊
+   （syncSessionBadge）是同一套做法。下面 CSS 里那个 top 只是脚本还没跑时的落点。 */
+function syncToastTop(){
+  const box = $("#toasts"), tb = $("#topbar");
+  if (!box || !tb) return;
+  const r = tb.getBoundingClientRect();
+  if (r.bottom) box.style.top = (r.bottom + 8) + "px";
+}
+addEventListener("resize", syncToastTop);
 function toast(msg, kind){
   if (kind === "ok") return;
+  syncToastTop();
   const box = $("#toasts");
   const el = document.createElement("div");
   el.className = "toast " + (kind||"");

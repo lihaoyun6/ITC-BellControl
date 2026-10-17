@@ -49,7 +49,7 @@ function renderTasks(){
           '<span class="hd-seg" id="tkNormal">'+
             '<button class="btn btn-sm btn-quiet" id="tkReload">'+ICON.refresh+'</button>'+
             '<span class="sbox sbox-sm">'+ICON.search+
-              '<input class="input" id="tkQ" placeholder="筛选名称 / 时间" value="'+esc(S.dt.tkq||"")+'">'+
+              '<input class="input" id="tkQ" placeholder="搜索名称 / 时间" value="'+esc(S.dt.tkq||"")+'">'+
             '</span>'+
             '<button class="btn btn-sm" id="tkNew">'+ICON.plus+' <span>添加<span class="wide-only">任务</span></span></button>'+
           '</span>'+

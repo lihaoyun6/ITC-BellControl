@@ -677,7 +677,7 @@ function renderSettings(){
     '<div class="panel">'+
       '<div class="panel-head"><h3>播放代理</h3></div>'+
       '<div class="panel-body">'+
-        '<div class="set-row">'+
+        '<div class="set-row agent-row">'+
           '<div class="set-lab">'+
             '<div class="set-t">通过播放代理在网页端使用实时对讲和在线播放功能</div>'+
             '<div class="hint">运行 ITC-PlayAgent 的服务器地址, 默认为本机, 远程托管用户可自行修改</div>'+
@@ -694,7 +694,27 @@ function renderSettings(){
       '</div>'+
     '</div>'+
 
-    /* 「在线对讲」：实时对讲那两声本机提示音（res/jietong.mp3、res/guaduan.mp3）。
+    /* 「外观」：两套配色，各自都有浅色/深色（深浅跟着系统走）。
+       klein = 苹果系统色，summer = 原来的暖色。纯本机偏好（存 localStorage），
+       点一下只换 <html data-palette>，不重画这一页。 */
+    '<div class="panel">'+
+      '<div class="panel-head"><h3>外观</h3></div>'+
+      '<div class="panel-body">'+
+        '<div class="set-row">'+
+          '<div class="set-lab">'+
+            '<div class="set-t">配色主题</div>'+
+          '</div>'+
+          '<div class="set-ctl">'+
+            '<div class="tabbar" id="stPalette">'+
+              '<button data-pal="klein"'+(S.palette==="klein"?' class="on"':"")+'>Klein</button>'+
+              '<button data-pal="summer"'+(S.palette==="summer"?' class="on"':"")+'>Summer</button>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+
+    /* 「在线对讲」：实时对讲那四声本机提示音（res/call.wav、pause、resume、finish）。
        默认开着，关掉就一声不响。和上面那两格一样是**纯本机偏好**（存 localStorage），
        服务器上没有这个概念，也不影响终端那头听不听得到。 */
     '<div class="panel">'+
@@ -702,12 +722,11 @@ function renderSettings(){
       '<div class="panel-body">'+
         '<div class="set-row">'+
           '<div class="set-lab">'+
-            '<div class="set-t">接通/挂断时播放提示音</div>'+
-            '<div class="hint">接通和挂断对讲时在当前设备上播放提示音。</div>'+
+            '<div class="set-t">接通/挂断时在此设备上播放提示</div>'+
           '</div>'+
           '<div class="set-ctl">'+
-            '<label class="switch" title="接通/挂断时播放提示音">'+
-              '<input type="checkbox" id="stChime" aria-label="接通/挂断时播放提示音"'+(S.chime?" checked":"")+'>'+
+            '<label class="switch" title="接通/挂断时在此设备上播放提示">'+
+              '<input type="checkbox" id="stChime" aria-label="接通/挂断时在此设备上播放提示"'+(S.chime?" checked":"")+'>'+
               '<span class="track"></span></label>'+
           '</div>'+
         '</div>'+
@@ -734,6 +753,13 @@ function renderSettings(){
   /* 「在线对讲」那枚提示音开关：翻一下就存，不重画这一页（这一点只影响下一次响不响）。 */
   const chimeSw = $("#stChime");
   if (chimeSw) chimeSw.onchange = e => { S.chime = e.target.checked; LS.set("chime", S.chime); };
+  /* 「外观」那两枚色板：点一下换 <html data-palette>、存本机，不重画这一页。 */
+  const palSw = $("#stPalette");
+  if (palSw) $$("button", palSw).forEach(b => b.onclick = ()=>{
+    S.palette = applyPalette(b.dataset.pal);
+    LS.set("palette", S.palette);
+    $$("button", palSw).forEach(x => x.classList.toggle("on", x === b));
+  });
   /* 标题行最右那枚「关闭设置」（竖屏上看不见它，见 css）。和顶栏那枚返回键同一个动作。 */
   $("#setClose").onclick = ()=> goMode(lastMode);
 }
