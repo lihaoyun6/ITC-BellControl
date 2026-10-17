@@ -5,6 +5,9 @@
 #   · 127.0.0.1:8181 —— 代理自己的 WebSocket 控制口（面板「全局设置 → 播放代理」
 #     默认就连这儿），不是网页；
 #   · 127.0.0.1:8182 —— --web-dir 开出来的静态托管口，面板网页在这儿。
+#
+# 代理现在默认绑 0.0.0.0（给装在服务器上的那种装法），这里两个口都显式收回到
+# 127.0.0.1：本脚本是「自己电脑上跑一份」用的，没必要把口开给整个局域网。
 cd "$(dirname "$0")" || exit 1
 
 if [ ! -x ./play-agent ]; then
@@ -13,7 +16,7 @@ if [ ! -x ./play-agent ]; then
   exit 1
 fi
 
-./play-agent --web-dir ./bell-panel &
+./play-agent --listen 127.0.0.1:8181 --web-listen 127.0.0.1:8182 --web-dir ./bell-panel &
 AGENT=$!
 # 脚本退出（Ctrl+C、关终端）时把代理一起收掉，不留后台进程。
 trap 'kill $AGENT 2>/dev/null' EXIT INT TERM
