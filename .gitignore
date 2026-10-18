@@ -21,6 +21,13 @@ udp.txt
 bell-panel/config.json
 bell-panel/config.json.tmp
 
+# ── 发布包用的启动脚本 ────────────────────────────────────────────
+# 打包时临时放在根目录、和代理与 bell-panel/ 一起压进各自的系统包；
+# 源码本身不需要跟踪它们，本地留着即可。
+run_win.bat
+run_linux.sh
+run_mac.command
+
 # ── 本地备份 / 系统文件 ──────────────────────────────────────────
 bell-panel_副本/
 .DS_Store
