@@ -26,7 +26,13 @@ function openModal(cfg){
     '<div class="modal-body"></div>'+
     (cfg.footer===false?"":'<div class="modal-foot"></div>')+
   '</div>';
-  document.body.appendChild(scrim);
+  /* tall：装着超长列表的弹窗，高度钉死在屏幕的 80%（列表自己滚，框子不跟着内容长）。 */
+  if (cfg.tall) host.querySelector(".modal").classList.add("is-tall");
+  /* 遮罩挂在**这一层弹窗自己的 host 里**，不是 body 上：叠第二层弹窗时，
+     它的 host 按 DOM 顺序压在上一层 host 之上，遮罩也跟着整层盖住上一层的
+     弹窗和页面，backdrop-filter 才会把下面那一层一起糊掉（用户定的）。
+     同一层里 .modal 被 z-index 抬在遮罩之上（见 css 的 .modal-host>.scrim）。 */
+  host.appendChild(scrim);
   $("#layers").appendChild(host);
   modalStack.push(id);
   if (cfg.onClose) modalOnClose[id] = cfg.onClose;
@@ -37,6 +43,26 @@ function openModal(cfg){
   $$("[data-close]", host).forEach(b=> b.onclick = ()=> closeModal(id));
   document.addEventListener("keydown", escHandler);
   cfg.mount && cfg.mount(host.querySelector(".modal-body"), host.querySelector(".modal-foot"), m);
+  /* 竖屏：所有弹窗都收掉右上角的 ×，出口改到底部的「取消」。
+     底栏已经自己画了「取消」的（好些弹窗本来就有）就不再添第二枚；
+     纯浏览类的底栏只有一枚「关闭」—— 它自己就是出口，也不该再摆「取消」；
+     没有底栏的弹窗不适用（竖屏那边走的是整页视图，见 40-view-exam 的改动预览）。 */
+  if (isNarrow()){
+    const x = host.querySelector(".m-x");
+    if (x) x.remove();
+    const foot = host.querySelector(".modal-foot");
+    if (foot){
+      const hasExit = Array.prototype.some.call(foot.querySelectorAll("button"),
+        b=> { const t = b.textContent.trim(); return t==="取消" || t==="关闭"; });
+      if (!hasExit){
+        const b = document.createElement("button");
+        b.type="button"; b.className="btn"; b.textContent="取消";
+        b.onclick = ()=> closeModal(id);
+        const primary = foot.querySelector(".btn-primary");
+        if (primary) foot.insertBefore(b, primary); else foot.appendChild(b);
+      }
+    }
+  }
   return m;
 }
 function escHandler(e){ if(e.key==="Escape" && modalStack.length) closeModal(modalStack[modalStack.length-1]); }
@@ -147,7 +173,7 @@ function openAreaEditor(mode, bulkList, onDone){
     sub: isPick ? "选好点位与分组，确定后应用"   /* 单条和批量都走 pick，别写死「这条铃声」 */
        : isList ? "改完点确定，列表内「默认」的铃声会一起更新"
        : "选中的铃声将统一改为下面的区域",
-    width:"760px",
+    width:"760px", tall:true,
     onClose: ()=>{ if (statHook){ const i=statusHooks.indexOf(statHook); if (i>=0) statusHooks.splice(i,1); statHook=null; } },
     mount(body, foot, mm){
       /* 顶上那格「已选区域」整块去掉了（用户要的）：那排胶囊把同一件事说了两遍 ——
@@ -155,6 +181,7 @@ function openAreaEditor(mode, bulkList, onDone){
          有了两个入口。现在只有列表这一个入口，「已选了哪些」由列表头上那句
          「已选择 N 个」交代（全选那一格的右边）。「清空」也跟着没了：
          它清的就是那排胶囊，而全选那一格反勾一下本来就是一键清空。 */
+      body.classList.add("grow-body");
       body.innerHTML =
         '<div class="stack">'+
           '<div class="tabbar" id="aTabs">'+
@@ -179,7 +206,7 @@ function openAreaEditor(mode, bulkList, onDone){
         if (tab==="term"){
           const groups = S.data.termGroups;
           pane.innerHTML =
-            '<div style="display:flex;gap:8px;margin-bottom:8px">'+
+            '<div class="pick-search">'+
               '<span class="sbox">'+ICON.search+
                 '<input class="input" id="aq" placeholder="搜索名称或 IP" value="'+esc(S.dt.areaQ)+'">'+
               '</span>'+
@@ -189,9 +216,13 @@ function openAreaEditor(mode, bulkList, onDone){
             '</div>'+
             /* 红绿点那份说明原来自成一行杵在这儿（搜索框下面），占掉一行高度，
                说的却是下面那些行头上的点是什么颜色 —— 现在挂到「全选」那一行的
-               最右边去（见 drawAllRow），贴着想说明的东西。 */
-            '<div class="pick-head" id="aHead"></div>'+
-            '<div class="pick" id="apick"></div>';
+               最右边去（见 drawAllRow），贴着想说明的东西。
+               「全选」这一行现在是列表框自己的题头（.pick-box）：钉在框子顶上
+               不跟列表滚，底下一条分隔线，滚的只有下面的行。 */
+            '<div class="pick-box">'+
+              '<div class="pick-head" id="aHead"></div>'+
+              '<div class="pick" id="apick"></div>'+
+            '</div>';
           $("#aq").oninput = e => { S.dt.areaQ = e.target.value; drawPick(); };
           $("#ag").onchange = e => { S.dt.areaGroup = e.target.value; drawPick(); };
           drawPick();
@@ -271,7 +302,7 @@ function openAreaEditor(mode, bulkList, onDone){
         drawAllRow(S.data.termGroups.map(g=>g.name), "g");
         const counts = {}, ons = {};
         S.data.terminals.forEach(t=>{
-          const hot = statusOf(t.name)==="online";
+          const hot = statusOf(t.name)==="online" || statusOf(t.name)==="busy";
           (t.with_groups||[]).forEach(w=>{
             counts[w.terminals_groups_id] = (counts[w.terminals_groups_id]||0)+1;
             if (hot) ons[w.terminals_groups_id] = (ons[w.terminals_groups_id]||0)+1;
@@ -374,7 +405,7 @@ function openMediaPicker(media, groups, onDone, opts){
      挂在页签内容区**下面**，不挤那三个恒高的列表。 */
   const extra = opts.extra;
   openModal({
-    title: opts.title || "选择音源", sub: opts.sub || "一个或多个音源文件，或整个媒体文件夹", width:"760px",
+    title: opts.title || "选择音源", sub: opts.sub || "一个或多个音源文件，或整个媒体文件夹", width:"760px", tall:true,
     mount(body, foot, mm){
       /* 音频文件是在**厂商原后台**上传的，手里这份 S.data.medias 是开面板时拉的快照 ——
          不重拉，刚传上去的文件在这个框里根本不存在，人会以为是面板没同步。
@@ -394,6 +425,7 @@ function openMediaPicker(media, groups, onDone, opts){
            现在只剩列表这一个入口，「选了多少」由搜索框下面那格全选右边的
            「已选择 N 个」交代（见 drawAllRow）。「清空」也跟着没了：
            它清的就是那排胶囊，而全选那一格反勾一下本来就是一键清空。 */
+        body.classList.add("grow-body");
         body.innerHTML =
           '<div class="stack">'+
             (filesOnly ? "" :
@@ -444,9 +476,10 @@ function openMediaPicker(media, groups, onDone, opts){
           cb.indeterminate = nOn>0 && nOn<headNames.length;
         };
         /* 两个页签的内容区恒高（`.pick-stage`，见 css），切页签时框子不动。
-           行数账：媒体库 8 行 = 全选行 + 列表 7 行；「音频」顶上多一行搜索框，
-           所以它的列表只排 6 行 —— **搜索行 + 全选行 + 列表 = 8 行**，
-           正好和另一页一样高，切过去也不会跳。
+           高度账：媒体库 = 30px 题头 + 7 条 38px 列表行；「音频」顶上多一行
+           搜索框，所以它的列表少排几行 —— 外框高度不变，两页切过去也不会跳。
+           题头（全选那一行）装在列表框 `.pick-box` 里，是框子的顶行，
+           不跟列表滚（见 css）。
            filesOnly 那条路没有页签栏，也就没有「切页签跳动」可谈，保持原样
            （考试铃声、听力音频走这条）。 */
         const drawPane = ()=>{
@@ -457,19 +490,24 @@ function openMediaPicker(media, groups, onDone, opts){
                 '<span class="sbox">'+ICON.search+
                   '<input class="input" id="mq" placeholder="搜索音频文件" value="'+esc(st.q)+'">'+
                 '</span>'+
-                '<select class="select" id="mg" style="width:160px"><option value="all">全部媒体库</option>'+
+                '<select class="select" id="mg"><option value="all">全部媒体库</option>'+
                   S.data.mediaGroups.map(g=>'<option value="'+g.id+'"'+(String(st.g)==String(g.id)?" selected":"")+'>'+esc(g.name)+'</option>').join("")+
                 '</select>'+
               '</div>'+
               /* filesOnly 只挑一个，也就没有「全选」那一行 —— 恒高那套账
                  （见 css 的 .pick-stage）只算走页签的这条路。 */
-              (filesOnly ? "" : '<div class="pick-head" id="mHead"></div>')+
-              '<div class="pick" id="mpick"></div>';
+              (filesOnly
+                ? '<div class="pick" id="mpick"></div>'
+                : '<div class="pick-box">'+
+                    '<div class="pick-head" id="mHead"></div>'+
+                    '<div class="pick" id="mpick"></div>'+
+                  '</div>');
             $("#mq").oninput = e => { st.q = e.target.value; drawFiles(); };
             $("#mg").onchange = e => { st.g = e.target.value; drawFiles(); };
             drawFiles();
           } else {
-            pane.innerHTML = '<div class="pick-head" id="mHead"></div><div class="pick" id="mdir"></div>';
+            pane.innerHTML = '<div class="pick-box">'+
+              '<div class="pick-head" id="mHead"></div><div class="pick" id="mdir"></div></div>';
             drawDirs();
           }
         };
@@ -601,8 +639,11 @@ function versionInfoHTML(){
          /language 回来之后由那边就地补上（见 10-data.js），整页不重画。 */
       '<dt>服务器版本</dt><dd id="verSrv">'+esc(S.srvVersion || "—")+'</dd>'+
       kv("登录用户",   userNameText() || "—")+
-      /* 排最后一行：它是个**诊断**读数，不是要天天看的信息。 */
-      kv("环境检测",   window.isSecureContext ? "安全上下文" : "非安全上下文")+
+      /* 排最后一行：它是个**诊断**读数，不是要天天看的信息。
+         App 里这行直接写「APP模式」（用户定的）：App 的页面由内置的本地
+         WebServer 喂给 WKWebView，安全上下文那套判断对它是另一回事，
+         写出来也帮不上忙；一眼看出「现在跑在 App 里」才有用。 */
+      kv("环境检测",   IS_APP ? "APP模式" : (window.isSecureContext ? "安全上下文" : "非安全上下文"))+
     '</dl>'+
     /* 这句只在**真的**处在非安全上下文时才出现（用户定的）——
        安全的时候它是句用不上的警告，白占一行。 */
@@ -628,15 +669,26 @@ function renderSettings(){
       '<div class="title-row">'+
         '<h2 class="serif">全局设置</h2>'+
       '</div>'+
-      /* 这一页的出口，和顶栏那枚「‹ 返回」是同一件事：退到**进设置之前**那一页
-         （lastMode，见 30-view-list.js），不是退回首页。
-         它是**两栏并排那一份**：窄到一次只显示一栏（≤980px）就收起来
-         （css 里 `.acts.set-close` 那条），那儿顶上已经有返回键了，
-         两个出口并排站着是同一件事说两遍。 */
-      '<div class="acts set-close"><button class="btn btn-primary" id="setClose">关闭设置</button></div>'+
     '</div>'+
 
     '<div class="page-body">'+
+
+    /* 「代理设置」：只有 App 里有（网页版浏览器自己管代理，面板碰不到）。
+       状态由原生在文档开始时注入到 __ITC_PROXY；点「设置代理」开原生弹窗，
+       保存后 App 重建 WebView、整页重载，这里显示的状态随之更新。 */
+    (IS_APP ?
+    '<div class="panel">'+
+      '<div class="panel-head"><h3>代理设置</h3></div>'+
+      '<div class="panel-body">'+
+        '<div class="set-row">'+
+          '<div class="set-lab">'+
+            '<div class="set-t">通过代理访问服务器</div>'+
+            '<div class="hint">'+esc(proxyStatusText())+'</div>'+
+          '</div>'+
+          '<div class="set-ctl"><button class="btn" id="stProxyBtn">设置代理</button></div>'+
+        '</div>'+
+      '</div>'+
+    '</div>' : "")+
 
     /* 「发送方式」这张面板 = 草稿模式 + 调试模式两个开关，也就是这两个模式在界面上
        仅有的入口。两个入口一起收着的时候（SHOW_MODE_SWITCHES，见 00-core.js）
@@ -673,7 +725,9 @@ function renderSettings(){
        地址**留空 = 127.0.0.1**（代理默认就和浏览器装在同一台机器上），所以正常
        情况下这两个框一个字都不用填；远程托管（代理装在别的机器上）才填那一台的地址。
        改一下就地写进 S 和本机存储，不提交、也不重画这一页 —— 它是本机设置，
-       服务器上压根没这个东西，下一次「呼叫」时才用到（agentURL 现读）。 */
+       服务器上压根没这个东西，下一次「呼叫」时才用到（agentURL 现读）。
+       **App 里整张不渲染**：App 自带播放代理（NativeAgent），没有地址可填。 */
+    (!IS_APP ?
     '<div class="panel">'+
       '<div class="panel-head"><h3>播放代理</h3></div>'+
       '<div class="panel-body">'+
@@ -692,7 +746,7 @@ function renderSettings(){
           '</div>'+
         '</div>'+
       '</div>'+
-    '</div>'+
+    '</div>' : "")+
 
     /* 「外观」：两套配色，各自都有浅色/深色（深浅跟着系统走）。
        klein = 苹果系统色，summer = 原来的暖色。纯本机偏好（存 localStorage），
@@ -760,8 +814,9 @@ function renderSettings(){
     LS.set("palette", S.palette);
     $$("button", palSw).forEach(x => x.classList.toggle("on", x === b));
   });
-  /* 标题行最右那枚「关闭设置」（竖屏上看不见它，见 css）。和顶栏那枚返回键同一个动作。 */
-  $("#setClose").onclick = ()=> goMode(lastMode);
+  /* 「代理设置」那枚「设置代理」：开原生弹窗（只有 App 里才有这一行）。 */
+  const pBtn = $("#stProxyBtn");
+  if (pBtn) pBtn.onclick = openNativeProxySettings;
 }
 
 /* ══ 月历控件（考试模式的「考试日期」和定时任务的「指定日期」共用这一个）═══

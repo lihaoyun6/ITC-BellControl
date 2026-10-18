@@ -145,7 +145,7 @@ function drawTkRows(){
       const live = ()=> S.tasks.find(x=> taskKey(x)===key) || t;
       openRowMenu(more, [
         { icon:ICON.edit, label:"编辑",     onPick:()=> openTaskEditor(live()) },
-        { icon:ICON.copy, label:"复制一条", onPick:()=> copyTask(live()) },
+        { icon:ICON.copy, label:"复制", onPick:()=> copyTask(live()) },
         { icon:ICON.del,  label:"删除",     onPick:()=> askTaskDelete(live()), danger:true },
       ]);
     };
@@ -255,7 +255,7 @@ function tkBulkShift(list){
     mount(b,f,mm){
       b.innerHTML = '<div class="stack">'+shiftFieldHTML("tsh")+'</div>';
       f.innerHTML = '<span class="spacer"></span><button class="btn" id="tshC">取消</button>'+
-        '<button class="btn btn-primary" id="tshOk">应用</button>';
+        '<button class="btn btn-primary" id="tshOk">确定</button>';
       $("#tshC").onclick = ()=> closeModal(mm.id);
       $("#tshOk").onclick = ()=>{
         const d = readShiftSec("tsh");
@@ -454,7 +454,7 @@ function openTaskEditor(t){
         const box = q("#tkArea"); if (!box) return;
         const a = {t:d.termNames||[], g:d.groupNames||[]};
         if (!a.g.length && !a.t.length){
-          box.innerHTML = '<span class="hint">尚未选择 —— 没设区域的任务到时间不会响</span>';
+          box.innerHTML = '<span class="hint">尚未选择任何区域</span>';
           return;
         }
         box.innerHTML = areaChips(a, true);
@@ -510,7 +510,7 @@ function openTaskEditor(t){
         const box = q("#tkWhenBox"); if (!box) return;
         const typed = Number(q("#tkTT").value);
         if (typed===0){
-          box.innerHTML = '<label>重复星期</label><div class="quickrow">'+
+          box.innerHTML = '<label>重复星期</label><div class="quickrow wk-row">'+
             [1,2,3,4,5,6,7].map(w=>'<button class="btn btn-sm'+
               ((d.weeks||[]).indexOf(w)>=0?" btn-primary":" btn-quiet")+
               '" data-wk="'+w+'">'+WEEK[w]+'</button>').join("")+
@@ -560,19 +560,19 @@ function openTaskEditor(t){
         }
       };
 
+      /* 顶上只放「名称 / 执行时间 / 优先级」；音量在所有宽度下都挪到下面
+         「播放时长」后面（用户定的）。绑定时只认 q("#tkVol") 在哪个网格里。
+         这儿不再有「启用」开关 —— 启停是列表里那个行尾开关的事，编辑一个任务
+         的时间／音源／区域不该顺手改它的启停。 */
+      const tkVolField =
+        '<div class="field" data-tkf="vol"><label>音量</label>'+
+          '<input class="input mono" id="tkVol" type="number" min="0" max="100" value="'+esc(d.volume)+'"></div>';
       body.innerHTML =
         '<div class="stack">'+
-          /* 这四格是建任务时一次要连着填完的四样。宽屏上并成一行；竖屏上按
-             [data-tkf] 重排成「名称 / 时间 + 音量 + 优先级」两行（见 css/app.css
-             的 ≤980 那段）。属性只是给 CSS 认人用的，DOM 顺序一个字没动。
-             这儿不再有「启用」开关 —— 启停是列表里那个行尾开关的事，编辑一个任务
-             的时间／音源／区域不该顺手改它的启停。 */
           '<div class="grid4 tk-top">'+
-            '<div class="field" data-tkf="time"><label>执行时间</label>'+quickTimeHTML('id="tkTime"', d.time)+'</div>'+
             '<div class="field" data-tkf="name"><label>名称</label>'+
               '<input class="input" id="tkName" value="'+esc(d.name)+'" placeholder="任务1"></div>'+
-            '<div class="field" data-tkf="vol"><label>音量</label>'+
-              '<input class="input mono" id="tkVol" type="number" min="0" max="100" value="'+esc(d.volume)+'"></div>'+
+            '<div class="field" data-tkf="time"><label>执行时间</label>'+quickTimeHTML('id="tkTime"', d.time)+'</div>'+
             '<div class="field" data-tkf="pri"><label>优先级</label>'+
               '<input class="input mono" id="tkPri" type="number" value="'+esc(d.priority)+'"></div>'+
           '</div>'+
@@ -592,9 +592,11 @@ function openTaskEditor(t){
                 '<div class="field"><label>播放模式</label><select class="select" id="tkMode">'+
                   '<option value="0"'+(Number(d.sound.play_model)===0?" selected":"")+'>列表播放</option>'+
                   '<option value="1"'+(Number(d.sound.play_model)===1?" selected":"")+'>循环播放</option>'+
+                  '<option value="2"'+(Number(d.sound.play_model)===2?" selected":"")+'>随机播放</option>'+
                 '</select></div>'+
                 '<div class="field"><label>播放时长</label>'+
-                  '<input class="input mono" id="tkLife" value="'+esc(d.sound.life_time||"00:00:10")+'"></div>'+
+                  quickTimeHTML('id="tkLife"', d.sound.life_time||"00:00:10")+'</div>'+
+                tkVolField+
               '</div>'+
             '</div></div></div>'+
 
@@ -607,16 +609,16 @@ function openTaskEditor(t){
             '<div class="sect-b"><div class="area-chips" id="tkArea"></div></div></div>'+
 
           '<div class="sect"><div class="sect-h">执行周期</div><div class="sect-b">'+
-            '<div class="grid3">'+
+            '<div class="grid3 tk-when-grid">'+
               '<div class="field"><label>周期类型</label><select class="select" id="tkTT">'+
                 '<option value="3"'+(d.timeType===3?" selected":"")+'>指定日期</option>'+
                 '<option value="0"'+(d.timeType===0?" selected":"")+'>按周重复</option>'+
                 (d.timeType!==0&&d.timeType!==3?'<option value="'+d.timeType+'" selected>'+esc(taskWhenRaw(d))+'（服务器原样保留）</option>':"")+
               '</select></div>'+
-              '<div class="field"><label>开始日期</label>'+
-                '<input class="input mono" id="tkStart" type="date" value="'+esc(d.startDate)+'"></div>'+
-              '<div class="field"><label>结束日期</label>'+
-                '<input class="input mono" id="tkEnd" type="date" value="'+esc(d.endDate)+'"></div>'+
+              /* 日期不再是原生 type=date：面板里其它日期格（新建任务 / 考试日期）
+                 都用自绘日历，这里也用同一套，省得 Safari 的原生控件和旁边的框对不齐。 */
+              '<div class="field"><label>开始日期</label>'+dateFieldHTML("tkStart", d.startDate)+'</div>'+
+              '<div class="field"><label>结束日期</label>'+dateFieldHTML("tkEnd", d.endDate)+'</div>'+
             '</div>'+
             '<div class="field" id="tkWhenBox" style="margin-top:14px"></div>'+
           '</div></div>'+
@@ -625,8 +627,18 @@ function openTaskEditor(t){
       drawSound(); drawArea(); drawWhen(); drawLen(); syncLife(true);
 
       q("#tkSoundPick").onclick = openSoundPicker;
-      q("#tkLife").oninput = e=>{ e.target.dataset.touched = "1"; };
-      q("#tkLife").onblur  = e=>{ if (!e.target.value){ delete e.target.dataset.touched; syncLife(true); } };
+      const tkLifeEl = q("#tkLife");
+      wireQuickTime(tkLifeEl);
+      tkLifeEl.oninput = e=>{ e.target.dataset.touched = "1"; };
+      tkLifeEl.onblur  = e=>{ if (!e.target.value){ delete e.target.dataset.touched; syncLife(true); } };
+      /* 竖屏：点框里任何地方都开转轮（用户定的）；横屏仍只认右边那枚时钟图标。 */
+      if (isPortraitNarrow()){
+        tkLifeEl.addEventListener("click", ()=>{
+          tkLifeEl.blur();
+          const btn = tkLifeEl.parentElement.querySelector(".t-drop");
+          if (btn) btn.click();
+        });
+      }
       q("#tkPickArea").onclick = ()=>{
         S.dt.area = {t:(d.termNames||[]).slice(), g:(d.groupNames||[]).slice()};
         openAreaEditor("pick", null, a=>{ d.termNames = a.t.slice(); d.groupNames = a.g.slice(); drawArea(); });
@@ -640,24 +652,25 @@ function openTaskEditor(t){
       q("#tkTime").onchange = e => { d.time = (hhmmToHMS(e.target.value) || d.time); };
       /* 同样支持敲 930 —— 这个框没有实时读取器，纯靠离开焦点时改写成 09:30:00 */
       wireQuickTime(q("#tkTime"));
-      q("#tkStart").onchange = e => {
-        d.startDate = e.target.value;
+      bindDateField(body, "tkStart", day=>{
+        d.startDate = day;
         if (d.timeType===3 && !(d.dates||[]).length){ d.dates = [d.startDate]; drawWhen(); }
-      };
+      });
+      bindDateField(body, "tkEnd");
 
       /* 编辑框里**没有删除键**：删除是列表那一行的事（宽屏行尾那枚垃圾桶、
          竖屏 ⋯ 单子里的「删除」）。摆在编辑框里等于同一件事两个入口，而且
          「保存」和「删除」并排，手一滑删掉的是一条已经配好的任务。 */
       foot.innerHTML = '<span class="spacer"></span><button class="btn" id="tkC">取消</button>'+
-        (isNew ? '<button class="btn btn-primary" id="tkOk">确认创建</button>'
-               : '<button class="btn btn-primary" id="tkOk">保存</button>');
+        (isNew ? '<button class="btn btn-primary" id="tkOk">添加</button>'
+               : '<button class="btn btn-primary" id="tkOk">确定</button>');
       fq("#tkC").onclick = ()=> closeModal(mm.id);
       fq("#tkOk").onclick = ()=>{
         d.name = q("#tkName").value.trim();
         d.volume = Number(q("#tkVol").value)||0;
         d.priority = Number(q("#tkPri").value)||50;
-        d.startDate = q("#tkStart").value || d.startDate;
-        d.endDate = q("#tkEnd").value || d.endDate;
+        d.startDate = q("#tkStart").dataset.date || d.startDate;
+        d.endDate = q("#tkEnd").dataset.date || d.endDate;
         /* d.isDone 原样带着走（新建时 blankTask 给的是 1）—— 编辑界面里没有这个
            开关了，不能在这儿把它抹成 0。 */
         d.time = (hhmmToHMS(q("#tkTime").value) || d.time);

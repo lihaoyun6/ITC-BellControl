@@ -50,7 +50,11 @@ function renderLogin(){
   const srv = splitServer(S.server);
   root.innerHTML =
   '<div class="login" id="login"><div class="login-card">'+
-    '<h1 class="serif">ITC 广播控制台</h1>'+
+    '<div class="login-head">'+
+      '<h1 class="serif">ITC 广播控制台</h1>'+
+      /* App 里才有这枚齿轮：代理设置是原生弹窗，网页版浏览器自己管代理。 */
+      (IS_APP ? '<button type="button" class="cell-btn login-gear" id="lgProxy" title="代理设置" aria-label="代理设置">'+ICON.gear+'</button>' : "")+
+    '</div>'+
     '<div class="stack">'+
       '<div class="srv-row">'+
         '<div class="field"><label for="lg-host">服务器地址</label>'+
@@ -98,6 +102,9 @@ function renderLogin(){
     LS.set("remember", $("#lg-remember").checked);
     doLogin($("#lg-user").value.trim(), $("#lg-pass").value);
   };
+  /* 登录页标题右边那枚代理齿轮（只有 App 里有），点开原生代理弹窗。 */
+  const lgProxy = $("#lgProxy");
+  if (lgProxy) lgProxy.onclick = openNativeProxySettings;
   $("#lg-pass").onkeydown = e => { if(e.key==="Enter") $("#loginBtn").click(); };
   $("#lg-user").onkeydown = e => { if(e.key==="Enter") $("#lg-pass").focus(); };
   $("#lg-port").onkeydown = e => { if(e.key==="Enter") $("#lg-user").focus(); };
@@ -201,8 +208,7 @@ function renderTopbar(){
   const showBack = ((!S.mode||S.mode==="list") && S.showDetail) ||
                    S.mode==="tasks" ||
                    (S.mode==="more" && S.dt.more && S.dt.more.full) ||
-                   (S.mode==="exam" && S.dt.exPreview) ||
-                   S.mode==="settings";
+                   (S.mode==="exam" && S.dt.exPreview);
   /* 里面再套一层 .topbar-inner：横条本身通栏（分隔线要顶到两边），
      但内容跟下面 .main-inner 用同一套左右边距，上下边缘才对得齐。
      再往里分 .tb-l / .tb-r 两组，只为窄屏折行用 —— 桌面上这两层是
@@ -232,30 +238,20 @@ function renderTopbar(){
          都是同一件事，不用猜自己指到了哪个元素。 */
       '<span class="stat cellbtn" id="connCell" title="'+esc(connTitle())+'">'+
         '<span class="dotstat '+S.conn+'" id="connDot"></span>'+
-        '<button class="dimmer chip-link" id="connBtn">'+connText()+'</button></span>'+
+        '<span class="dimmer" id="connBtn">'+connText()+'</span></span>'+
       /* 终端在线状态是另一条 WebSocket，跟 REST 通不通是两回事，分开报。
          这一格点开「终端管理」（在线 / 离线两页签，见 15-status.js 的 openTermList）。
          推送没连上时它照样点得开 —— 那张表会照实写「状态未知」，比一个点不动的读数有用；
          「推送连没连上」这句交代跟着搬进了那张表的副标题（提示语让给「点击查看终端管理」了）。 */
       '<span class="stat cellbtn" id="termCell" title="点击查看终端管理">'+
         '<span class="icostat '+(S.link==="ok"?"ok":S.link==="busy"?"busy":"bad")+'" id="linkDot">'+ICON.monitor+'</span>'+
-        '<button class="dimmer chip-link" id="linkText">'+esc(linkText())+'</button></span>'+
+        '<span class="dimmer" id="linkText">'+esc(linkText())+'</span></span>'+
       /* 头像 + 「注销」。头像就是图标库里那个人头（ICON.user），不套圈、绿的那颗，
          和左边那颗显示器同尺寸 —— **不是**谁的照片。整格是退出按钮，头像只是这一格的记号。 */
       '<span class="stat cellbtn" id="userCell" title="'+esc(logoutTitle())+'">'+
         '<span class="avatar">'+ICON.user+'</span>'+
-        '<button class="dimmer chip-link" id="logoutBtn">注销</button></span>'+
-      /* 「设置」跟在「注销」右边（用户定的）。它原来和三个业务页签挤在
-         同一排里，还是那一排里唯一一个**光有图标没有字**的项 —— 摆在「账号那几格」
-         这一头才对：它说的是「这台面板本身怎么配」，不是「去哪一页干活」。
-         绿色的齿轮：和旁边那枚人头同一个绿（--good），说的是「这是设置这一格」，
-         不是任何状态。整格可点，和左边三格一个待遇。
-         格子里这行字短了（「全局设置」→「设置」，用户定的）：顶栏本来就紧，
-         这一格和「注销」一起各让出两个字。full name 挂在格子的提示语上。 */
-      '<span class="stat cellbtn" id="setCell" title="打开全局设置">'+
-        '<span class="geartic">'+ICON.gear+'</span>'+
-        '<button class="dimmer chip-link" id="setBtn">设置</button></span>'+
-      '</span>'+   /* .tb-stats ── 四格读数到此为止 */
+        '<span class="dimmer" id="logoutBtn">注销</span></span>'+
+      '</span>'+   /* .tb-stats ── 三格读数到此为止 */
       '<div class="spacer"></div>'+
      '</div>'+
      '<div class="tb tb-r">'+
@@ -274,11 +270,8 @@ function renderTopbar(){
               结果视图都是**整块顶掉浏览区**的，那一页没有别的出口；页签虽然还在，
               但页签是「去别页」，不是「回到刚才那张表 / 刚才那份配置」。这两处宽屏
               那一支走的都是模态，弹窗自带关闭，所以这一条照样进不来。
-           3. 设置页 —— **这一条横竖屏都判真，只是横屏上看不见它**（.rail-back 基线
-              就是 display:none）：横屏的出口长在设置页自己那一行标题的最右边
-              （「关闭设置」，见 20-ui.js 的 renderSettings），竖屏上那枚收起来，
-              改用这一枚。竖屏没有这条退路的话就出不来了 —— 底部那条导航栏里
-              压根没有「设置」这一格（它当初就是为这个从页签里搬走的）。
+           3. 这里不再有设置页 —— 设置已经是一枚常规页签（横屏在这排最右边、
+              竖屏在底部导航栏最后一格），不靠返回键退出。
 
          它在顶栏里，不在 #main 里，而 lockDetail 只遍历 .wb-main 的控件 ——
          所以被考试模式锁住的那张详情页照样退得出来。这一条是刻意的，别改成
@@ -316,9 +309,10 @@ function renderTopbar(){
         /* 「更多功能」：装那些一年用不上两回、但不该没有的东西（眼下是终端任务
            反查）。它排在最右边 —— 左边那些是「日常在用的」，这一个装的是「其余」。 */
         '<button data-mode="more"'+(S.mode==="more"?' class="on"':"")+'>更多功能</button>'+
-        /* 齿轮原来住在这儿（这一排里唯一一个光有图标没有字的项）。现在搬去左边
-           「注销」右边那一格，改叫「设置」，竖屏那条底部导航栏里也不放它 ——
-           四个页签是「去哪一页干活」，它是「这台面板怎么配」，两件事不该混在一排。 */
+        /* 设置：这排页签最右边的一枚齿轮（用户定的），只有图标没有字。
+           横屏和宽屏走这里；竖屏那排页签收起来，改用底部导航栏最后一格。 */
+        '<button class="seg-ic'+(S.mode==="settings"?' on':"")+'" data-mode="settings"'+
+          ' title="设置" aria-label="设置">'+ICON.gear+'</button>'+
       '</div>'+
       /* 这颗按钮**现在一律不显示**：草稿模式收着、S.draft 恒 false，于是它永远挂着
          disabled，CSS 那条 `#pushBtn[disabled]{display:none}` 让它整颗消失。
@@ -418,7 +412,7 @@ function renderTopbar(){
   /* 退出登录先问一句（用户要的）。这一下不是白问：它会**当场作废本机那张令牌**，
      还会把攒着没提交的改动一起清掉（见 10-data.js 的 doLogout）—— 点错了没有后悔药。 */
   el.querySelector("#userCell").onclick = ()=>{
-    openConfirm("退出登录", "是否退出登录？", doLogout, "退出登录");
+    openConfirm("退出登录", "是否退出登录？", doLogout, "退出登录", true);
   };
   /* 开关收着的时候这一格根本不在（见 SHOW_MODE_SWITCHES），所以判空再绑。 */
   const draftToggle = el.querySelector("#draftToggle");
@@ -452,13 +446,8 @@ function renderTopbar(){
     /* 考试模式那份「改动预览」同一个道理：收掉这一格，退回**考试模式这一页**，
        手上那份安排（S.exam）一个字都没动过 —— 预览是只读的，退出来就是原来那一页。 */
     if (S.mode==="exam" && S.dt.exPreview){ S.dt.exPreview = false; renderAll(); return; }
-    /* 设置页退**来的那一页**（见下面 lastMode），不是退回首页 —— 从考试模式进设置、
-       一按返回落到铃声计划，那是走丢了，不是返回。 */
-    if (S.mode==="settings"){ goMode(lastMode); return; }
     S.showDetail = false; renderAll();
   };
-  /* 「设置」那一格：整格可点（和左边三格一样），点图标和点字是同一件事。 */
-  el.querySelector("#setCell").onclick = ()=> goMode("settings");
   /* 顶栏这一排页签（宽屏（>980px）上用它；竖屏上它整排收起来，改用下面那条
      底部导航栏 —— 见 css 里 `.topbar .seg{display:none}` 那一档）。 */
   $$("#modeSeg button", el).forEach(b => b.onclick = ()=> goMode(b.dataset.mode));
@@ -485,10 +474,9 @@ function renderTopbar(){
    从铃声计划起步。初值是 list（S.mode 一开始是空串，那也是铃声计划）。 */
 let lastMode = LS.get("lastMode", "list");
 function goMode(m){
-  /* 每次进「实时对讲」都把拨号框清空（用户定的）：号码不该跨一次进出留在这儿，
-     不然下一次进来按呼叫，很容易把上一通拨过的号又拨出去。 */
-  if (m === "live" && S.mode !== "live" && typeof liveState === "function") liveState().num = "";
-  if (m !== "settings" && m !== "tasks"){ lastMode = m; LS.set("lastMode", m); }
+  /* 拨号框里的号**不跟着切页清空**（用户定的）：号码只在挂断或手动清空时抹掉，
+     切去别的页再回来还留在框里，可以接着按呼叫。 */
+  if (m !== "tasks"){ lastMode = m; LS.set("lastMode", m); }
   S.mode = m;
   if (m === "tasks") loadTasks();
   renderAll();
@@ -534,7 +522,10 @@ function renderNavbar(){
        ScriptProcessorNode），所以它一般都在（playUsable）。 */
     (liveUsable() ? item("live", ICON.phone, "实时对讲") : "")+
     (playUsable() ? item("online",ICON.play,  "在线播放") : "")+
-    item("more",  ICON.grid,  "更多功能");
+    item("more",  ICON.grid,  "更多功能")+
+    /* 设置是底部导航栏的最后一格（用户定的）：和别的页签一样是常规页，
+       点开就在这一条上高亮，不再靠顶栏的返回键退出。 */
+    item("settings", ICON.gear, "设置");
   $$("[data-mode]", el).forEach(b => b.onclick = ()=> goMode(b.dataset.mode));
 }
 
@@ -597,6 +588,9 @@ function renderRail(){
     '<div class="rail-tasks">'+
       '<button class="rail-card'+(S.mode==="tasks"?" on":"")+'" id="railTasks" title="打开定时任务">'+
         '<span class="nm">定时任务</span>'+
+        /* 卡片末尾、路标「›」左边那一格是定时任务的条数（用户定的）：
+           点开之前先知道里面有多少条。只写数字，不带「条」字（用户定的）。 */
+        '<span class="n">'+S.tasks.length+'</span>'+
         '<span class="chev">'+ICON.chevR+'</span>'+
       '</button>'+
     '</div>'+
@@ -742,7 +736,7 @@ function renderMain(){
     ((lock||nEmpty)? '<div class="banner-group">'+
       (lock?'<div class="panel banner lock-banner" style="border-color:var(--warn)"><div class="panel-body" style="display:flex;gap:10px;align-items:center">'+
         '<span class="pill-lock">已锁定</span>'+
-        '<span style="font-size:13px"><b>此计划已被锁定</b>，关闭考试模式后可修改</span>'+
+        '<span style="font-size:13px"><b>此计划已被锁定</b>，结束考试后可修改</span>'+
       '</div></div>':"")+
 
       /* .banner-btn = 这条横幅里带一枚按钮。按钮比旁边那行字高一头，靠它这一格 css
@@ -926,9 +920,8 @@ function lockDetail(el){
 }
 
 /* 区域胶囊。`rm` 为真时每颗末尾带一枚 ×（点掉自己）—— 只有**改得动**的地方才给：
-   铃声编辑器「特例区域」下那排、定时任务编辑器的执行区域。跟着列表默认走的那几份
-   （「默认区域」、列表页顶上那块、只读的弹窗）一律不带：那儿点掉一颗等于顺手改了
-   整张列表的区域，而列表的区域只该在列表页上改。 */
+   铃声编辑器那排、定时任务编辑器的执行区域。列表页顶上那块、只读的弹窗一律不带：
+   那儿点掉一颗等于顺手改了整张列表的区域，而列表的区域只该在列表页上改。 */
 function areaChips(a, rm){
   /* 点位前面的点一律是「在线状态」，别再拿它做装饰 */
   const x = rm ? '<button class="x" aria-label="移除">'+ICON.x+'</button>' : "";
@@ -950,14 +943,36 @@ function areaChips(a, rm){
   const g = a.g.map(n=>'<span class="chip chip-group"'+
       attr("g", n, rm ? "点击移除此区域" : "")+
       '><span class="dot"></span>'+esc(n)+x+'</span>').join("");
-  if (!t && !g) return '<span class="hint">未设置区域 — 这些铃声到时间不会响</span>';
+  if (!t && !g) return '<span class="hint">尚未选择任何区域</span>';
   return t + g;
 }
 /* 挂上那些热区：onRemove(kind, name)，kind 是 "t"（点位）或 "g"（分组）。
    选择器是 `[data-rm]` —— 它就是胶囊本身（见上面那个 attr()），
-   和音源那对（mountSoundChips）一个做法。 */
+   和音源那对（mountSoundChips）一个做法。
+
+   除了每颗胶囊的 click，这里再兜一层 pointerup：窄屏上这排胶囊是横向滚动的
+   （见 css 的 .area-chips），手机上抬手那一下有时会被当成滚动手势，click 就
+   不来了 —— 用户实测「点了没反应」。抬手时只要没怎么移动（≤8px）就当点了它；
+   真的在滑的那些手势浏览器会发 pointercancel，不会走到这儿。
+   两条路都触发也没关系：同一个名字删两遍，第二遍是空操作。 */
 function mountAreaChips(box, onRemove){
   $$("[data-rm]", box).forEach(b => b.onclick = ()=> onRemove(b.dataset.rm, b.dataset.n));
+  const hit = t => (t && t.closest) ? t.closest("[data-rm]") : null;
+  let down = null;
+  /* 用 onpointerdown / onpointerup 赋值而不是 addEventListener：同一个盒子
+     会被重画很多次（每删一颗就重画），addEventListener 会把监听器一层层叠起来。 */
+  box.onpointerdown = e=>{
+    const c = hit(e.target);
+    down = c ? {c, x:e.clientX, y:e.clientY} : null;
+  };
+  box.onpointercancel = ()=>{ down = null; };
+  box.onpointerup = e=>{
+    const d = down; down = null;
+    if (!d) return;
+    if (Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8) return;
+    if (hit(e.target) !== d.c) return;
+    onRemove(d.c.dataset.rm, d.c.dataset.n);
+  };
 }
 
 /* 表格里那枚「特例」胶囊点开：这条铃声实际会响在哪些点位 / 分组。
@@ -978,14 +993,15 @@ function visibleBells(){
   return S.bells.filter(b=> (b.name+" "+hm(b.time)+" "+(b.mediaNames.join(" "))).toLowerCase().indexOf(q)>=0);
 }
 
-/* 播放模式（厂商字段 play_model：0 列表 / 1 循环 / 2 采播）→ 一枚记号 + 它的名字。
+/* 播放模式（厂商字段 play_model：0 列表 / 1 循环 / 2 随机）→ 一枚记号 + 它的名字。
    表里只画记号，名字挂在 title 上。
-   0 和 1 之外一律当「采播」：编辑器里只给得出这两个选项，采播是厂商前端那边才有
-   的第三种，面板认得出来就行 —— 这条也是原来那行「时长 · 播放方式」的口径。 */
+   其它值一律当「采播」：编辑器里只给得出前三种，采播是厂商前端那边才有的
+   另一种音源类型，面板认得出来就行 —— 这条也是原来那行「时长 · 播放方式」的口径。 */
 function pmodeOf(m){
   m = Number(m);
   if (m === 0) return {word:"列表", icon:ICON.list};
   if (m === 1) return {word:"循环", icon:ICON.loop};
+  if (m === 2) return {word:"随机", icon:ICON.shuffle};
   return {word:"采播", icon:ICON.live};
 }
 
@@ -1037,7 +1053,7 @@ function renderRows(){
         ' title="'+esc(b.isDone?"停用这一条":"启用这一条")+'"></button></td>'+
       '<td><div class="rowacts">'+
         '<button class="ric r-edit" title="编辑">'+ICON.edit+'</button>'+
-        '<button class="ric r-copy" title="复制一条">'+ICON.copy+'</button>'+
+        '<button class="ric r-copy" title="复制">'+ICON.copy+'</button>'+
         '<button class="ric danger r-del" title="删除">'+ICON.del+'</button>'+
         /* 竖屏上这三个收成这一枚（css 换的，宽屏上看不见它也看不见这一枚）——
            这个按钮在 DOM 里一直都在，两套零件各有一份，谁来显示由断点说了算。 */
@@ -1085,7 +1101,7 @@ function renderRows(){
       const b = bell(); if (!b) return;
       openRowMenu(e.target.closest(".r-more"), [
         { icon:ICON.edit, label:"编辑",     onPick:()=> openBellEditor(bell()) },
-        { icon:ICON.copy, label:"复制一条", onPick:()=> copyBell(bell()) },
+        { icon:ICON.copy, label:"复制", onPick:()=> copyBell(bell()) },
         { icon:ICON.del,  label:"删除",     onPick:()=> removeBell(bell()), danger:true },
       ]);
       return;
@@ -1170,8 +1186,8 @@ function applyAreaToBells(bells, area, why){
 }
 
 /* ══ bell editor ════════════════════════════════════════════════════
-   新建时三个页签：单条（一条一条填）、按节次生成（一整天的作息一次排完）、
-   从模板添加（把一整份打铃计划粘进来）。
+   新建时三个页签：单条添加（一条一条填）、按节次生成（一整天的作息一次排完）、
+   从模板生成（把一整份打铃计划粘进来）。
    三个页签共用下面那块「执行区域」。 */
 function openBellEditor(bell){
   const isNew = !bell;
@@ -1181,28 +1197,23 @@ function openBellEditor(bell){
     strategyId: ensureStrategy(), isDone:1, type:1, priority:50, volume:70, mode:1,
     lightId:1, ledText:"", ledCfgId:1,
     sound:{life_time:"00:00:00", play_model:0},
-    mediaNames:[], mediaGroupNames:[], termNames:S.listArea.t.slice(), groupNames:S.listArea.g.slice(),
-    inheritArea:true
+    mediaNames:[], mediaGroupNames:[], termNames:S.listArea.t.slice(), groupNames:S.listArea.g.slice()
   };
-  if (bell) b.inheritArea = !isOverride(bell);
-  /* 编辑已有铃声时**没有预备铃这一块**：它是创建那一下的选项，不是这条铃声的属性。
-     所以下面 b.withPrep / b.prepMin 只在 isNew 时被读（新建那条路走默认值）。 */
-  b.withPrep = isNew;
-  b.prepMin  = prepMinOf(b);
-
   let tab = "one";
-  /* up / down 是生成的「上课」「下课」两条各放哪个音源文件（默认就是那两个名字）。
+  /* up / down 是生成的「上课」「下课」两条各放哪个音源文件。**不给默认值**：
+     服务器上那两个文件不一定叫这个名，预填一个反而会被当成真的选了。
+     两个音源可以各设各的音量，所以 upVol / downVol 是两份（预备铃跟着上课那条走）。
      预备铃不放这儿：它的名字写死在 PREP_MEDIA 上，除了这个页签它别处不出现。 */
   const gen = { start:"08:00", dur:40, gap:10, n:4, strat:Number(b.strategyId),
-                vol:Number(b.volume)||70, prep:true, prepMin:prepMinOf(b), rows:[],
-                up:"上课铃.mp3", down:"下课铃.mp3" };
-  /* 模板页签的那份状态。rows / errs 是**解析结果**，不是输入 —— 输入本身text 才是
-     唯一权威，每次重画都从它重新解析一遍（见 parseBellTemplate）。 */
-  const tpl = { text:"", rows:[], errs:[] };
+                upVol:Number(b.volume)||70, downVol:Number(b.volume)||70,
+                prep:true, prepMin:prepMinOf(b), rows:[],
+                up:"", down:"" };
+  /* 模板页签只记输入本身（text）—— 解析结果每次点「生成」时现算，
+     不再留一份可能过期的 rows / errs。 */
+  const tpl = { text:"" };
 
   const m = openModal({
     title: isNew ? "添加铃声" : "编辑铃声",
-    sub: esc(groupName(S.groupId)),
     width:"820px",
     mount(body, foot, mm){
       const q  = s => body.querySelector(s);
@@ -1217,32 +1228,22 @@ function openBellEditor(bell){
       };
       const areaHTML = ()=>
         '<div class="sect"><div class="sect-h">执行区域<span class="acts" id="bAreaActs"></span></div>'+
-        '<div class="sect-b">'+
-          '<div class="tabbar" style="margin-bottom:10px">'+
-            '<button data-areamode="inherit" class="'+(b.inheritArea?"on":"")+'">默认区域</button>'+
-            '<button data-areamode="custom" class="'+(b.inheritArea?"":"on")+'">特例区域</button>'+
-          '</div><div id="bAreaBox"></div>'+
-        '</div></div>';
-      /* 只有「特例区域」才有东西可编辑。但这颗键**一直画着**，默认区域下只是藏起来
-         （.is-ghost，见 css）：撤掉不画的话，.sect-h 这一行会矮掉一颗键的高度
-         （.btn-sm 约 28.6px 撑起的一行 vs 12px 字撑出的 18.6px 行盒），
-         「默认 / 特例」来回切的时候整块面板跟着抖 10px —— 就是用户实测那个抖动。 */
+        '<div class="sect-b"><div id="bAreaBox"></div></div></div>';
+      /* 执行区域不再分「默认 / 特例」两档（用户定的）：下面那排胶囊就是这条铃声
+         自己的区域，想改就点右上角这颗键，它一直实打实地画着。 */
       const drawAreaActs = ()=>{
         const box = q("#bAreaActs"); if (!box) return;
-        box.innerHTML = '<button class="btn btn-sm'+(b.inheritArea?" is-ghost":"")+'" id="bPickArea">编辑区域</button>';
+        box.innerHTML = '<button class="btn btn-sm" id="bPickArea">编辑区域</button>';
         q("#bPickArea").onclick = pickArea;
       };
       const drawAreaBox = ()=>{
         const box = q("#bAreaBox"); if (!box) return;
         /* 盒子自己就是那一格 chips（不再往里面套一层）：标红（markErr）挂在它身上，
            重画一次红自己就掉了 —— 挑完区域回来，红不该还留着。
-           「特例区域」下每颗胶囊自带一枚 ×：删一个点位／分组不用再开一遍选择器
-           （它本来就得先点「编辑区域」、再在几十行里找到那一项、再取消勾选）。
-           跟着列表走的那份是只读的，rm 传 false。 */
-        const editable = !b.inheritArea;
+           一律可删：每颗胶囊自带一枚 ×，删一个点位／分组不用再开一遍选择器。
+           竖屏也照点（用户定的）：手机上点整颗胶囊直接摘掉。 */
         box.className = "area-chips";
-        box.innerHTML = areaChips(editable ? {t:b.termNames,g:b.groupNames} : S.listArea, editable);
-        if (!editable) return;
+        box.innerHTML = areaChips({t:b.termNames,g:b.groupNames}, true);
         mountAreaChips(box, (k,n)=>{
           if (k==="t") b.termNames  = b.termNames.filter(x=>x!==n);
           else         b.groupNames = b.groupNames.filter(x=>x!==n);
@@ -1254,14 +1255,17 @@ function openBellEditor(bell){
          选择器（filesOnly —— 一节铃声就放一个音源，多选了也没处放）。
          挑空了（把唯一勾着的那一格又取消掉）就当没改：这一栏不给空着，
          空了生成出来的铃声到点没东西可放。 */
+      /* 没选的时候按钮里写「未选择」并降一档灰（.ph，和考试编辑那几格同一套），
+         不写任何一个文件名 —— 预填名字会被当成「已经选好了」。 */
       const genPickHTML = (id, key, label)=>
         '<div class="field"><label>'+label+'</label>'+
           '<button class="select-btn" type="button" id="'+id+'">'+
-            '<span class="v">'+esc(gen[key])+'</span><span class="chev">'+ICON.chevD+'</span>'+
+            '<span class="v'+(gen[key]?"":" ph")+'">'+esc(gen[key]||"未选择")+'</span>'+
+            '<span class="chev">'+ICON.chevD+'</span>'+
           '</button></div>';
       const drawGenMedia = ()=>{
         const set = (id,key)=>{ const el = q("#"+id); const v = el && el.querySelector(".v");
-                                if (v) v.textContent = gen[key]; };
+                                if (v){ v.textContent = gen[key]||"未选择"; v.classList.toggle("ph", !gen[key]); } };
         set("gUp","up"); set("gDown","down");
       };
       const pickGenMedia = (title, key)=>{
@@ -1274,19 +1278,26 @@ function openBellEditor(bell){
       };
 
       /* ── 单条 ──
-         上面五格是**一个** grid（.bell-top），不是原来那两行 —— 横屏和竖屏的
-         分组方式不一样，一个 grid 才排得出两种：宽屏「时间 + 名称(占2格)」/「周期 +
-         音量 + 优先级」两行；≤980px 靠 [data-bf] 上的 order 和 span 重排成
-         「时间 + 周期」/「名称 + 音量 + 优先级」两行。DOM 顺序按宽屏写。 */
-      const oneHTML = ()=>
-        '<div class="grid3 bell-top">'+
-          '<div class="field" data-bf="time"><label>执行时间</label>'+quickTimeHTML('id="bTime"', b.time)+'</div>'+
+         名称 / 执行时间 / 执行周期 / 优先级四格是**一个** grid（.bell-top），
+         DOM 顺序就是「名称在前、优先级跟在执行周期后面」（用户定的）；竖屏靠
+         [data-bf] 上的 order 和 span 重排成「名称 + 优先级」/「执行时间 + 执行周期」
+         两行，见 css 文件末尾那一大段。
+         音量不在这里 —— 它和播放模式、播放时长一起排在音源区那一行（.bell-play），
+         横竖屏都一样（用户定的）。 */
+      const oneHTML = ()=>{
+        const volField =
+          '<div class="field" data-bf="vol"><label>音量</label><input class="input mono" id="bVol" type="number" min="0" max="100" value="'+Number(b.volume)+'"></div>';
+        const priField =
+          '<div class="field" data-bf="pri"><label>优先级</label><input class="input mono" id="bPri" type="number" value="'+Number(b.priority)+'"></div>';
+        return '<div class="grid3 bell-top">'+
           '<div class="field bf-name" data-bf="name"><label>名称</label><input class="input" id="bName" value="'+esc(b.name)+'" placeholder="铃声1"></div>'+
+          '<div class="field" data-bf="time"><label>执行时间</label>'+
+            (isPortraitNarrow() ? timePickHTML("bTime", b.time)
+                        : quickTimeHTML('id="bTime"', b.time))+'</div>'+
           '<div class="field" data-bf="strat"><label>执行周期</label><select class="select" id="bStrat">'+
             S.data.strategies.map(s=>'<option value="'+s.id+'"'+(Number(b.strategyId)===Number(s.id)?" selected":"")+'>'+esc(s.name)+'</option>').join("")+
           '</select></div>'+
-          '<div class="field" data-bf="vol"><label>音量</label><input class="input mono" id="bVol" type="number" min="0" max="100" value="'+Number(b.volume)+'"></div>'+
-          '<div class="field" data-bf="pri"><label>优先级</label><input class="input mono" id="bPri" type="number" value="'+Number(b.priority)+'"></div>'+
+          priField+
         '</div>'+
         /* 音源区：一行**已选清单**（多个音源 / 多个文件夹 / 混着选，各自都能点掉），
            右上「选择音源」开多选器。这里不再摆一排「常用」快捷按钮 —— 挑音源
@@ -1304,96 +1315,98 @@ function openBellEditor(bell){
               '<div class="field"><label>播放模式</label><select class="select" id="bMode">'+
                 '<option value="0"'+(Number(b.sound.play_model)===0?" selected":"")+'>列表播放</option>'+
                 '<option value="1"'+(Number(b.sound.play_model)===1?" selected":"")+'>循环播放</option>'+
+                '<option value="2"'+(Number(b.sound.play_model)===2?" selected":"")+'>随机播放</option>'+
               '</select></div>'+
-              '<div class="field"><label>播放时长</label><input class="input mono" id="bLife" value="'+esc(b.sound.life_time||"00:00:00")+'"></div>'+
+              '<div class="field"><label>播放时长</label>'+
+                quickTimeHTML('id="bLife"', b.sound.life_time||"00:00:00")+
+              '</div>'+
+              volField+
             '</div>'+
           '</div></div>'+
         '</div>'+
-        /* 预备铃只在**新建**时出现 —— 它是创建那一下的选项，不是这条铃声的属性，
-           所以编辑已有铃声时这一块整个不画（连 id 都不存在，绑定那边也不用判空）。 */
-        (isNew ? '<div class="sect" id="bPrepSect" style="display:none"><div class="sect-h">预备铃</div><div class="sect-b">'+
-          '<div style="display:flex;gap:16px;align-items:flex-end">'+
-            '<label class="switch" id="bPrepLbl"><input type="checkbox" id="bPrep"'+(b.withPrep?" checked":"")+'>'+
-              '<span class="track"></span><span>创建预备铃</span></label>'+
-            '<div class="field" style="margin:0;width:150px"><label>预备铃提前(分)</label>'+
-              '<input class="input mono" id="bPrepMin" type="number" min="1" max="60" step="1" value="'+Number(prepMinOf(b))+'"></div>'+
-          '</div>'+
-          '<div class="hint" style="margin-top:8px">只在新建时把这条预备铃一起建出来；建好之后它就是列表里一条普通铃声，两边互不影响。</div>'+
-        '</div></div>' : "")+
         areaHTML();
+      };
 
       /* ── 按节次生成 ── */
-      const genHTML = ()=>
-        '<div class="grid4">'+
-          '<div class="field"><label>上课时间</label>'+quickTimeHTML('id="gStart"', gen.start)+'</div>'+
-          '<div class="field"><label>每节时长（分）</label><input class="input mono" id="gDur" type="number" min="1" value="'+gen.dur+'"></div>'+
-          '<div class="field"><label>课间时长（分）</label><input class="input mono" id="gGap" type="number" min="0" value="'+gen.gap+'"></div>'+
-          '<div class="field"><label>节数</label><input class="input mono" id="gN" type="number" min="1" max="20" value="'+gen.n+'"></div>'+
-        '</div>'+
-        '<div class="grid4">'+
+      /* 顶上那几格排两行（见 css 的 .gen-top）：第一行是开始时间 + 执行周期，
+         第二行是节数 + 每节时长 + 课间时长 + 预铃提前（用户定的顺序）。
+         竖屏也照这个排法，不折成一列（用户定的：排课就这几项，一眼看全）。
+         「创建预备铃」不在这儿了，挪到弹窗底栏最左边（见 draw() 的页脚）。
+         音量**不在顶上**：上课铃和下课铃可以各调各的，两份音量分别跟在自己
+         那个音源后面（用户定的）。它们是窄窄的一列（见 css 的 .gen-src），
+         窄屏下正好和音源排在同一行；标签都只叫「音量」，跟在谁后面就是谁的。 */
+      const genHTML = ()=>{
+        const volField = (id, v)=> '<div class="field"><label>音量</label>'+
+          '<input class="input mono" id="'+id+'" type="number" min="0" max="100" value="'+v+'"></div>';
+        return '<div class="gen-top">'+
+          '<div class="field"><label>开始时间</label>'+
+            (isPortraitNarrow() ? timePickHTML("gStart", gen.start)
+                        : quickTimeHTML('id="gStart"', gen.start))+'</div>'+
           '<div class="field"><label>执行周期</label><select class="select" id="gStrat">'+
             S.data.strategies.map(s=>'<option value="'+s.id+'"'+(Number(gen.strat)===Number(s.id)?" selected":"")+'>'+esc(s.name)+'</option>').join("")+
           '</select></div>'+
-          '<div class="field"><label>音量</label><input class="input mono" id="gVol" type="number" min="0" max="100" value="'+gen.vol+'"></div>'+
-          '<div class="field"><label>创建预备铃</label>'+
-            '<label class="switch" style="align-self:flex-end"><input type="checkbox" id="gPrep"'+(gen.prep?" checked":"")+'>'+
-              '<span class="track"></span></label></div>'+
-          '<div class="field"><label>预备铃提前(分)</label><input class="input mono" id="gPrepMin" type="number" min="1" max="60" value="'+gen.prepMin+'"></div>'+
+          '<div class="field"><label>节数</label><input class="input mono" id="gN" type="number" min="1" max="20" value="'+gen.n+'"></div>'+
+          '<div class="field"><label>每节时长</label><input class="input mono" id="gDur" type="number" min="1" value="'+gen.dur+'"></div>'+
+          '<div class="field"><label>课间时长</label><input class="input mono" id="gGap" type="number" min="0" value="'+gen.gap+'"></div>'+
+          '<div class="field"><label>预铃提前量</label><input class="input mono" id="gPrepMin" type="number" min="1" max="60" value="'+gen.prepMin+'"></div>'+
         '</div>'+
         /* 音源：一整天的课表就是这么三条一轮一轮排出来的（预备 / 上课 / 下课），
-           所以这儿只挑「上课」和「下课」两条各放什么 —— 两格，一格一个文件。
-           从前这两条是写死的两个文件名，服务器上那条叫别的名字就一点辙没有。 */
+           所以这儿只挑「上课」和「下课」两条各放什么 —— 一格一个文件。
+           从前这两条是写死的两个文件名，服务器上那条叫别的名字就一点辙没有。
+           音量紧跟在各自的音源后面：两份是独立的，改上课铃不带动下课铃。
+           宽屏一行两对（音源 / 窄音量 / 音源 / 窄音量），窄屏换成两行，
+           每行的音源右边仍是它自己那一份音量。 */
         '<div class="sect"><div class="sect-h">音源</div>'+
-          '<div class="sect-b"><div class="grid2">'+
-            genPickHTML("gUp","up","上课铃")+genPickHTML("gDown","down","下课铃")+
+          '<div class="sect-b"><div class="gen-src">'+
+            genPickHTML("gUp","up","上课铃")+volField("gUpVol",gen.upVol)+
+            genPickHTML("gDown","down","下课铃")+volField("gDownVol",gen.downVol)+
           '</div></div></div>'+
-        areaHTML()+
-        '<div class="sect"><div class="sect-h">预览 <span class="mono" id="gCount"></span></div>'+
-          '<div class="sect-b" id="gPrev" style="max-height:300px;overflow:auto"></div>'+
-        '</div>';
+        areaHTML();
+      };
 
-      /* ── 从模板添加 ──
-         四块：提示词（拿去喂 AI）、模板（AI 的产物粘进来）、执行区域（模板里没有
-         区域这一列，得在这儿挑）、预览（解析结果，可以逐条取消再生成）。
-         预览那一块是用户后来加的 —— 原本只打算在模板框底下挂一行校验，但这份模板
-         动辄几十行，只看一个「12 行」的数字等于闭着眼睛建。 */
-      /* 「AI辅助提示」这一块只剩一颗按钮，没有框。原来那个框是 readonly 的，
-         可十行提示词正文摊在那儿，把真正要填的「模板」挤到了折叠线下面 ——
-         而它的用法本来就是「复制走、发给 AI」，没人会在这儿读它。
-         正文现在活在 bindTpl 的 prompt 变量里，按钮直接复制它。 */
+      /* ── 从模板生成 ──
+         两块：模板（AI 的产物粘进来）、执行区域（模板里没有区域这一列，得在这儿挑）。
+         和「按节次生成」一样，点「生成」才弹预览框 —— 面板里不再摆那张表。
+         提示词那一块整个搬到了弹窗左下角（见 draw() 的页脚）：那一栏本来就只有
+         一颗「复制」按钮，摆一整块在正文顶上反而把要填的「模板」挤下去。 */
       const tplHTML = ()=>
-        '<div class="sect"><div class="sect-h">AI辅助提示'+
-          '<span class="acts"><button class="btn btn-sm" id="tCopy">复制提示词</button></span></div>'+
-          '<div class="sect-b"><div class="stack">'+
-            '<div class="hint">点「复制提示词」，把复制到的这段连同你的打铃计划一起发给任意一个 AI'+
-              '（豆包、DeepSeek、ChatGPT 都行），它会按我们的格式给你一份模板，再把那份模板粘到'+
-              '下面「模板」那一栏。提示词里的周期名和音源名是从这台服务器上读出来的，AI 照着抄就写不歪。</div>'+
-          '</div></div></div>'+
         '<div class="sect"><div class="sect-h">模板</div>'+
           '<div class="sect-b"><div class="stack">'+
             '<textarea class="input mono" id="tText" rows="8" spellcheck="false"'+
               ' placeholder="08:00:00,第一节课上课,周一到周五,上课铃.mp3"></textarea>'+
+            /* 解析出错时逐行报在这儿（上面那块「预览」已经去掉了，但行号还是得
+               让人看得见，拿着回去让 AI 改）。平时不占位置。 */
+            '<div class="hint" id="tErr" style="display:none;color:var(--crit)"></div>'+
           '</div></div></div>'+
-        areaHTML()+
-        '<div class="sect"><div class="sect-h">预览 <span class="mono" id="tCount"></span></div>'+
-          '<div class="sect-b" id="tPrev" style="max-height:300px;overflow:auto"></div>'+
-        '</div>';
+        areaHTML();
 
       function draw(){
         body.innerHTML = '<div class="stack">'+
           (isNew?'<div class="tabbar" id="bTabs">'+
-            '<button data-t="one"'+(tab==="one"?' class="on"':'')+'>单条</button>'+
+            '<button data-t="one"'+(tab==="one"?' class="on"':'')+'>单条添加</button>'+
             '<button data-t="gen"'+(tab==="gen"?' class="on"':'')+'>按节次生成</button>'+
-            '<button data-t="tpl"'+(tab==="tpl"?' class="on"':'')+'>从模板添加</button></div>':"")+
+            '<button data-t="tpl"'+(tab==="tpl"?' class="on"':'')+'>从模板生成</button></div>':"")+
           (tab==="one" ? oneHTML() : tab==="gen" ? genHTML() : tplHTML())+
         '</div>';
-        /* 页脚按页签给。模板页签**只有一个**按钮：那一栏里没有「这一条铃声」可存，
-           摆一个「确认添加」在旁边只会让人以为要按两下。 */
-        foot.innerHTML = '<span class="spacer"></span><button class="btn" id="bCancel">取消</button>'+
-          (isNew ? (tab==="gen" ? '<button class="btn" id="gGo">生成任务</button><button class="btn btn-primary" id="bOk">确认添加</button>'
-                  : tab==="tpl" ? '<button class="btn btn-primary" id="tOk">生成铃声</button>'
-                  :               '<button class="btn btn-primary" id="bOk">确认添加</button>')
-                 : '<button class="btn btn-danger" id="bDel">删除</button><button class="btn btn-primary" id="bOk">保存</button>');
+        /* 页脚按页签给。「按节次生成」和「从模板生成」的主按钮都叫「生成」：
+           它们都不直接建，先弹「铃声预览」让人勾掉不要的，真正落库的是预览框里
+           那颗「添加」。
+           底栏最左边那格随页签换：按节次是「创建预备铃」开关（开关在左、字在右），
+           从模板是「复制AI辅助提示词」按钮；它和右边那颗「取消 / 生成」隔着一整段
+           空白，不挤按钮堆里。 */
+        foot.innerHTML =
+          (isNew && tab==="gen"
+            ? '<label class="switch" title="勾上之后，每节课前都多生成一条预备铃">'+
+                '<input type="checkbox" id="gPrep"'+(gen.prep?" checked":"")+'>'+
+                '<span class="track"></span><span class="dimmer">创建预备铃</span></label>'
+            : isNew && tab==="tpl"
+            ? '<button class="btn" id="tCopy">复制 AI 提示词</button>'
+            : "")+
+          '<span class="spacer"></span><button class="btn" id="bCancel">取消</button>'+
+          (isNew ? (tab==="gen" ? '<button class="btn btn-primary" id="gGo">生成</button>'
+                  : tab==="tpl" ? '<button class="btn btn-primary" id="tOk">生成</button>'
+                  :               '<button class="btn btn-primary" id="bOk">添加</button>')
+                 : '<button class="btn btn-primary" id="bOk">确定</button>');
         bind();
       }
 
@@ -1406,7 +1419,11 @@ function openBellEditor(bell){
         function syncLife(force){
           const inp = q("#bLife");
           if (b.mediaGroupNames.length) return;   /* 文件夹里有多少、放多久，本地算不出来 */
-          if (force || !inp.dataset.touched) inp.value = lifeTimeOf(b.mediaNames);
+          if (force || !inp.dataset.touched){
+            const v = lifeTimeOf(b.mediaNames);
+            /* 竖屏那格是按钮（没有 .value），得走 setTimePick 才改得动显示的数和值。 */
+            if (inp.dataset.time != null) setTimePick(inp, v); else inp.value = v;
+          }
         }
         /* 已选清单。渲染和绑定都在 20-ui.js（`soundChipsHTML` / `mountSoundChips`），
            定时任务编辑框用的是同一对函数 —— 两处长得一模一样是代码保证的，不是巧合。 */
@@ -1419,10 +1436,10 @@ function openBellEditor(bell){
             drawSound(); syncLife(true);
           });
         }
-        /* 音源区整个重画：清单 + 合计时长 + 预备铃那一块的显隐。
+        /* 音源区整个重画：清单 + 合计时长。
            改完音源一律走这里，别再各处零散地补 lenEl()。 */
         function drawSound(){
-          drawChips(); lenEl(); drawPrepSect();
+          drawChips(); lenEl();
         }
         /* 多选器：音源文件、媒体文件夹、混着选都行 —— 它本来就是这个能力，
            以前被一个「自定义…」的下拉选项藏着，只有点进去才看得见。 */
@@ -1432,39 +1449,35 @@ function openBellEditor(bell){
             drawSound(); syncLife(true);
           });
         }
-        /* 「创建预备铃」只对上课铃有意义 —— 别的铃声下这块不出现。
-           编辑已有铃声时整块都不存在（见 oneHTML），q("#bPrepSect") 取不到就退出。 */
-        function drawPrepSect(){
-          const sect = q("#bPrepSect"); if (!sect) return;
-          const isClass = isClassBell(b);
-          sect.style.display = isClass ? "" : "none";
-          if (!isClass) return;
-          if (!b.withPrep && !b._prepTouched){ b.withPrep = true; q("#bPrep").checked = true; }
+        const timeEl = q("#bTime");
+        if (isPortraitNarrow()){
+          /* 竖屏：点开转轮（和考试模式同一套），值落在 b.time 上 —— 切页签重画时还在。 */
+          wireTimePick(timeEl, v=>{ b.time = v; });
+        } else {
+          timeEl.oninput = ()=>{ const t=hhmmToHMS(timeEl.value); if(t) b.time=t; };
+          /* 敲 930 也算数：离开焦点时把框里改写成 09:30:00，再补派一次 input
+             让上面那个读取器跑一遍。打字过程中它读不出东西就什么都不做。 */
+          wireQuickTime(timeEl);
         }
-
-        if (q("#bPrep")){
-          q("#bPrep").onchange = e=>{ b.withPrep = e.target.checked; b._prepTouched = true; drawPrepSect(); };
-          q("#bPrepMin").oninput = e=>{
-            const n = Number(e.target.value);
-            if (isFinite(n) && n >= 1) b.prepMin = Math.min(60, Math.floor(n));
-            if (!b.withPrep && !b._prepTouched){ b.withPrep = true; q("#bPrep").checked = true; }
-          };
-          /* 输入框留空 / 填了 0 时，离开焦点再归整成有效值（打字过程中不回写） */
-          q("#bPrepMin").onblur = ()=>{ b.prepMin = prepMinOf(b); q("#bPrepMin").value = b.prepMin; };
-          q("#bPrep").checked = !!b.withPrep;
+        const lifeEl = q("#bLife");
+        wireQuickTime(lifeEl);
+        lifeEl.addEventListener("input", e=>{ e.target.dataset.touched="1"; });
+        lifeEl.addEventListener("blur",  e=>{ if(!e.target.value){ delete e.target.dataset.touched; syncLife(true); } });
+        /* 竖屏：点框里任何地方都开转轮（用户定的）；横屏仍只认右边那枚时钟图标。
+           先 blur 收掉键盘，再走图标那条老路。 */
+        if (isPortraitNarrow()){
+          lifeEl.addEventListener("click", ()=>{
+            lifeEl.blur();
+            const btn = lifeEl.parentElement.querySelector(".t-drop");
+            if (btn) btn.click();
+          });
         }
-        q("#bTime").oninput = ()=>{ const t=hhmmToHMS(q("#bTime").value); if(t) b.time=t; };
-        /* 敲 930 也算数：离开焦点时把框里改写成 09:30:00，再补派一次 input
-           让上面那个读取器跑一遍。打字过程中它读不出东西就什么都不做。 */
-        wireQuickTime(q("#bTime"));
-        q("#bLife").oninput  = e=>{ e.target.dataset.touched="1"; };
-        q("#bLife").onblur   = e=>{ if(!e.target.value){ delete e.target.dataset.touched; syncLife(true); } };
         q("#bSoundPick").onclick = openSoundPicker;
         drawSound(); syncLife(true);
       }
 
       function saveOne(){
-        const t = hhmmToHMS(q("#bTime").value);
+        const t = hhmmToHMS(timeFieldVal("bTime"));
         /* 缺格除了喊一声，还把那一格套红（markErr，见 20-ui）：toast 三秒就没了，
            回来还得自己找是哪一格。下同。 */
         if (!t){ markErr(body,'[data-bf="time"]'); toast("请填写执行时间","err"); return; }
@@ -1476,13 +1489,7 @@ function openBellEditor(bell){
         b.strategyId = Number(q("#bStrat").value);
         b.volume = Number(q("#bVol").value)||70;
         b.priority = Number(q("#bPri").value)||50;
-        b.sound = {life_time: q("#bLife").value || "00:00:00", play_model: Number(q("#bMode").value)};
-        /* 预备铃那一块只在新建时有（编辑时 q("#bPrep") 取不到），所以这里读到 null
-           就等于「不建预备铃」—— 编辑已有铃声时无论如何都不会碰它那条搭档。 */
-        const prepChk = q("#bPrep"), prepMinEl = q("#bPrepMin");
-        b.prepMin = prepMinOf({prepMin: prepMinEl && prepMinEl.value});
-        b.withPrep = !!(prepChk && prepChk.checked) && isClassBell(b);
-        if (b.inheritArea){ b.termNames = S.listArea.t.slice(); b.groupNames = S.listArea.g.slice(); }
+        b.sound = {life_time: timeFieldVal("bLife") || "00:00:00", play_model: Number(q("#bMode").value)};
         closeModal(mm.id);
         if (isNew){
           S.bells.push(b);
@@ -1493,77 +1500,121 @@ function openBellEditor(bell){
           if (i>=0) S.bells[i] = b;
           queueSave(b, "编辑");       /* 复制出来的那条还没有 id，得走 POST */
         }
-        /* 预备铃只在**新建**这条路里生成，而且只生成、不改也不删：
-           编辑已有铃声时 b.withPrep 恒为 false（那一块根本没画），走 else 分支。 */
-        if (b.withPrep){
-          createPrepFor(b);
-          toast(S.draft ? "已加入待提交（含预备铃）" : "已写入服务器（含预备铃）","ok");
-        } else {
-          toast(wroteWord(),"ok");
-        }
+        toast(wroteWord(),"ok");
         renderAll();
       }
 
       /* ══ 按节次生成 ══ */
-      function drawPreview(){
-        const rows = gen.rows, box = q("#gPrev");
-        const nOn = rows.filter(r=>r.on).length;
-        if (!rows.length){
-          box.innerHTML = '<div class="hint" style="padding:14px">填好上面两行，点「生成任务」。</div>';
-        } else {
-          box.innerHTML = '<table class="prev-tbl"><thead><tr><th style="width:26px">'+
-            '<input type="checkbox" id="gAll"></th>'+
-            '<th>时间</th><th>名称</th><th>音源</th></tr></thead><tbody>'+
-            rows.map((r,i)=> '<tr class="'+(r.on?"on":"")+'"><td><input type="checkbox" data-qi="'+i+'"'+(r.on?" checked":"")+'></td>'+
-              '<td>'+esc(hm(r.time))+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.label)+'</td></tr>').join("")+
-            '</tbody></table>';
-          const all = q("#gAll");
-          all.onchange = ()=>{ gen.rows.forEach(r=> r.on = all.checked); drawPreview(); };
-        }
-        syncPrevHead();
-      }
-      /* 表头那个框就是全选：全勾 = checked，勾一半 = 半选 */
-      function syncPrevHead(){
-        const n = gen.rows.length, nOn = gen.rows.filter(r=>r.on).length;
-        const c = q("#gCount"); if (c) c.textContent = nOn+" 条";
-        const all = q("#gAll"); if (!all) return;
-        all.checked = nOn>0 && nOn===n;
-        all.indeterminate = nOn>0 && nOn<n;
-      }
       function buildRows(){
-        const st = hhmmToHMS(q("#gStart").value);
-        if (!st){ markErr(body, q("#gStart").closest(".tfield")); toast("请填写上课时间","err"); return null; }
+        const st = hhmmToHMS(timeFieldVal("gStart"));
+        /* 宽屏那格在 .tfield 里，竖屏是按钮、直接挂在 .field 上 —— 标红找 .field
+           两种都盖得住。 */
+        if (!st){ markErr(body, q("#gStart").closest(".field")); toast("请填写开始时间","err"); return null; }
+        /* 两个音源都不给默认值了，所以每次都得自己挑；漏掉一个就生成一整天
+           没有声音的上课/下课铃，不如在这儿拦一下。 */
+        if (!gen.up){ markErr(body, q("#gUp").closest(".field")); toast("请选择上课铃音源","err"); return null; }
+        if (!gen.down){ markErr(body, q("#gDown").closest(".field")); toast("请选择下课铃音源","err"); return null; }
         const dur = Math.max(1,Number(q("#gDur").value)||40);
         const gap = Math.max(0,Number(q("#gGap").value)||0);
         const n   = Math.max(1,Math.min(20,Number(q("#gN").value)||1));
         const pm  = Math.max(1,Math.min(60,Number(q("#gPrepMin").value)||PREP_MIN_DEFAULT));
+        /* 音量允许写 0（= 静音），所以不能像别的数字格那样用 `|| 默认值` 兜底；
+           空着才回落到 70。 */
+        const volOf = s=>{
+          const raw = q(s).value.trim();
+          if (!raw) return 70;
+          const v = Number(raw);
+          return Number.isFinite(v) ? Math.max(0,Math.min(100,v)) : 70;
+        };
+        const upVol = volOf("#gUpVol"), downVol = volOf("#gDownVol");
         gen.start = hms(st); gen.dur = dur; gen.gap = gap; gen.n = n; gen.prepMin = pm;
-        gen.prep = q("#gPrep").checked;
+        gen.upVol = upVol; gen.downVol = downVol;
+        gen.prep = fq("#gPrep").checked;
         const out = [];
         let t = hmsToSec(st);
         for (let i=1;i<=n;i++){
-          if (gen.prep) out.push(genRow(t-pm*60, "第"+i+"节-预备", PREP_MEDIA));
-          out.push(genRow(t, "第"+i+"节-上课", gen.up));
-          out.push(genRow(t+dur*60, "第"+i+"节-下课", gen.down));
+          /* 预备铃跟着它要引出的那节课走，用上课铃那份音量。 */
+          if (gen.prep) out.push(genRow(t-pm*60, "第"+i+"节-预备", PREP_MEDIA, upVol));
+          out.push(genRow(t, "第"+i+"节-上课", gen.up, upVol));
+          out.push(genRow(t+dur*60, "第"+i+"节-下课", gen.down, downVol));
           t += (dur+gap)*60;
         }
         return out;
       }
-      function saveGen(){
-        if (!gen.rows.length){ toast("请先点击「生成任务」生成播放安排","err"); return; }
-        const rows = gen.rows.filter(r=>r.on);
-        if (!rows.length){ toast("预览列表中未勾选任何条目","err"); return; }
-        if (!b.inheritArea && !b.termNames.length && !b.groupNames.length){ markErr(body,"#bAreaBox"); toast("请选择执行区域","err"); return; }
-        const dup = rows.filter(r=> S.bells.some(x=>x.name===r.name));
-        if (dup.length){ toast("名称重复："+dup.slice(0,3).map(d=>d.name).join("、")+(dup.length>3?" 等":""),"err"); return; }
-        const strat = Number(q("#gStrat").value), vol = Number(q("#gVol").value)||70;
-        const area = b.inheritArea ? {t:S.listArea.t, g:S.listArea.g} : {t:b.termNames, g:b.groupNames};
+      /* 「铃声预览」：按节次生成和从模板生成共用同一个框 —— 标题、勾选、
+         取消 / 添加都一样，差别只在「添加」之后怎么落库（onAdd）。
+         「添加」关掉的是预览框，onAdd 再把下面那个「添加铃声」关掉。 */
+      function openRowsPreview(rows, onAdd){
+        openModal({
+          title:"铃声预览", width:"560px", tall:true,
+          mount(pbody, pfoot, pm){
+            pbody.classList.add("grow-body");
+            pbody.innerHTML = '<div class="stack">'+
+              '<div class="pick" id="pvList" style="flex:1;min-height:0;max-height:none"></div>'+
+            '</div>';
+            const box = pbody.querySelector("#pvList");
+            /* 表头那个框就是全选：全勾 = checked，勾一半 = 半选。
+               勾一行只改那一行和表头，列表**不重画** —— 重画会把滚动条弹回顶上。 */
+            const syncHead = ()=>{
+              const all = box.querySelector("#pvAll"); if (!all) return;
+              const nOn = rows.filter(r=>r.on).length;
+              all.checked = nOn>0 && nOn===rows.length;
+              all.indeterminate = nOn>0 && nOn<rows.length;
+            };
+            box.innerHTML = '<table class="prev-tbl"><thead><tr><th style="width:26px">'+
+              '<input type="checkbox" id="pvAll"></th>'+
+              '<th>时间</th><th>名称</th><th>音源</th></tr></thead><tbody>'+
+              rows.map((r,i)=> '<tr class="'+(r.on?"on":"")+'"><td><input type="checkbox" data-pvi="'+i+'"'+(r.on?" checked":"")+'></td>'+
+                '<td>'+esc(hm(r.time))+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.label)+'</td></tr>').join("")+
+              '</tbody></table>';
+            const all = box.querySelector("#pvAll");
+            all.onchange = ()=>{
+              rows.forEach(r=> r.on = all.checked);
+              Array.prototype.forEach.call(box.querySelectorAll("[data-pvi]"), cb=>{
+                cb.checked = all.checked;
+                cb.closest("tr").classList.toggle("on", all.checked);
+              });
+              syncHead();
+            };
+            box.onchange = e=>{
+              const cb = e.target.closest("[data-pvi]"); if (!cb) return;
+              rows[Number(cb.dataset.pvi)].on = cb.checked;
+              cb.closest("tr").classList.toggle("on", cb.checked);
+              syncHead();
+            };
+            syncHead();
+
+            pfoot.innerHTML = '<span class="spacer"></span><button class="btn" id="pvCancel">取消</button>'+
+              '<button class="btn btn-primary" id="pvOk">添加</button>';
+            pfoot.querySelector("#pvCancel").onclick = ()=> closeModal(pm.id);
+            pfoot.querySelector("#pvOk").onclick = ()=>{
+              const sel = rows.filter(r=>r.on);
+              if (!sel.length){ toast("预览列表中未勾选任何条目","err"); return; }
+              const dup = sel.filter(r=> S.bells.some(x=>x.name===r.name));
+              if (dup.length){ toast("名称重复："+dup.slice(0,3).map(d=>d.name).join("、")+(dup.length>3?" 等":""),"err"); return; }
+              closeModal(pm.id);
+              onAdd(sel);
+            };
+          }
+        });
+      }
+      /* 点「生成」先弹「铃声预览」：几十行的单子塞在表单底下既滚不动也看不清，
+         单开一个框逐条勾，勾完按「添加」才真正落库。 */
+      function openGenPreview(){
+        const rows = buildRows();
+        if (!rows) return;
+        gen.rows = rows;
+        openRowsPreview(rows, commitGen);
+      }
+      function commitGen(rows){
+        const strat = Number(q("#gStrat").value);
+        const area = {t:b.termNames, g:b.groupNames};
         closeModal(mm.id);
         rows.forEach(r=>{
           const nb = {
             id:null, tmpId:"t"+Math.random().toString(36).slice(2,8), isNew:true,
             name:r.name, times:[r.time], time:r.time, strategyId:strat, isDone:1, type:1,
-            priority:50, volume:vol, mode:1, lightId:1, ledText:"", ledCfgId:1,
+            priority:50, volume:r.vol, mode:1, lightId:1, ledText:"", ledCfgId:1,
             sound:{life_time:r.life, play_model:r.model},
             mediaNames:r.mediaNames.slice(), mediaGroupNames:[],
             termNames:area.t.slice(), groupNames:area.g.slice()
@@ -1575,99 +1626,60 @@ function openBellEditor(bell){
         toast("已生成 "+rows.length+" 条铃声"+tailFor(),"ok");
       }
       function bindGen(){
-        /* 「生成任务」在页脚，得从 foot 里找 */
-        fq("#gGo").onclick = ()=>{ const rows = buildRows(); if (rows){ gen.rows = rows; drawPreview(); } };
-        q("#gPrev").onchange = e=>{
-          const cb = e.target.closest("[data-qi]"); if (!cb) return;
-          gen.rows[Number(cb.dataset.qi)].on = cb.checked;
-          cb.closest("tr").classList.toggle("on", cb.checked);
-          syncPrevHead();
-        };
+        /* 「生成」和「创建预备铃」都在页脚，得从 foot 里找。
+           开关一动就把状态记下来 —— 切去别的页签再回来，开关得还是刚才那一下。
+           关掉开关时「预铃提前量」跟着变灰禁用：那条数已经用不上了，留着能填
+           只会让人以为它还管用。 */
+        const prepChk = fq("#gPrep");
+        const prepMinEl = q("#gPrepMin");
+        const syncPrepMin = ()=>{ if (prepMinEl) prepMinEl.disabled = !gen.prep; };
+        if (prepChk) prepChk.onchange = ()=>{ gen.prep = prepChk.checked; syncPrepMin(); };
+        syncPrepMin();
+        fq("#gGo").onclick = openGenPreview;
         q("#gUp").onclick   = ()=> pickGenMedia("选择上课铃音源", "up");
         q("#gDown").onclick = ()=> pickGenMedia("选择下课铃音源", "down");
-        drawPreview();
-        wireQuickTime(q("#gStart"));
+        const startEl = q("#gStart");
+        if (isPortraitNarrow()) wireTimePick(startEl, v=>{ gen.start = v; });
+        else wireQuickTime(startEl);
       }
 
-      /* ══ 从模板添加 ══ */
-      function drawTplPreview(){
-        const box = q("#tPrev"); if (!box) return;
-        const bad = tpl.errs.length;
-        const cnt = q("#tCount");
-        if (cnt) cnt.textContent = bad ? "有 "+bad+" 处问题" : (tpl.rows.length ? tpl.rows.length+" 条" : "");
-        /* 有错就**一条都不给建**：按钮置灰，比按下去再弹一句「模板有错」更早地
-           把话说清楚。行数也没有的时候同样置灰（空模板没什么可生成的）。 */
-        const ok = fq("#tOk"); if (ok) ok.disabled = bad>0 || !tpl.rows.length;
-
-        let html = "";
-        if (bad){
-          /* 报错**逐行列**，不折成一句「模板有 3 处问题」—— 用户拿着行号回去让 AI
-             改，或者自己动手改，都得分得清是哪一行。 */
-          html += '<div class="hint" style="color:var(--crit);padding:10px 4px">'+
-            tpl.errs.map(e=>esc(e)).join("<br>")+'</div>';
-        }
-        if (tpl.rows.length){
-          html += '<table class="prev-tbl"><thead><tr><th style="width:26px">'+
-            '<input type="checkbox" id="tAll"></th>'+
-            '<th>时间</th><th>名称</th><th>周期</th><th>音源</th></tr></thead><tbody>'+
-            tpl.rows.map((r,i)=> '<tr class="'+(r.on?"on":"")+'">'+
-              '<td><input type="checkbox" data-ti="'+i+'"'+(r.on?" checked":"")+'></td>'+
-              '<td>'+esc(hm(r.time))+'</td><td>'+esc(r.name)+'</td>'+
-              '<td>'+esc(r.stratName)+'</td><td>'+esc(r.label)+'</td></tr>').join("")+
-            '</tbody></table>';
-        } else if (!bad){
-          html = '<div class="hint" style="padding:14px">把模板粘到上面，这里就会列出解析结果。</div>';
-        }
-        box.innerHTML = html;
-
-        if (!tpl.rows.length) return;
-        /* 表头那个框就是全选：全勾 = checked，勾一半 = 半选。和「按节次生成」
-           那张预览表是同一套写法。 */
-        const all = q("#tAll");
-        const sync = ()=>{
-          const nOn = tpl.rows.filter(r=>r.on).length;
-          all.checked = nOn>0 && nOn===tpl.rows.length;
-          all.indeterminate = nOn>0 && nOn<tpl.rows.length;
-        };
-        all.onchange = ()=>{ tpl.rows.forEach(r=> r.on = all.checked); drawTplPreview(); };
-        $$("[data-ti]", box).forEach(cb => cb.onchange = ()=>{
-          tpl.rows[Number(cb.dataset.ti)].on = cb.checked;
-          cb.closest("tr").classList.toggle("on", cb.checked);
-          sync();
-        });
-        sync();
-      }
+      /* ══ 从模板生成 ══ */
+      /* 解析错误逐行报在模板框下面（「预览」那块已经去掉了，但行号还是得让人看得见，
+         拿着回去让 AI 改）。平时这块是隐藏的，不占位置。 */
+      const tplErr = list=>{
+        const box = q("#tErr"); if (!box) return;
+        box.style.display = list.length ? "" : "none";
+        box.innerHTML = list.map(e=>esc(e)).join("<br>");
+      };
       function bindTpl(){
         const tt = q("#tText");
         /* 提示词正文不再摆在页面上了（那个框删了），就留在这个闭包里给复制按钮用。
            每次进这个页签都重算一遍：周期名和音源名是从服务器读出来的，外面刷过就得跟上。 */
         const prompt = bellTemplatePrompt();
         tt.value = tpl.text;
-        q("#tCopy").onclick = ()=> copyText(prompt, "提示词已复制");
-        /* 输入即解析，不设「解析」按钮：满打满算几百行的字符串比较，代价可以忽略，
-           而少按一下按钮就少一次「我明明粘了啊」的困惑。*/
-        tt.oninput = ()=>{ tpl.text = tt.value; const r = parseBellTemplate(tpl.text);
-                           tpl.rows = r.rows; tpl.errs = r.errs; drawTplPreview(); };
-        const r = parseBellTemplate(tpl.text);
-        tpl.rows = r.rows; tpl.errs = r.errs;
-        drawTplPreview();
+        /* 「复制 AI 提示词」在底栏最左边，得从 foot 里找。成功的提示走顶栏那颗
+           气泡（toast 的成功通知是关着的）。 */
+        fq("#tCopy").onclick = ()=> copyText(prompt, null, ()=> topTip("已复制到剪贴板"));
+        /* 一改就把上一次的报错收起来 —— 别让旧错误挂在那儿吓人。 */
+        tt.oninput = ()=>{ tpl.text = tt.value; tplErr([]); };
         /* 切页签不丢已粘的内容（tpl.text 活在这个闭包里，draw() 重画时又填回去），
            但**区域选择跟着 b 走**，和另外两个页签共用同一份，切来切去不会各选各的。 */
       }
-      function saveTpl(){
-        if (tpl.errs.length){ toast("模板有 "+tpl.errs.length+" 处问题，先照预览里的提示改","err"); return; }
-        const rows = tpl.rows.filter(r=>r.on);
-        if (!rows.length){ toast("预览列表里没有勾选任何条目","err"); return; }
-        if (!b.inheritArea && !b.termNames.length && !b.groupNames.length){ markErr(body,"#bAreaBox"); toast("请选择执行区域","err"); return; }
-        /* 模板**永远是追加**（用户定的），所以和列表里现有的铃声撞名这条一定会遇上。
-           同一列表内重名是服务器那边也不接受的（saveOne 里同一条规矩），在这儿先拦。 */
-        const dup = rows.filter(r=> S.bells.some(x=> x.name===r.name));
-        if (dup.length){ toast("名称重复："+dup.slice(0,3).map(d=>d.name).join("、")+(dup.length>3?" 等":""),"err"); return; }
-
-        const area = b.inheritArea ? {t:S.listArea.t, g:S.listArea.g} : {t:b.termNames, g:b.groupNames};
+      function openTplPreview(){
+        tpl.text = q("#tText").value;
+        const r = parseBellTemplate(tpl.text);
+        /* 有错就**一条都不给建**，逐行报出来。 */
+        tplErr(r.errs);
+        if (r.errs.length){ toast("模板有 "+r.errs.length+" 处问题","err"); return; }
+        if (!r.rows.length){ toast("模板里还没有可生成的行","err"); return; }
+        openRowsPreview(r.rows, commitTpl);
+      }
+      function commitTpl(rows){
+        /* 模板**永远是追加**（用户定的），重名检查在预览框里统一做了。 */
+        const area = {t:b.termNames, g:b.groupNames};
         closeModal(mm.id);
         rows.forEach(r=>{
-          /* 音量 / 优先级 / 播放模式模板里没有，走这一份默认值（和「单条」新建时一致）。
+          /* 音量 / 优先级 / 播放模式模板里没有，走这一份默认值（和「单条添加」新建时一致）。
              预备铃**一条都不建**（用户定的）：模板是「完全遵照输入」，
              自己多出来的东西就是没遵照。 */
           const nb = {
@@ -1687,26 +1699,16 @@ function openBellEditor(bell){
 
       function bind(){
         if (isNew) $$("#bTabs button", body).forEach(btn => btn.onclick = ()=>{ tab = btn.dataset.t; draw(); });
-        $$("[data-areamode]", body).forEach(btn => btn.onclick = ()=>{
-          b.inheritArea = btn.dataset.areamode==="inherit";
-          if (b.inheritArea){ b.termNames = S.listArea.t.slice(); b.groupNames = S.listArea.g.slice(); }
-          $$("[data-areamode]", body).forEach(x=>x.classList.toggle("on", x===btn));
-          drawAreaActs(); drawAreaBox();
-        });
         (tab==="gen" && isNew) ? bindGen() : (tab==="tpl" && isNew) ? bindTpl() : bindOne();
         drawAreaActs(); drawAreaBox();
 
         fq("#bCancel").onclick = ()=> closeModal(mm.id);
-        if (!isNew) fq("#bDel").onclick = ()=>{
-          closeModal(mm.id);
-          openConfirm("删除「"+bell.name+"」", "该铃声将从列表中移除，不可撤销。",
-            ()=>{ queueDelete(bell); toast(wroteWord(),"ok"); }, "删除", true);
-        };
-        /* 模板页签的页脚是另一颗按钮，没有 #bOk —— 取不到就跳过，别去 .onclick 一个 null。 */
+        /* 模板页签和按节次生成页签的页脚都是另一颗按钮，没有 #bOk ——
+           取不到就跳过，别去 .onclick 一个 null。 */
         const okBtn = fq("#bOk");
-        if (okBtn) okBtn.onclick = ()=> (tab==="gen" && isNew) ? saveGen() : saveOne();
+        if (okBtn) okBtn.onclick = saveOne;
         const tplBtn = fq("#tOk");
-        if (tplBtn) tplBtn.onclick = saveTpl;
+        if (tplBtn) tplBtn.onclick = openTplPreview;
       }
 
       draw();
@@ -1714,7 +1716,7 @@ function openBellEditor(bell){
   });
 }
 
-/* ══ 从模板添加：解析 ════════════════════════════════════════════════
+/* ══ 从模板生成：解析 ════════════════════════════════════════════════
    模板是拿去给 AI 生成的纯文本，一行一条铃声、四列：
 
        时间,名称,周期,音源
@@ -1809,29 +1811,34 @@ function bellTemplatePrompt(){
   ].join("\n");
 }
 
-/* 按节次生成出来的一行预览 → 一条铃声 */
-function genRow(sec, name, media){
+/* 按节次生成出来的一行预览 → 一条铃声。vol 是这条铃声自己的音量（生成本来就
+   分上课 / 下课两份，见 genHTML 音源那块）。 */
+function genRow(sec, name, media, vol){
   const md = media ? mediaByName(media) : null;
   const mn = media ? [md?md.name:media] : [];
   return {on:true, time:secToHMS(Math.max(0,sec)), name:name,
-          mediaNames:mn, life: lifeTimeOf(mn), model:0, label: mediaLabel({media:mn, groups:[]})};
+          mediaNames:mn, life: lifeTimeOf(mn), model:0, vol:vol,
+          label: mediaLabel({media:mn, groups:[]})};
 }
 /* ══ group (list) create / edit ═════════════════════════════════════ */
 /* 日期格：长得像输入框，但只能点 —— 点开的是面板自绘的日历（考试日期用的是
    同一套 openDatePicker）。原生 <input type="date"> 在 Safari / iPad 上带着
    自己那一套控件样式，和旁边的框对不齐，尺寸也不归页面管。 */
 function dateFieldHTML(id, value){
+  /* 右边是**日历图标**，不是「▾」（用户定的）：这格点开的是日历。 */
   return '<button type="button" class="select-btn" id="'+id+'" data-date="'+esc(value)+'">'+
     '<span class="v mono">'+esc(value)+'</span>'+
-    '<span class="chev">'+ICON.chevD+'</span></button>';
+    '<span class="chev">'+ICON.cal+'</span></button>';
 }
-function bindDateField(el, id){
+/* onChange 可选：定时任务那边选完日期还要顺手决定「指定日期」那组要不要跟着换。 */
+function bindDateField(el, id, onChange){
   const btn = el.querySelector("#"+id); if (!btn) return;
   btn.onclick = ()=>{
     openDatePicker(btn, btn.dataset.date || todayISO(), day=>{
       btn.dataset.date = day;
       const v = btn.querySelector(".v");
       if (v) v.textContent = day;
+      if (onChange) onChange(day);
     });
   };
 }
@@ -1850,7 +1857,7 @@ function openNewGroup(){
               '</div>';
       bindDateField(b, "ngStart");
       bindDateField(b, "ngEnd");
-      f.innerHTML = '<span class="spacer"></span><button class="btn" id="ngC">取消</button><button class="btn btn-primary" id="ngOk">创建</button>';
+      f.innerHTML = '<span class="spacer"></span><button class="btn" id="ngC">取消</button><button class="btn btn-primary" id="ngOk">添加</button>';
       $("#ngC").onclick = ()=> closeModal(mm.id);
       $("#ngOk").onclick = ()=>{
         const name = $("#ngName").value.trim();
@@ -1873,7 +1880,7 @@ function openNewGroup(){
 function deleteGroup(g){
   if (!g || !g.id) return;
   openConfirm("删除任务「"+(g.name||"")+"」",
-    "服务器上会删掉这个任务和它里面的 "+S.bells.length+" 条铃声，不可撤销。",
+    "删除此任务及 "+S.bells.length+" 个铃声，此操作不可撤销。",
     async ()=>{
       const n = await queueClearList(g.id, g.name);
       queueOp({
@@ -1903,11 +1910,10 @@ function openEditGroup(){
           '<div class="field"><label>结束日期</label>'+dateFieldHTML("egEnd", end0)+'</div>'+
         '</div>'+
         '<label class="chk"><input type="checkbox" id="egYear"'+(Number(g.is_year_repeat)?" checked":"")+'> 按年重复</label>'+
-        '<label class="chk"><input type="checkbox" id="egOn"'+(isListEnabled(g)?" checked":"")+'> 启用该任务</label>'+
       '</div>';
       bindDateField(b, "egStart");
       bindDateField(b, "egEnd");
-      f.innerHTML = '<span class="spacer"></span><button class="btn" id="egC">取消</button><button class="btn btn-primary" id="egOk">保存</button>';
+      f.innerHTML = '<span class="spacer"></span><button class="btn" id="egC">取消</button><button class="btn btn-primary" id="egOk">确定</button>';
       $("#egC").onclick = ()=> closeModal(mm.id);
       $("#egOk").onclick = async ()=>{
         const btn=$("#egOk"); btn.disabled=true; btn.textContent="保存中…";
@@ -1915,9 +1921,10 @@ function openEditGroup(){
           await api("PUT","/timing-bells-groups/"+S.groupId,{body:{
             name:$("#egName").value.trim(), is_year_repeat: $("#egYear").checked?1:0,
             start_date:$("#egStart").dataset.date, end_date:$("#egEnd").dataset.date,
-            is_done: $("#egOn").checked?1:0 }});
+            /* 启停不在这张框里改：原样回传服务器上这条现在的状态。 */
+            is_done: isListEnabled(g)?1:0 }});
           closeModal(mm.id); await loadAll(); toast("已保存","ok");
-        }catch(e){ btn.disabled=false; btn.textContent="保存"; toast(e.message,"err"); }
+        }catch(e){ btn.disabled=false; btn.textContent="确定"; toast(e.message,"err"); }
       };
     }});
 }
@@ -1953,7 +1960,7 @@ function openMediaBulk(list){
          「播放模式」是同一件事，那两处现在各占半行、把整行分掉，这里只有它一格，
          就自己把整行占了；钉着 220px 会显得是另一套排法。 */
       html:'<div class="field"><label>播放模式</label>'+
-        '<select class="select" id="mbMode"><option value="0">列表播放</option><option value="1">循环播放</option></select></div>',
+        '<select class="select" id="mbMode"><option value="0">列表播放</option><option value="1">循环播放</option><option value="2">随机播放</option></select></div>',
       mount(box){
         const s = box.querySelector("#mbMode"); if (!s) return;
         s.value = String(mode);
@@ -1981,7 +1988,7 @@ function openTimeBulk(list){
         shiftFieldHTML("tb")+
       '</div>';
       f.innerHTML = '<span class="spacer"></span><button class="btn" id="tbC">取消</button>'+
-        '<button class="btn btn-primary" id="tbOk">应用</button>';
+        '<button class="btn btn-primary" id="tbOk">确定</button>';
       $("#tbC").onclick = ()=> closeModal(mm.id);
       $("#tbOk").onclick = ()=>{
         const sid = $("#tbS").value ? Number($("#tbS").value) : null;

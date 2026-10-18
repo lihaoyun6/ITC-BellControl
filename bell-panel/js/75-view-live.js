@@ -529,6 +529,9 @@ async function liveHangup(){
   /* **不管挂断成没成都把麦克风关掉。** 代理那边没应，人这边照样得退出对讲 ——
      麦克风是浏览器的，我们能关；服务器上那条任务留着最多是一路静音。 */
   liveMicStop();
+  /* 挂断后把号码抹掉（用户定的）：这通已经结束，框里不该还留着它；
+     切页和切换「拨号／直接呼叫」都不清，只有挂断（和手动清空）才清。 */
+  st.num = "";
   st.busy = false; renderMain();
 }
 
@@ -625,11 +628,30 @@ function liveActsHTML(st, tgt){
       ICON.phone+(calling?"呼叫中":"呼叫")+'</button>';
 }
 
+/* ══ 开着代理时这两页的替身 ═════════════════════════════════════════
+   代理只走 TCP，对讲和在线播放的音频是 UDP，开了代理就送不到终端。
+   App 里只要代理生效，这两页就只显示这句说明（用户定的文案）。 */
+function renderProxyBlocked(el, title){
+  el.classList.add("headfix");
+  el.innerHTML =
+    '<div class="sec-head">'+
+      '<div class="title-row"><h2 class="serif">'+title+'</h2></div>'+
+    '</div>'+
+    '<div class="page-body">'+
+      '<div class="panel"><div class="panel-body">'+
+        '<div class="hint" style="padding:18px 4px;font-size:14px;text-align:center">'+
+          '正在通过代理连接服务器, 暂时无法使用此功能'+
+        '</div>'+
+      '</div></div>'+
+    '</div>';
+}
+
 /* ══ 页面 ═══════════════════════════════════════════════════════════
    和「全局设置」「更多功能」同一套骨架（.headfix + .sec-head + .page-body）：
    标题那行钉住，下面那张面板自己滚。键盘那一坨用现成的 .panel，不新写卡片样式。 */
 function renderLive(){
   const el = $("#main"); if (!el) return;
+  if (proxyBlocksMedia()){ renderProxyBlocked(el, "实时对讲"); return; }
   const st  = liveState();
   const tgt = liveTarget();
   el.classList.add("headfix");
@@ -760,7 +782,7 @@ function liveDialHTML(st, tgt){
   return ''+
     '<div class="dial-target-row">'+liveTargetHTML(st)+'</div>'+
     '<div class="dial-num">'+
-      '<span class="dial-code'+(st.num?"":" ph")+'">'+esc(st.num || "输入呼叫编码")+'</span>'+
+      '<span class="dial-code">'+esc(st.num)+'</span>'+
     '</div>'+
     /* 号码框和键盘之间**不放任何一行字**（用户定的，强调了两次）—— 状态那行在
        话筒底下（liveTipHTML），不在这一块里。 */
@@ -831,7 +853,7 @@ function livePickItemsHTML(st){
   if (st.aTab === "group"){
     const counts = {}, ons = {};
     S.data.terminals.forEach(t=>{
-      const hot = statusOf(t.name)==="online";
+      const hot = statusOf(t.name)==="online" || statusOf(t.name)==="busy";
       (t.with_groups||[]).forEach(w=>{
         counts[w.terminals_groups_id] = (counts[w.terminals_groups_id]||0)+1;
         if (hot) ons[w.terminals_groups_id] = (ons[w.terminals_groups_id]||0)+1;
@@ -982,9 +1004,6 @@ function liveBind(st){
   $$("#liveTabs button", el).forEach(b => b.onclick = ()=>{
     if (st.tab === b.dataset.t) return;
     st.tab = b.dataset.t; st.err = "";
-    /* 每次进拨号页都从空号开始（用户定的）：上一次拨的号不留在框里，
-       免得下一通误拨到上一台。 */
-    if (st.tab === "dial") st.num = "";
     renderMain();
   });
   /* 数字键：一律往号码尾巴上接一位。**按 `[data-k]` 认，不按类名排** ——
@@ -1809,6 +1828,7 @@ function playClock(s){
    管着（竖屏那一档是 90px）。 */
 function renderPlayback(){
   const el = $("#main"); if (!el) return;
+  if (proxyBlocksMedia()){ renderProxyBlocked(el, "在线播放"); return; }
   const st = playState();
   el.classList.add("headfix");
   el.innerHTML =

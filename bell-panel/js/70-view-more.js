@@ -306,7 +306,7 @@ function openMoreResultModal(){
   const st = moreState();
   if (!st.hits.length) return;
   openModal({
-    title:"查询结果", sub: moreCountText(st)+" · "+moreAskedText(st), width:"1040px",
+    title:"查询结果", sub: moreCountText(st)+" · "+moreAskedText(st), width:"1040px", tall:true,
     mount(body, foot, mm){
       /* 正文交出剩余高度（.modal-body.grow-body 那两条 CSS），让表自己去滚：
          题头才钉得住，而且滚到底也一直看得见「查询结果 / 共 N 条」这一行。 */
@@ -395,7 +395,7 @@ function renderMore(){
           '<div class="field"><label>查询日期</label>'+
             '<button type="button" class="select-btn" id="moreDate" title="点开日历，选一天">'+
               '<span class="v mono">'+esc(st.date)+'</span>'+
-              '<span class="chev">'+ICON.chevD+'</span></button></div>'+
+              '<span class="chev">'+ICON.cal+'</span></button></div>'+
           '<div class="field"><label>终端 / 分组</label>'+
             '<button type="button" class="select-btn" id="moreArea" title="选点位或分组，可多选">'+
               '<span class="v'+(chosen?"":" ph")+'">'+esc(moreAreaText(st.area))+'</span>'+

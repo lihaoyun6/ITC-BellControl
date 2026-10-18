@@ -123,7 +123,7 @@ async function reloadTerminals(){
    报文里也只有 EndpointName），不清掉的话，顶栏那格读数会把一台已经不存在的
    设备一直算在里头。 */
 async function afterDeviceWrite(forget){
-  (forget||[]).forEach(n=>{ if (n) delete S.termStat[n]; });
+  (forget||[]).forEach(n=>{ if (n){ delete S.termStat[n]; delete S.termTask[n]; } });
   await reloadTerminals();
 }
 
@@ -143,7 +143,7 @@ function openDeviceEditor(id){
     mount(body, foot, mm){
       body.innerHTML = '<div class="hint" style="padding:20px 4px">正在读取设备信息…</div>';
       foot.innerHTML = '<span class="spacer"></span><button class="btn" data-cancel>取消</button>'+
-                       '<button class="btn btn-primary" data-save disabled>保存</button>';
+                       '<button class="btn btn-primary" data-save disabled>确定</button>';
       foot.querySelector("[data-cancel]").onclick = ()=> closeModal(mm.id);
       const save = foot.querySelector("[data-save]");
       let rec = null;                       /* 服务器上这条现在长什么样，保存时整条回传 */
@@ -197,7 +197,7 @@ function openDeviceAdd(){
     mount(body, foot, mm){
       body.innerHTML = deviceFormHTML({default_volume:45, broadcast_volume:60, phone_volume:60});
       foot.innerHTML = '<span class="spacer"></span><button class="btn" data-cancel>取消</button>'+
-                       '<button class="btn btn-primary" data-ok>确认添加</button>';
+                       '<button class="btn btn-primary" data-ok>添加</button>';
       foot.querySelector("[data-cancel]").onclick = ()=> closeModal(mm.id);
       const okBtn = foot.querySelector("[data-ok]");
 

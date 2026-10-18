@@ -72,7 +72,7 @@ function doLogout(){
   S.listArea = {t:[],g:[]};
   S.pending = [];
   S.sel.clear(); S.tsel.clear();
-  S.tasks = []; S.termStat = {}; S.wsIp = null; S.link = "off";
+  S.tasks = []; S.termStat = {}; S.termTask = {}; S.sessions = []; S.wsIp = null; S.link = "off";
   S.exam = null;
   renderAll();
   toast("已退出登录", "ok");
@@ -215,14 +215,20 @@ async function loadAll(){
   S.data.mediaGroups = unwrap(mgs).filter(legacyMediaHide);
   S.data.strategies  = unwrap(strategies);
 
-  /* 考试模式那一份不存，照服务器上真实摆着的铃声读回来（见 40-view-exam.js） */
+  /* 考试模式：服务器上有正在进行的配置就照它重排并覆盖本机那份；没有就留住本机那份
+     （见 40-view-exam.js 的 readExamState / saveExamLocal） */
   S.exam = await readExamState();
   loadTasks();                       /* 定时任务是独立资源，不阻塞主流程 */
   const def = S.user && S.user.users_config && S.user.users_config.default_ringing_scheme;
-  const want = DEFAULT_GROUP || def;
   /* 只在「铃声计划」看得见的列表里挑。选到一个被考试模式藏起来的临时列表，
      用户会看到一张空白的详情页，还不知道自己是怎么走到那儿的。 */
   const vis = S.data.groups.filter(g=> !isExamHiddenList(g));
+  /* 正看着的那张列表还在，就留在它上面 —— 刷新、改完任务名走完这一趟都不该把人
+     换到另一张列表上（用户实测：在新建的任务详情里改名，一保存视图就跳回上一条）。
+     DEFAULT_GROUP 是页面load 那一刻存下的旧值，只该在还没有当前列表时（开机 /
+     刚登录）拿来恢复上次那张。 */
+  const cur = Number(S.groupId);
+  const want = (cur && vis.some(g=>Number(g.id)===cur)) ? cur : (DEFAULT_GROUP || def);
   const ok = vis.some(g=>Number(g.id)===Number(want));
   if (ok) await selectGroup(Number(want));
   else if (vis.length) await selectGroup(Number(vis[0].id));

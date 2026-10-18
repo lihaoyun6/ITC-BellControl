@@ -302,7 +302,7 @@ function openGrpEdit(){
                 'aria-label="删除分组" style="flex:none">'+ICON.del+'</button>'+
             '</div>').join("")
           : '<div class="hint">还没有分组。</div>')+
-          '<div style="display:flex;gap:8px;align-items:center">'+
+          '<div style="display:flex;gap:8px;align-items:stretch">'+
             '<input class="input" id="grpNew" placeholder="分组1" style="flex:1;min-width:0">'+
             '<button class="btn btn-sm" id="grpAdd" style="flex:none">'+ICON.plus+' 添加</button>'+
           '</div>'+
@@ -352,7 +352,7 @@ function openGrpEdit(){
       }
 
       draw();
-      foot.innerHTML = '<span class="spacer"></span><button class="btn" id="geDone">完成</button>';
+      foot.innerHTML = '<span class="spacer"></span><button class="btn btn-primary" id="geDone">确定</button>';
       foot.querySelector("#geDone").onclick = ()=> closeModal(mm.id);
     }
   });
@@ -372,7 +372,7 @@ function openGrpDetail(gname){
   const here = ()=> grpNames().indexOf(gname) >= 0;
 
   openModal({
-    title: gname, width:"540px",
+    title: gname, width:"540px", tall:true,
     mount(body, foot, mm){
       let q = "";                             /* 搜索词，只活在这个弹窗里 */
       /* 一条铃声在这份勾选里叫什么。有 id 用 id，没有（新加的、还没上服务器）
@@ -401,6 +401,7 @@ function openGrpDetail(gname){
         }
       };
 
+      body.classList.add("grow-body");
       const draw = ()=>{
         /* 分组被删掉了（在别的地方删的）就自己关上，别留一张空壳 */
         if (!here()){ closeModal(mm.id); return; }
@@ -412,7 +413,7 @@ function openGrpDetail(gname){
             '<span class="acts"><span class="sbox sbox-sm" style="flex:none;width:150px">'+ICON.search+
               '<input class="input" id="gdQ" placeholder="搜索名称/时间" value="'+esc(q)+'"></span></span>'+
           '</div>'+
-          '<div id="gdList" style="max-height:44vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r-sm)">'+
+          '<div id="gdList" style="flex:1 1 auto;min-height:0;overflow:auto;border:1px solid var(--border);border-radius:var(--r-sm)">'+
             (rows.length ? rows.map(b=>{
               const k = key(b);
               return '<label class="gd-row">'+
@@ -470,7 +471,7 @@ function openGrpDetail(gname){
           '<span class="dimmer">启用组内所有铃声</span>'+
         '</label>'+
         '<span class="spacer"></span>'+
-        '<button class="btn" id="gdDone">完成</button>';
+        '<button class="btn btn-primary" id="gdDone">确定</button>';
       sw = foot.querySelector("#gdSw");
       sync();                                 /* 开开关的初值：勾着的都开着才亮 */
 
@@ -543,7 +544,7 @@ function openGrpNew(bells){
       inp.onkeydown = e => { if (e.key === "Enter") go(); };
       foot.innerHTML = '<span class="spacer"></span>'+
         '<button class="btn" id="gnCancel">取消</button>'+
-        '<button class="btn btn-primary" id="gnOk">建好并放入</button>';
+        '<button class="btn btn-primary" id="gnOk">添加</button>';
       foot.querySelector("#gnCancel").onclick = ()=> closeModal(mm.id);
       foot.querySelector("#gnOk").onclick = go;
     }

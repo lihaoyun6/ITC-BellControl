@@ -6,7 +6,7 @@
    就这一个手写的常量，**发版时改它** —— 这项目没有构建步骤，浏览器也读不到 .git，
    没有别的地方能自动拿到版本号。设置页尾部「版本信息」那张表显示的就是它。
    （厂商那套的版本号不在这儿：那是服务器报上来的，见 S.srvVersion。） */
-const PANEL_VERSION = "1.0.2";
+const PANEL_VERSION = "1.0.3";
 
 
 /* ══ utils ══════════════════════════════════════════════════════════ */
@@ -27,6 +27,9 @@ const uniq = a => Array.from(new Set(a));
    判据只在**点下去的那一下**看一眼，不挂 resize / matchMedia 监听 ——
    窗口在结果页上被拉宽了，靠下一次重画收场（各页自己那一句）。 */
 const isNarrow = ()=> window.matchMedia("(max-width:980px)").matches;
+/* 竖屏 = 窄屏且竖着拿。css 里那几条手机专用的规则用的就是这个判据；
+   少数控件只在竖屏换形状（单条添加 / 按节次生成的时间格，见 timePickHTML）。 */
+const isPortraitNarrow = ()=> window.matchMedia("(max-width:980px) and (orientation:portrait)").matches;
 
 /* ══ 禁掉页面缩放 ═══════════════════════════════════════════════════
    两件事都会把版面推出屏幕（用户定的：全局关掉）：
@@ -50,6 +53,36 @@ const LS = {
   set(k,v){ try{ localStorage.setItem("bc."+k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem("bc."+k); }catch(e){} }
 };
+
+/* ══ 是不是装在 iOS App 里 ═══════════════════════════════════════════
+   App 在 document start 注入 __ITC_NATIVE_AGENT（内置播放代理的垫片）。
+   浏览器里没有这个变量：App 专属的界面（登录页那枚代理齿轮、设置页的
+   代理面板）只在 App 里渲染，网页版一切照旧。 */
+const IS_APP = !!window.__ITC_NATIVE_AGENT;
+/* App 里给 <html> 挂个记号，css 用得到：触屏浏览器要把输入框字号钉到 16px
+   才不会一点就触发页面缩放，App 的 WKWebView 不管这件事。 */
+if (IS_APP) document.documentElement.classList.add("in-app");
+
+/* App 的代理设置是**原生弹窗**：网页只负责按一下，原生弹窗自己读写
+   UserDefaults 并重建 WebView。当前状态由 App 在每次建页面时注入到
+   __ITC_PROXY；改完设置整页重载，这个值自然跟着更新。 */
+function openNativeProxySettings(){
+  const h = window.webkit && window.webkit.messageHandlers;
+  if (h && h.itcProxyOpen) h.itcProxyOpen.postMessage(1);
+}
+function proxyStatusText(){
+  const p = window.__ITC_PROXY;
+  if (!p || !p.available) return "当前系统版本不支持代理设置（需要 iOS 17 及以上）。";
+  if (!p.host) return "尚未设置代理服务器。";
+  const kind = p.type === "http" ? "HTTP" : "SOCKS5";
+  return (p.enabled ? "已启用" : "未启用") + " · " + kind + " · " + p.host + ":" + p.port;
+}
+/* App 里开着代理时，对讲和在线播放的音频走 UDP，代理带不了 —— 这两页直接换成
+   一句说明，别让人按了「呼叫」才失败。网页版没有 __ITC_PROXY，永远为假。 */
+function proxyBlocksMedia(){
+  const p = window.__ITC_PROXY;
+  return IS_APP && !!(p && p.available && p.enabled);
+}
 const secToHMS = s => pad(Math.floor(s/3600))+":"+pad(Math.floor(s%3600/60))+":"+pad(Math.floor(s%60));
 const hmsToSec = t => { const p=String(t||"0:0:0").split(":").map(Number); return (p[0]||0)*3600+(p[1]||0)*60+(p[2]||0); };
 /* 秒数折回一天之内。JS 的 % 对负数给负余数（-3600 % 86400 === -3600），
@@ -165,9 +198,11 @@ function quickTimeHTML(attrs, value, ph){
   return '<span class="tfield">'+
     '<input class="input mono t-in" '+attrs+' type="text" inputmode="numeric" autocomplete="off"'+
       ' spellcheck="false" maxlength="8" placeholder="'+esc(ph||"08:00")+'"'+
-      ' title="直接敲数字：930 = 09:30，1130 = 11:30；也可以点右边的 ▾ 按时/分/秒选"'+
+      ' title="直接敲数字：930 = 09:30，1130 = 11:30；也可以点右边的时钟图标按时/分/秒选"'+
       ' value="'+esc(hms(v))+'">'+
-    '<button type="button" class="t-drop" tabindex="-1" aria-label="按时/分/秒选">'+ICON.chevD+'</button>'+
+    /* 右边的按钮用**时钟图标**，不是「▾」（用户定的）：它开的是时间转轮，
+       不是下拉列表；横屏和竖屏看起来也该是同一套。 */
+    '<button type="button" class="t-drop" tabindex="-1" aria-label="按时/分/秒选">'+ICON.clock+'</button>'+
   '</span>';
 }
 /* opt.emptyOK：留空是有含义的（考试模式的「结束铃」不填就是不写结束铃），
@@ -203,6 +238,43 @@ function wireQuickTime(el, opt){
   }
 }
 
+/* ══ 点开转轮的时间格（考试模式那种）═══════════════════════════════
+   考试模式的编辑弹窗里，开考 / 结束两格不是输入框：一枚 .select-btn，点开直接
+   是时/分/秒转轮，值只从转轮里来。竖屏上打字本来就难受，转轮又正好是一块模态，
+   所以单条添加 / 按节次生成里的时间格也跟着用这一套（宽屏仍用可打字的框）。
+   值挂在 data-time 上 —— <button> 没有 .value，读取处统一走 timeFieldVal()。 */
+function timePickHTML(id, value, title){
+  const v = hms(value);
+  return '<button type="button" class="select-btn" id="'+id+'" data-time="'+esc(v)+'"'+
+    ' title="'+esc(title||"点开按时/分/秒选")+'">'+
+    '<span class="v mono">'+esc(v)+'</span>'+
+    '<span class="chev">'+ICON.clock+'</span></button>';
+}
+function setTimePick(el, value){
+  const v = hms(value);
+  el.dataset.time = v;
+  const box = el.querySelector(".v");
+  if (box) box.textContent = v;
+}
+/* onChange 是给调用方留的口子：切页签会重画表单，值得记在自己的状态对象上，
+   不能只留在按钮的 dataset 里。 */
+function wireTimePick(el, onChange){
+  if (!el) return;
+  const box = { value: el.dataset.time || "00:00:00" };
+  el.onclick = ()=> openTimePicker(el, box, ()=>{
+    const v = parseQuickTime(box.value);
+    if (v === null) return;
+    setTimePick(el, v);
+    if (onChange) onChange(v);
+  });
+}
+/* 同一个读取口，两种形状：宽屏是可打字的 <input>（.value），竖屏是按钮（data-time）。 */
+function timeFieldVal(id){
+  const el = document.getElementById(id);
+  if (!el) return "";
+  return el.dataset.time != null ? el.dataset.time : el.value;
+}
+
 /* ══ 时 / 分 / 秒 转轮 ═══════════════════════════════════════════════
    三列数字，每列是一个**观察窗**：六格高，前后各垫 2.5 格，所以任何一格都能停在
    正中间；停在正中的那一格就是当前值，也只有它高亮。
@@ -231,6 +303,9 @@ function tpColumn(u, cur, max){
 function closeTimePicker(){
   if (!TP) return;
   const t = TP; TP = null;
+  /* 面板里已经没有「完成」按钮了，收起就是提交：先把那 140ms 的滚动结算补跑
+     一遍（commit 自己会判重，值和上次一样就不写），再拆面板。 */
+  if (t.commit) t.commit();
   t.host.remove();
   if (t.scrim) t.scrim.remove();
   document.removeEventListener("keydown", t.onKey, true);
@@ -245,8 +320,10 @@ function openTimePicker(anchor, el, fix){
   host.className = "tp";
   host.innerHTML =
     '<div class="tp-head"><span>时</span><span>分</span><span>秒</span></div>'+
-    '<div class="tp-cols">'+ tpColumn("h",c[0],23) + tpColumn("m",c[1],59) + tpColumn("s",c[2],59) +'</div>'+
-    '<div class="tp-foot"><button type="button" class="btn btn-sm" data-tp-done>完成</button></div>';
+    /* .tp-sel 是横跨三列的选中横条：叠在三列底下、面板底色之上，由 css 定位到
+       正中那一格的位置。选中格自己不再画底色（见 .tp-cell.on）。 */
+    '<div class="tp-cols">'+ tpColumn("h",c[0],23) + tpColumn("m",c[1],59) + tpColumn("s",c[2],59) +
+      '<div class="tp-sel"></div></div>';
   /* 遮罩：宽屏上 display:none，纯粹是给 ≤980px 那份「当作模态」用的 */
   const scrim = document.createElement("div");
   scrim.className = "tp-scrim";
@@ -309,13 +386,14 @@ function openTimePicker(anchor, el, fix){
   const onOut    = e=>{ if (TP && !TP.host.contains(e.target) && !TP.anchor.contains(e.target)) closeTimePicker(); };
   /* 页面一动就跟锚点错位了，直接收掉，不追 */
   const onScroll = e=>{ if (TP && !TP.host.contains(e.target)) closeTimePicker(); };
-  TP = { host, scrim, anchor, onKey, onOut, onScroll };
+  TP = { host, scrim, anchor, onKey, onOut, onScroll, commit };
   document.addEventListener("keydown", onKey, true);
   window.addEventListener("pointerdown", onOut, true);   /* pointerdown 早于 click：先收起来，那一下照样落到它该落的地方 */
   window.addEventListener("scroll", onScroll, true);
 
   host.addEventListener("click", e=>{
-    if (e.target.closest("[data-tp-done]")){ clearTimeout(settle); commit(); closeTimePicker(); return; }
+    /* 竖屏上点某一格不再把它转到正中（用户定的）—— 转轮只靠拖动 / 滚。 */
+    if (isNarrow()) return;
     const b = e.target.closest(".tp-cell");
     if (!b) return;
     const col = b.closest(".tp-col");
@@ -412,10 +490,12 @@ const S = {
   tasks  : [],                 // 定时任务（不属于任何铃声列表）
   wsIp   : null,               // 状态推送的 WebSocket 地址（/language 返回）
   link   : "off",              // 状态推送连接：off | busy | ok | bad
-  termStat: {},                // 点位名 → "online" | "offline"（见 15-status.js）
+  termStat: {},                // 点位名 → "online" | "busy" | "offline"（见 15-status.js）
+  termTask: {},                // 点位名 → 忙碌时那台终端所在任务的 {TaskID, EndpointID}
+  sessions: [],                // 正在进行的任务/会话（WS 的 c2ls_get_task_status，见 15-status.js）
   srvSkew: Number(LS.get("srvSkew", 0)) || 0,       // 本机钟 → 服务器钟 的差值（毫秒，见 noteSrvClock）
   settingsOpen: false,
-  exam   : null,               // 考试模式（readExamState() 在 loadAll() 里从服务器读回来）
+  exam   : LS.get("exam", null), // 考试模式：本机留一份；服务器正在考试时由 readExamState() 覆盖
   /* dt = 各种「对话框开到一半」的临时状态。medQ/medG/medSel 曾经也在这儿，
      是旧那套批量改音源选择器的 —— 换成 openMediaPicker 之后它自己管自己的
      st，全局这份没人问了，删掉。 */
@@ -498,6 +578,8 @@ const ICON = {
   x   : svgIcon('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
   /* plus */
   plus: svgIcon('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+  /* minus —— 竖屏考试概览的「没有听力音频」状态点 */
+  minus: svgIcon('<path d="M5 12h14"/>'),
   /* search —— 搜索框里那个放大镜。它贴在框子**里面**、文字前头（排版见 css 的
      .sbox），不是一枚按钮，所以只做记号、不接点击。 */
   search: svgIcon('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
@@ -511,6 +593,8 @@ const ICON = {
   chevD: svgIcon('<path d="m6 9 6 6 6-6"/>'),
   /* clock —— 时间列下面那行「服务器上真正存着的时刻」用它当标记 */
   clock: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+  /* calendar —— 考试弹窗里日期那一格的下拉记号（点开是日历，不是下拉列表） */
+  cal  : svgIcon('<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>'),
   /* monitor —— 顶栏「终端 xx/xx」前面那个标记（原来是个绿点，换成显示器） */
   monitor: svgIcon('<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>'),
   /* info —— 定时任务表「详情」那一栏的圈 i：点开看任务信息与执行区域。
@@ -561,6 +645,10 @@ const ICON = {
      暂停是「先掐住、待会儿接着说」，停止是「这一条到此为止、从头再来」
      （停止之后进度条回零，见 75-view-live.js 的 playStop）。 */
   stop : svgIcon('<rect x="4" y="4" width="16" height="16" rx="2"/>'),
+  /* circle-stop —— 终端管理里那枚「停止播放」：圈里一个方块。和上面那枚纯方块
+     分得开：纯方块是在线播放自己的停止键，说的是「这一条播到头了」；终端管理
+     这枚是「把这一台从它当前的任务里摘出来」。 */
+  stopC: svgIcon('<circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/>'),
   /* volume —— 在线播放那根音量滑杆前头的记号（喇叭 + 两道声波）。它旁边那一行字
      写的才是这一页的关键：这个音量管的是**终端听见的那一份**，不是这台电脑。 */
   volume: svgIcon('<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'),
@@ -568,7 +656,7 @@ const ICON = {
      它只在这一处用，所以没跟上面那两枚页签记号摆在一起说。 */
   bksp : svgIcon('<path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2"/><path d="m18 9-6 6"/><path d="m12 9 6 6"/>'),
   /* 下面三枚是铃声「播放模式」的记号（厂商字段 play_model：0 列表 / 1 循环 /
-     2 采播），挂在铃声表「播放时长」那一列的时长前头。三个字一列排下来每行都
+     2 随机，随机那枚和在线播放共用下面的 shuffle），挂在铃声表「播放时长」那一列的时长前头。三个字一列排下来每行都
      要重读一遍，一枚记号扫过去就认得了 —— 字没丢，挪进 title。
      列表是一张单子逐条走，循环是那两支绕着转的箭头，采播是往外发的波。 */
   list : svgIcon('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>'),
@@ -692,6 +780,24 @@ function toast(msg, kind){
   while (box.children.length > TOAST_MAX) box.removeChild(box.firstElementChild);
   setTimeout(()=>{ el.style.transition="opacity .25s"; el.style.opacity="0"; setTimeout(()=>el.remove(),260); }, kind==="err"?6200:3200);
 }
+/* 顶栏下面那颗气泡（`.busy-tip`，原本只在写入服务器慢了才露头）。成功的提示
+   不走 toast（原因见上），「已复制到剪贴板」这类话借这颗气泡说一句就走。
+   说完把原文案换回去；要是这时真有写入在跑（body.busy），气泡留给它。 */
+let topTipT = null;
+function topTip(msg, ms){
+  const el = document.querySelector(".busy-tip"); if (!el) return;
+  if (!el.dataset.orig) el.dataset.orig = el.textContent;
+  el.textContent = msg;
+  document.body.classList.add("tip-show");
+  clearTimeout(topTipT);
+  topTipT = setTimeout(()=>{
+    /* 先让气泡带着这句话淡出，淡完再把文案悄悄换回去 ——
+       同一帧换的话，那 0.18 秒的淡出会露出「正在写入服务器…」。
+       真要写入时 busy 那套自己会把气泡撑住，和这个类互不打扰。 */
+    document.body.classList.remove("tip-show");
+    setTimeout(()=>{ if (!document.body.classList.contains("tip-show")) el.textContent = el.dataset.orig; }, 220);
+  }, ms || 1800);
+}
 /* 把一段文字塞进剪贴板。
    两条路，好的那条先试 —— 因为面板既可能跑在 http 上，也可能被部署到 https 上，
    同一条路没法两头都通：
@@ -701,9 +807,11 @@ function toast(msg, kind){
      2. 「选中 + execCommand」：早被打上废弃标记，可它在 http 下是唯一能用的那条。
 
    两条路各自的坑写在下面各自那一段里。 */
-function copyText(text, okMsg){
+function copyText(text, okMsg, okFn){
   const str = String(text==null?"":text);
-  const done = ok => toast(ok ? (okMsg||"已复制") : "复制失败 —— 请手动选中文字再复制", ok?"ok":"err");
+  /* okFn：成功时改走别的提示（「复制 AI 提示词」用的是顶栏气泡，不走 toast）。 */
+  const done = ok => ok && okFn ? okFn()
+    : toast(ok ? (okMsg||"已复制") : "复制失败 —— 请手动选中文字再复制", ok?"ok":"err");
 
   /* 老办法：选中 + execCommand。用一个飘在屏幕外的 textarea 装文字，它可选中、
      又不会被看见，也没有 contenteditable 那套「复制时把格式也带走」的毛病。 */
@@ -1139,7 +1247,7 @@ function createPrepFor(bell){
     sound: {life_time: lifeTimeOf([PREP_MEDIA]), play_model: Number(bell.mode)||0},
     mediaNames:[PREP_MEDIA], mediaGroupNames:[],
     termNames: bell.termNames.slice(), groupNames: bell.groupNames.slice(),
-    time, times:[time], inheritArea: bell.inheritArea
+    time, times:[time]
   };
   S.bells.push(nb);
   S.bells.sort((x,y)=> hmsToSec(x.time)-hmsToSec(y.time));
