@@ -174,16 +174,27 @@ async function runOp(o){
 /* 一批改动做完：重拉受影响的数据，再把这批记录里报过错的清掉。
    一次批量改区域可能落几十条报文，不能每条都重拉一遍 —— 攒在一个 tick 里做一次。 */
 let settleTimer = null;
-function scheduleSettle(){
+/* sendNow 的挡板凭据先寄存在这儿，交给紧随其后的那趟 settle 一起交还。
+   报文落定到 settle 真正开跑之间隔着这 260ms 的合并窗口；在这里就先 busyOff
+   的话，计数会归零、挡板摘掉，下一秒 settle 又 busyOn 挂回去 —— 服务器稍慢
+   一点，那句「正在写入服务器…」就会闪两回（发报文一回、重拉一回）。 */
+let settleTickets = [];
+function scheduleSettle(ticket){
+  if (ticket) settleTickets.push(ticket);
   if (settleTimer) return;
   settleTimer = setTimeout(()=>{ settleTimer = null; settle(true); }, 260);
+}
+function releaseSettleTickets(){
+  if (!settleTickets.length) return;
+  const ts = settleTickets; settleTickets = [];
+  ts.forEach(busyOff);
 }
 /* veil=true：这一趟是即时模式那条路跟过来的，重拉加重画的这一小段也把挡板算上
    （那几百毫秒里点东西会被紧接着的重画直接吃掉）。pushAll 传 false —— 草稿模式
    不动挡板，理由见上面那段。 */
 async function settle(veil){
   const done = S.pending.filter(o=>o.status==="ok" || o.status==="err");
-  if (!done.length) return;
+  if (!done.length){ if (veil) releaseSettleTickets(); return; }
   const busy = veil ? busyOn() : false;
   try{
     const ok  = done.filter(o=>o.status==="ok").length;
@@ -204,7 +215,10 @@ async function settle(veil){
       S.pending = S.pending.filter(o=> o.status!=="err");
       renderAll(); renderDrawer();
     }, bad?4000:1200);
-  } finally { busyOff(busy); }
+  } finally {
+    busyOff(busy);
+    if (veil) releaseSettleTickets();
+  }
 }
 
 /* 即时模式下的一条：进队列 → 立刻排队发出去（和前后那些严格串行）。 */
@@ -212,11 +226,12 @@ function sendNow(op){
   const busy = busyOn();
   sendChain = sendChain
     .then(()=> runOp(op))
-    .then(()=>{ scheduleSettle(); })
     .catch(()=>{})
-    /* 报文落定（成也好败也好）就交还这一条的凭据。上一批排了十几条的话，
-       计数要等最后一条走完才归零 —— 也就是「队列排空」那一下才松。 */
-    .then(()=>{ busyOff(busy); });
+    /* 报文落定（成也好败也好）后把凭据交给 settle，而不是就地交还：
+       重拉数据也是这一趟操作的一部分，两段要算在同一个挡板里（见 settleTickets）。
+       上一批排了十几条的话，计数要等最后一条走完、settle 也落定才归零 ——
+       也就是「队列排空」那一下才松。 */
+    .then(()=>{ scheduleSettle(busy); });
 }
 
 /* 草稿模式下的「提交到服务器」：把攒着的按顺序一次发完。 */

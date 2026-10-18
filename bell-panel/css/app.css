@@ -7,6 +7,11 @@
    状态色也各用系统的 good/crit/warn，绿色和红色取可读性够压字的深一档。 */
 :root{
   --bg:#F2F2F7; --surface:#FFFFFF; --surface-2:#F2F2F7; --surface-3:#E5E5EA;
+  /* 控件组标题栏的底与两级标题色、组内行的副标题色（用户定的 Klein 浅色）。
+     其余配色和深色模式照旧用 --surface-2 / --fg-2 / --fg-3，见下面 summer
+     和各暗色块里的回落。 */
+  --panel-head-bg:#E5E5E8;
+  --panel-title:#5a5a5c; --panel-sub:#818184; --row-sub:#929298;
   /* 长名单的**隔行底**（见下面「隔行换底」那几条）。是一层极浅的中性灰，
      比 --accent-soft（选中用的那档）还浅一头 —— 两个色各有各的活：
      这个只管「一行一行分开」，选中那档要在一堆交替底里跳出来。 */
@@ -41,6 +46,8 @@
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --bg:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E; --surface-3:#3A3A3C;
+    --panel-head-bg:var(--surface-2);
+    --panel-title:var(--fg-2); --panel-sub:var(--fg-3); --row-sub:var(--fg-3);
     --row-alt:#232325;
     --fg:#FFFFFF; --fg-2:rgba(235,235,245,.6); --fg-3:rgba(235,235,245,.35);
   --mic-idle:#8E8E93;
@@ -62,6 +69,8 @@
 }
 :root[data-theme="dark"]{
   --bg:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E; --surface-3:#3A3A3C;
+  --panel-head-bg:var(--surface-2);
+  --panel-title:var(--fg-2); --panel-sub:var(--fg-3); --row-sub:var(--fg-3);
   --row-alt:#232325;
   --fg:#FFFFFF; --fg-2:rgba(235,235,245,.6); --fg-3:rgba(235,235,245,.35);
   --mic-idle:#8E8E93;
@@ -86,6 +95,8 @@
    这几段排在 Klein 后面，选择器也各多一档属性，所以一定会赢。 */
 :root[data-palette="summer"]{
   --bg:#FAF8F4; --surface:#FFFFFF; --surface-2:#F2EEE7; --surface-3:#EAE5DB;
+  --panel-head-bg:var(--surface-2);
+  --panel-title:var(--fg-2); --panel-sub:var(--fg-3); --row-sub:var(--fg-3);
   --row-alt:#FEF9F5;
   --fg:#1B1815; --fg-2:#57534E; --fg-3:#8A8177;
   --mic-idle:#8A8177;
@@ -106,6 +117,8 @@
 @media (prefers-color-scheme:dark){
   :root[data-palette="summer"]:not([data-theme="light"]){
     --bg:#1A1713; --surface:#232019; --surface-2:#2C2822; --surface-3:#37322A;
+    --panel-head-bg:var(--surface-2);
+    --panel-title:var(--fg-2); --panel-sub:var(--fg-3); --row-sub:var(--fg-3);
     --row-alt:#2A211A;
     --fg:#EDE8E0; --fg-2:#B3ABA0; --fg-3:#8A8177;
   --mic-idle:#8A8177;
@@ -126,6 +139,8 @@
 }
 :root[data-palette="summer"][data-theme="dark"]{
   --bg:#1A1713; --surface:#232019; --surface-2:#2C2822; --surface-3:#37322A;
+  --panel-head-bg:var(--surface-2);
+  --panel-title:var(--fg-2); --panel-sub:var(--fg-3); --row-sub:var(--fg-3);
   --row-alt:#2A211A;
   --fg:#EDE8E0; --fg-2:#B3ABA0; --fg-3:#8A8177;
   --mic-idle:#8A8177;
@@ -907,11 +922,11 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
    ≤980px 里 .hd-seg / .acts 折到两行时（现下手机上是常事），它自己会往上长。 */
 .panel-head{display:flex;align-items:center;gap:10px;min-height:48px;padding:4px 14px;
   border-bottom:1px solid var(--border);
-  background:var(--surface-2);color:var(--fg-2);flex-wrap:wrap}
-.panel-head h3{font-size:13px;letter-spacing:.02em}
+  background:var(--panel-head-bg);color:var(--fg-2);flex-wrap:wrap}
+.panel-head h3{font-size:13px;letter-spacing:.02em;color:var(--panel-title)}
 /* 标题栏里那截副标题（「共 N 条」「N 个分组」那种）。12px → 11px（用户定的：
    控件组标题栏里的副标题一律 -1），比正题小两号，退成附注。 */
-.panel-head .sub{font-size:11px;color:var(--fg-3)}
+.panel-head .sub{font-size:11px;color:var(--panel-sub)}
 .panel-head .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 /* 考试分区标题旁边那对图标（编辑名 / 删分区）：.panel-head 的 .acts 默认被
    margin-left:auto 推到最右边，这里要贴着标题站，和铃声计划标题旁那一对同理。 */
@@ -936,7 +951,7 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
    句子里那个数字框不受影响：.input 的底是 --surface（白的），落在这一片上正好是个框。 */
 .panel-body.ex-listen{display:flex;align-items:center;justify-content:flex-end;
   min-height:48px;padding:6px 14px;
-  background:var(--surface-2);color:var(--fg-2)}
+  background:var(--panel-head-bg);color:var(--fg-2)}
 /* 一个分区一条科目都还没有的时候，那张表的位置换成这一句「还没有安排考试…」：
    高度 52px（用户要的）。它和上面那行听力说明是一件事的两面 —— 有科目时底下是
    听力说明，没科目时整块就剩这一句，所以两条挨着写、都拿 flex 居中。
@@ -991,6 +1006,8 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
 .set-row + .set-row{margin-top:15px;padding-top:15px;border-top:1px solid var(--border)}
 .set-row .set-lab{flex:1 1 auto;min-width:0}
 .set-row .set-t{font-size:13px;color:var(--fg);margin-bottom:4px}
+/* 设置页这类组内行：主行下面那一句说明（.hint）就是这一行的副标题 */
+.set-row .hint{color:var(--row-sub)}
 .set-row .set-ctl{flex:none;display:flex;align-items:center;gap:8px;padding-top:2px}
 /* 带输入框的那一行（「播放代理」的地址 / 端口）：排法照登录页那对「服务器地址 /
    端口」—— 地址吃满、端口钉死一小格，两个 .field 各自扛一个 12px 的小标签。
@@ -1176,7 +1193,7 @@ table.tbl-exam .select-btn{height:calc(1.55em + 10px)}
 }
 td.t{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:14px;white-space:nowrap}
 td.n{font-weight:500}
-td .sub{font-size:12px;color:var(--fg-3)}
+td .sub{font-size:12px;color:var(--row-sub)}
 
 /* ── 铃声表在横屏上的行高 ─────────────────────────────────────────────
    这一档只干一件事：把每一行压成**一行字**。
@@ -1327,7 +1344,7 @@ table.tbl-bells th,table.tbl-tasks th{padding-top:5px;padding-bottom:5px}
   max-height:60vh;overflow-y:auto;color:var(--fg);margin:0;
 }
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px;margin:0}
-.kv dt{color:var(--fg-3)}
+.kv dt{color:var(--row-sub)}
 .kv dd{margin:0;font-family:"IBM Plex Mono",monospace}
 
 /* modal */
