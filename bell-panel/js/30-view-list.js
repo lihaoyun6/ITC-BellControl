@@ -468,20 +468,25 @@ function renderTopbar(){
        铃声计划，那是走丢了，不是返回。横竖屏两个出口都是它（见 20-ui.js 的
        「关闭设置」和上面那枚返回键）。
 
-   **它同时记在本机（bc.lastMode）**，不然刷新一下就回默认页了。两个视图**不算页签**
+   **它记在这个标签页的会话里（sessionStorage，键还是 bc.lastMode）**：刷新、
+   前进后退都还在，标签页一关就没了 —— 关掉浏览器或标签页后在新标签页 / 窗口打开，
+   sessionStorage 是空的，自然回到铃声计划（用户定的）。不能放 localStorage：那是
+   整台机器的记忆，刷新和重开分不开，每次打开都会把上次的页签捡回来。
+   两个视图**不算页签**
    （见下面那句判断）：设置是「这台面板怎么配」、定时任务是「铃声计划这一页的另一种
    内容」，都不是「去哪一页干活」，记成它们会让上面两件事都失去意义（退设置退到设置；
    刷新停在定时任务上，而它连页签都没有，退出去只能靠顶栏那枚返回键）。
-   本机那一份**跟着登录会话走**，forgetLogin() 会把它抹掉 —— 注销或令牌过期重登，
-   从铃声计划起步。初值是 list（S.mode 一开始是空串，那也是铃声计划）。 */
-let lastMode = LS.get("lastMode", "list");
+   这个标签页那一份**跟着登录会话走**，forgetLogin() 会把它抹掉 —— 注销或令牌
+   过期重登，从铃声计划起步。初值是 list（S.mode 一开始是空串，那也是铃声计划）。 */
+let lastMode = SS.get("lastMode", "list");
+LS.del("lastMode");   /* 老版本把这个记忆存在 localStorage 里：清掉，别再读它 */
 function goMode(m){
   /* 离开「更多功能」= 离开终端测试页，正在响的测试当场停（用户定的）。
      静默停：下面这一趟 renderAll 本来就会把整页重画。 */
   if (m !== "more" && S.dt.more && S.dt.more.test) moreTestStop(true);
   /* 拨号框里的号**不跟着切页清空**（用户定的）：号码只在挂断或手动清空时抹掉，
      切去别的页再回来还留在框里，可以接着按呼叫。 */
-  if (m !== "tasks"){ lastMode = m; LS.set("lastMode", m); }
+  if (m !== "tasks"){ lastMode = m; SS.set("lastMode", m); }
   S.mode = m;
   if (m === "tasks") loadTasks();
   renderAll();

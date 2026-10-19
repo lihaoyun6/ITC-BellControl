@@ -46,7 +46,7 @@ function rememberLogin(on, name, password){
    而不是把上一趟停在哪儿捡回来。
    （草稿开关、上次看的列表那些是本机偏好，照旧不动。） */
 function forgetLogin(){
-  LS.del("token"); LS.del("tokenExpireMonitor"); LS.del("lastMode");
+  LS.del("token"); LS.del("tokenExpireMonitor"); SS.del("lastMode");
   lastMode = "list";     /* 30-view-list.js 那个变量：内存里那份也得跟着忘掉 */
   S.token = null;
 }

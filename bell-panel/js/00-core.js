@@ -56,6 +56,14 @@ const LS = {
   set(k,v){ try{ localStorage.setItem("bc."+k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem("bc."+k); }catch(e){} }
 };
+/* 同一个前缀，换 sessionStorage：跟着**这个标签页的会话**走 —— 刷新 / 前进后退
+   都还在，标签页一关就没了，新标签页 / 新窗口天然是空的。
+   眼下只有「上次待的页签」（30-view-list.js 的 lastMode）用它。 */
+const SS = {
+  get(k,d){ try{ const v=sessionStorage.getItem("bc."+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ sessionStorage.setItem("bc."+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ sessionStorage.removeItem("bc."+k); }catch(e){} }
+};
 
 /* ══ 是不是装在 iOS App 里 ═══════════════════════════════════════════
    App 在 document start 注入 __ITC_NATIVE_AGENT（内置播放代理的垫片）。
