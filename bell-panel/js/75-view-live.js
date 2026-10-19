@@ -194,6 +194,12 @@ function liveConnect(){
         pl.err = "与播放代理的连接已断开";
         playTeardown(false);
       }
+      /* 终端测试也一样：连接没了，本机还在放就只是白响。
+         这条路上**不能再发 hangup** —— 连接刚断，发它等于又去重连一次。 */
+      if (moreTestRunning()){
+        moreTestState().err = "与播放代理的连接已断开";
+        moreTestStop(true, true);
+      }
       renderMain();
     };
   });
@@ -440,6 +446,12 @@ function liveChime(name, onFail){
 async function liveCall(){
   const st = liveState();
   if (st.busy || st.phase !== "idle") return;
+  /* 「更多功能 → 终端测试」也占着代理那一条会话，先让它停。 */
+  if (moreTestRunning()){
+    st.err = "正在测试中，先停止测试";
+    renderMain();
+    return;
+  }
   /* 代理那头**同一时刻只有一条会话**（ag.audio 就一个字段）：播放着的时候再按
      「呼叫」，它会静悄悄把播放那条任务换成麦克风这一条，而面板这边还写着
      「正在播放」。所以这一下先挡住，把原因明说在话筒底下那行（liveTipHTML）。 */
@@ -891,8 +903,12 @@ function livePickPaneHTML(st){
           (String(st.aGroup)===String(g.id)?" selected":"")+'>'+esc(g.name)+'</option>').join("")+
       '</select>'+
     '</div>'+
-    '<div class="pick-head" id="livePickHead">'+livePickHeadHTML(st)+'</div>'+
-    '<div class="pick" id="livePickList">'+livePickItemsHTML(st)+'</div>';
+    /* 「全选」那一行和普通设备选择器一样，是列表框自己的题头（.pick-box）：
+       钉在框子顶上不跟列表滚，不再单独占框子外面的一行。 */
+    '<div class="pick-box">'+
+      '<div class="pick-head" id="livePickHead">'+livePickHeadHTML(st)+'</div>'+
+      '<div class="pick" id="livePickList">'+livePickItemsHTML(st)+'</div>'+
+    '</div>';
 }
 /* 页签上那个数字跟着**当前列出的**走：搜索一过滤，它就从「全部点位」变成
    「搜出来几个」（和模态那边一个口径）。 */
@@ -1079,6 +1095,8 @@ function playState(){
     pos  : 0,                   /* 没在放的时候进度停在哪一秒（放的时候由音频时钟现算） */
     vol  : 100,                 /* 推给终端的音量（0-100）。**本机一直不出声**，所以这个
                                    数调的不是这台电脑的音箱，是终端听见的那一份 */
+    volMuted: false,            /* 竖屏那枚喇叭的静音状态：音量条归零、图标划线 */
+    volPrev : 100,              /* 静音前那一档，解除静音时回到这里 */
     err  : "",                  /* 上一次没做成的一句话，摆在转盘底下那行。**只留给
                                    「按播放没做成」这类传输性的事** —— 读文件失败走 toast，
                                    不然它会盖掉「播放中 · 已推送到 N 个终端」那句 */
@@ -1271,6 +1289,34 @@ function playVolInput(st, box, v){
   playVolApply();
 }
 
+/* ── 竖屏音量条左边那枚喇叭：点一下静音，再点一下恢复 ────────────────
+   静音＝把音量条归零（滑杆、百分比、推给终端的那一档一起归零），图标换成
+   带斜线的喇叭；再点一下回到静音前那一档，图标也回去。状态存在 playState 里，
+   页面重画后图标仍然对得上。 */
+function playVolPaintMute(st, box){
+  const btn = box && box.querySelector("#playVolMute");
+  if (!btn) return;
+  const tx = st.volMuted ? "取消静音" : "静音";
+  btn.innerHTML = st.volMuted ? ICON.volumeX : ICON.volume;
+  btn.title = tx;
+  btn.setAttribute("aria-label", tx);
+  btn.setAttribute("aria-pressed", st.volMuted ? "true" : "false");
+}
+function playVolMuteSet(st, box, on){
+  st.volMuted = !!on;
+  playVolPaintMute(st, box);
+}
+function playVolToggleMute(st, box){
+  if (st.volMuted){
+    playVolInput(st, box, st.volPrev || 0);
+    playVolMuteSet(st, box, false);
+  } else {
+    st.volPrev = st.vol;
+    playVolInput(st, box, 0);
+    playVolMuteSet(st, box, true);
+  }
+}
+
 /* 点到竖音量条外面就收起它。**只在 playBind 里挂一次**（每次重画都会跑到那儿），
    用捕获阶段，免得被页面上别处的 stopPropagation 挡住。 */
 let playVolOutsideBound = false;
@@ -1309,11 +1355,16 @@ function playVolAlign(){
 /* 一帧 PCM 推给代理。只有「正在播」才推：暂停时音频线程本来就停了（suspend），
    但拖动和起播的空档也得挡住，不然代理会收到上一段的残帧。 */
 /* 把一包样点递给代理。worklet 那条（playFeed）和 ScriptProcessor 那条（playTap）
-   最后都到这儿，守卫只此一份。 */
-function playSend(buf){
-  if (playState().phase !== "playing") return;
+   最后都到这儿，守卫只此一份。
+   更多功能里的「终端测试」也走这条通道，但它有自己的相位判断，所以把「只检查
+   连接」这一半单独摘出来给两边共用。 */
+function liveSendPcm(buf){
   if (!liveSock || liveSock.readyState !== 1) return;
   try { liveSock.send(buf); } catch(err){}
+}
+function playSend(buf){
+  if (playState().phase !== "playing") return;
+  liveSendPcm(buf);
 }
 function playFeed(e){ playSend(e.data); }
 /* ScriptProcessorNode 那条路：Float32 裁到 [-1,1] 再转 16 位，和 LIVE_WORKLET_SRC
@@ -1516,6 +1567,10 @@ function playReadDraw(st){
 async function playStart(st){
   if (st.busy) return;
   if (st.phase === "connecting") return;
+  /* 「更多功能 → 终端测试」也占着代理那一条会话，先让它停。 */
+  if (moreTestRunning()){
+    st.err = "正在测试中，先停止测试"; renderMain(); return;
+  }
   /* 代理同一时刻只有一条会话：通话中不许起播（另一头在 liveCall 里挡着）。 */
   const lv = liveState();
   if (lv.phase === "calling" || lv.phase === "talking"){
@@ -1883,7 +1938,13 @@ function playDeckHTML(st){
       '<h3 class="pl-h">播放器</h3>'+
       /* 音量调的是**推给终端的那一份**（本机一直不出声），所以在播放中拧也有用 ——
          它改的是喂给 worklet 之前那个增益节点，下一帧就见效，不用停、不用重连。 */
-      '<div class="pl-vol">'+ICON.volume+
+      '<div class="pl-vol">'+
+        '<button class="pl-vol-mute" id="playVolMute" type="button" title="'+
+          (st.volMuted ? "取消静音" : "静音")+'" aria-label="'+
+          (st.volMuted ? "取消静音" : "静音")+'" aria-pressed="'+
+          (st.volMuted ? "true" : "false")+'">'+
+          (st.volMuted ? ICON.volumeX : ICON.volume)+
+        '</button>'+
         '<input type="range" id="playVol" min="0" max="100" step="1" value="'+st.vol+'"'+
           ' aria-label="音量" title="音量">'+
         '<span class="pc" id="playVolTx">'+st.vol+'%</span>'+
@@ -2135,11 +2196,21 @@ function playBind(st){
      节点是常驻的，改它的值下一帧就见效，不用停、不用重连。 */
   const vol = box.querySelector("#playVol");
   if (vol){
-    vol.oninput = ()=> playVolInput(st, box, vol.value);
+    /* 静音时拖滑杆＝重新给音量，顺手解除静音（滑杆动了图标还划着线就自相矛盾）。 */
+    vol.oninput = ()=>{
+      if (st.volMuted) playVolMuteSet(st, box, false);
+      playVolInput(st, box, vol.value);
+    };
     vol.style.setProperty("--p", st.vol + "%");   /* 自绘滑杆的初始着色 */
   }
   const vol2 = box.querySelector("#playVol2");
-  if (vol2) vol2.oninput = ()=> playVolInput(st, box, vol2.value);
+  if (vol2) vol2.oninput = ()=>{
+    if (st.volMuted) playVolMuteSet(st, box, false);
+    playVolInput(st, box, vol2.value);
+  };
+  /* 竖屏那枚喇叭：静音／恢复。 */
+  const volMute = box.querySelector("#playVolMute");
+  if (volMute) volMute.onclick = ()=> playVolToggleMute(st, box);
 
   /* 进度条：点一下、按住拖都跳。热区是整条 .pl-scrub（26px 高），手机上也好按。 */
   const sc = box.querySelector("#playScrub");

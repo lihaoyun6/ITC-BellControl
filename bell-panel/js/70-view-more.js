@@ -1,13 +1,18 @@
 /* view-more — 更多功能
    广播控制台 · 替代厂商后台的打铃配置面板
    //////////////////////////////////////////////////////////////
-   装那些一年用不上两回、但不该没有的东西。眼下就一样：
+   这一页是一个入口页：两张卡片，点进去各是一套完整界面。
 
-     终端任务反查 —— 选一天 + 选一批点位／分组，把「这一天它们会响什么」摊成
-     一张按时刻排好的表。口径是**原始数据**：不看面板里正在编辑的工作集，而是把
-     每张启用的铃声列表重新拉一遍，再加上全部定时任务。
+     任务反查 —— 选一天 + 选一批点位／分组，把「这一天它们会响什么」摊成
+     一张按时刻排好的表。结果就留在本页，不再弹窗。口径是**原始数据**：
+     不看面板里正在编辑的工作集，而是把每张启用的铃声列表重新拉一遍，
+     再加上全部定时任务。
 
-   这一页**只读**：全是 GET。不改服务器上一个字节。 */
+     终端测试 —— 选一个音源 + 一批点位，按「开始测试」向这些终端真实播放
+     一次这段音源。下面按「分组 → 终端」两层显示它们的实时状态。
+
+   任务反查**只读**：全是 GET。不改服务器上一个字节。
+   终端测试会往终端推音频——这是能听见的写入，只在用户明确按下按钮时发生。 */
 
 /* ══ 状态 ═══════════════════════════════════════════════════════════
    结果存在 S.dt.more 里，**不存 DOM**。loadTasks() 末尾自己会 renderTopbar() +
@@ -15,18 +20,41 @@
    这一下就冲没了。renderMore() 每次从状态重画。 */
 function moreState(){
   if (!S.dt.more) S.dt.more = {
+    tab: "home",                 /* home 卡片页 | lookup 任务反查 | test 终端测试 */
     date: todayISO(),
     area: {t:[], g:[]},          /* 和别处一样是 {点位名[], 分组名[]} */
-    busy: false, done: false, full: false,
-    hits: []                     /* 会响的：一条铃声的几个时刻各占一行 */
+    busy: false, done: false,
+    hits: [],                    /* 会响的：一条铃声的几个时刻各占一行 */
+    test: moreTestInit()
   };
-  return S.dt.more;
+  const st = S.dt.more;
+  if (!st.tab) st.tab = "home";
+  if (!st.test) st.test = moreTestInit();
+  return st;
 }
-/* 结果摆在哪：**宽屏弹模态，竖屏整页替换**（用户定的）。
-   判据就是 00-core 里那个 isNarrow（980px，全项目唯一一处 matchMedia）；
-   这儿留个名字只是为了读起来是这一页的话 —— 「竖屏」在这一页的语境里
-   就是「整页顶掉浏览区」。 */
-const moreNarrow = isNarrow;
+function moreTestInit(){
+  return {
+    media: "",                   /* 音源文件名 */
+    area: {t:[], g:[]},          /* 测试点位 */
+    phase: "idle",               /* idle | loading | connecting | playing */
+    err: "",                     /* 上一次没做成的一句话 */
+    gen: 0,                      /* 第几趟测试；停掉就翻号，作废在途的 await */
+    buf: null, bufMedia: "",     /* 解好的 AudioBuffer 和它对应的音源名 */
+    count: 0                     /* 这一趟推给几台终端 */
+  };
+}
+function moreTestState(){
+  const st = moreState();
+  if (!st.test) st.test = moreTestInit();
+  return st.test;
+}
+/* 正在测试（准备音源、连接、播放都算）。对讲和在线播放用它来挡「代理同一时刻
+   只有一条会话」那件事。 */
+function moreTestRunning(){
+  const t = S.dt.more && S.dt.more.test;
+  return !!(t && t.phase !== "idle");
+}
+
 const moreAreaChosen = a => !!((a && a.t && a.t.length) || (a && a.g && a.g.length));
 const moreAreaText = a => moreAreaChosen(a)
   ? (a.t||[]).concat(a.g||[]).join("、")
@@ -141,13 +169,9 @@ async function runMoreQuery(){
   }
   st.busy = true; st.done = false;
   st.hits = [];
-  /* 竖屏：**点下去就换地方**，不等查完。整页结果视图当场顶掉浏览区，
-     里面先写着「正在查询…」—— 用户要的是「点了就去看结果」，让人盯着
-     一个变灰的按钮等一趟请求，正是最没必要的那几秒。
-     走 renderAll() 不走 renderMore()：那个「‹ 返回」住在顶栏里，
-     不重画顶栏它不会长出来。 */
-  st.full = moreNarrow();
-  if (st.full) renderAll(); else renderMore();
+  /* 点下去就在结果区写「正在查询…」，不等查完 —— 用户要的是「点了就去看结果」，
+     让人盯着一个变灰的按钮等一趟请求，正是最没必要的那几秒。 */
+  renderMain();
 
   const date = st.date;
   const noRead = [];                          /* 读不出来的列表 */
@@ -215,24 +239,12 @@ async function runMoreQuery(){
     st.done = true;
   }catch(e){
     st.busy = false;
-    if (st.full) renderAll(); else renderMore();
+    renderMain();
     toast((e && e.message) || "查询失败", "err");
     return;
   }
   st.busy = false;
-  /* 结果落到**当下待的那块地方**：st.full 可能已经被「‹ 返回」改掉了
-     （查询中途退出去是允许的），那就画回表单页，再弹模态给宽屏。 */
-  if (st.full) renderAll(); else renderMore();
-  /* 宽屏这一支才弹模态。`!moreNarrow()` 这一层是给「竖屏查到一半按了返回」兜底的 ——
-     竖屏本来就放不下这个模态，那时候宁可不弹，结果留在 st.hits 里，
-     再点一次「开始查询」就回来了。
-
-     宽屏上一条都没查到就**不弹**：一个空壳模态比浮一句话更像「坏了」。
-     竖屏那边不用管 —— 结果视图已经顶在那儿了，它自己也写着同一句话。 */
-  if (st.done && !st.full && !moreNarrow()){
-    if (st.hits.length) openMoreResultModal();
-    else toast(MORE_EMPTY);
-  }
+  renderMain();
   /* 出了毛病才浮一次，正常一趟一个字都不说 —— 条数在「查询结果」的副标题上。 */
   if (noRead.length) toast("有 "+noRead.length+" 张列表没读出来："+noRead.join("、"), "err");
   else if (unknown)  toast("有 "+unknown+" 条用的周期类型本面板还认不出，没有列进来", "warn");
@@ -251,7 +263,7 @@ function moreResultsHTML(){
      不给宽度的列是 auto，浏览器按内容分 —— 真机上音源名一长（「轻音乐 - 一剪梅.mp3」
      这种），名称和音源两列就把右边几列挤成一条缝。定死不等于丢信息：
      长的那几格省略号截断，全文挂在 title 上，鼠标停一下就看全。
-     宽度本身写在 CSS 的 `.tbl-more .c-*` 里，**不写行内** —— 竖屏那档要单独改
+     宽度本身写在 CSS 的 `.tbl-more .c-*` 里，**不写行内** —— 竖屏那一档要单独改
      「来源」「周期」两列（把省下的宽度让给名称），行内样式只输给 !important。
      和 `.tbl-bells .c-act` 一个道理。 */
   return '<div class="tbl-wrap"><table class="tbl tbl-more"><thead><tr>'+
@@ -276,79 +288,22 @@ function moreResultsHTML(){
    裁剪框，题头于是跟着行一起滚走 —— 用户实测报的就是这个。
    中间**不能垫 .panel-body**：多一层它就不是直接孩子，那条选择器当场落空。
    哪一天要给它加内边距，加在 .tbl-wrap 上，别加出一层来。 */
-function moreResultsBoxHTML(st, caption){
+function moreResultsBoxHTML(st){
   return '<div class="panel grow">'+
-    /* 题注（哪天、哪些终端）：整页那份要，模态那份不要 —— 模态头里已经写着同一句了 */
-    (caption && st.hits.length
-      ? '<div class="panel-head"><h3>'+esc(st.date)+'</h3>'+
-          '<span class="sub">'+esc(moreAreaText(st.area))+'</span></div>'
-      : "")+
+    '<div class="panel-head"><h3>查询结果</h3>'+
+      '<span class="sub">'+esc(moreAskedText(st))+' · '+esc(moreCountText(st))+'</span></div>'+
     moreResultsHTML()+
   '</div>';
 }
 
-/* 结果摆给谁看：**宽屏弹模态，竖屏整页替换**（用户定的）。
-   两处呈现共用下面这几句，改一处两处都跟着变：
-     · moreCountText —— 条数那一行。用户定的位置：就摆在「查询结果」旁边当副标题。
-     · moreAskedText —— 这一趟问的是什么（哪天、哪些终端）。表本身回答不了这个，
-       而这张表是会被截图发出去的，回头得看得出是哪天的哪几个点。 */
+/* 条数那一行。用户定的位置：就摆在「查询结果」旁边当副标题。
+   moreAskedText —— 这一趟问的是什么（哪天、哪些终端）。表本身回答不了这个，
+   而这张表是会被截图发出去的，回头得看得出是哪天的哪几个点。 */
 const moreCountText = st => "共 "+st.hits.length+" 条，按时刻排序";
 const moreAskedText = st => st.date + " · " + moreAreaText(st.area);
 /* 一条都没查到时的那句话。**这不是「交代」**（已查几张列表、跳过几张……那些
    全删了），它是这一趟查询的**答案**：这一天不响。 */
 const MORE_EMPTY = "这一天没有会执行的铃声或定时任务";
-
-/* ══ 宽屏：模态 ═════════════════════════════════════════════════════
-   宽度给到 1040px：那五列在 .tbl-more 里都是定死的百分比／像素（见 moreResultsHTML），
-   窄了会让「时刻」那两列挤在一起。模态本身封顶 88vh，行数再多也是**表自己滚** ——
-   滚的既然是表，题头就钉在顶上不动（见 moreResultsBoxHTML 那段）。 */
-function openMoreResultModal(){
-  const st = moreState();
-  if (!st.hits.length) return;
-  openModal({
-    title:"查询结果", sub: moreCountText(st)+" · "+moreAskedText(st), width:"1040px", tall:true,
-    mount(body, foot, mm){
-      /* 正文交出剩余高度（.modal-body.grow-body 那两条 CSS），让表自己去滚：
-         题头才钉得住，而且滚到底也一直看得见「查询结果 / 共 N 条」这一行。 */
-      body.classList.add("grow-body");
-      body.innerHTML = moreResultsBoxHTML(st, false);
-      /* 这一格子只读，footer 里就一个出口。× / Esc / 点边上那层黑也都是关 ——
-         三种都通，但按钮是最不打哑谜的那一种。 */
-      foot.innerHTML = '<span class="spacer"></span><button class="btn" data-ok>关闭</button>';
-      foot.querySelector("[data-ok]").onclick = ()=> closeModal(mm.id);
-    }
-  });
-}
-/* ══ 竖屏：整页 ═════════════════════════════════════════════════════
-   骨架和考试模式那份「改动预览」一样（`#main.fill` + `.sec-head` + `.panel.grow`，
-   见 40-view-exam.js 的 renderExamPreviewFull）：
-   整页不滚，**只有那张表滚** —— 题头才钉得住（见 moreResultsBoxHTML 那段）。
-   出口是顶栏第二行最左那个「‹ 返回」（见 30-view-list 的 #tbBack）。 */
-function renderMoreFull(el, st){
-  el.classList.add("fill");
-  const n = st.hits.length;
-  /* 查完之前不报数：这一刻写「共 0 条」是句假话，人只会在那一瞬间看见它。 */
-  const sub = st.busy ? "" : (n ? moreCountText(st) : MORE_EMPTY);
-  el.innerHTML =
-    '<div class="sec-head">'+
-      '<div style="min-width:0">'+
-        /* 条数那一行摆在标题**同一行**、紧跟在后（用户定的）—— 原来挂在下面当
-           .meta 副标题，竖屏上标题底下就白多占一行。这一行带副标题，所以那一对按
-           基线站（跟标题底部对齐，见 css 的 .title-row:has(> .hint)），窄了它自己
-           掉到标题下面，不用另外管。
-           flex-wrap 必须在这儿写回去：≤980 那条 `.sec-head .title-row{flex-wrap:nowrap}`
-           是给「标题 + 右边按钮」那类行准备的，套到这儿会让「这一天没有会执行的铃声
-           或定时任务」这 17 个字在 360px 的屏上顶出屏幕去。行内样式压得过媒体查询。 */
-        '<div class="title-row" style="flex-wrap:wrap">'+
-          '<h2 class="serif">查询结果</h2>'+
-          (sub ? '<span class="hint">'+esc(sub)+'</span>' : "")+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-    (st.busy
-      ? '<div class="hint" style="padding:28px 4px">正在查询…</div>'
-      : (n ? moreResultsBoxHTML(st, true) : ""));
-}
 
 /* 日期或终端一改，上一次那张表就不再对应问题了 —— 直接退回「还没查」，
    不留一张对不上的结果让人照着它去关设备。
@@ -361,31 +316,77 @@ function moreInvalidate(){
 }
 
 /* ══ 页面 ═══════════════════════════════════════════════════════════
-   用和「全局设置」同一套骨架（.headfix + .sec-head + .page-body）：标题那行钉住，
-   下面那张面板自己滚。面板就是现成的 .panel，不用新写 CSS。 */
+   首页是卡片入口；两个子页都是 `.main-inner.fill`：标题固定、条件固定，
+   下面结果／状态面板吃剩余高度并自己滚。 */
 function renderMore(){
   const el = $("#main"); if (!el) return;
   const st = moreState();
-  /* 整页结果视图只在竖屏存在（宽屏那一支走模态）。窗口要是停在结果页上被拉宽了 ——
-     没有 resize 监听，所以只能等下一次重画 —— 这里当场退回表单页，
-     免得留下一个只靠顶栏才退得出来的页面。 */
-  if (st.full && !moreNarrow()) st.full = false;
-  if (st.full) return renderMoreFull(el, st);
+  if (st.tab === "lookup") return renderMoreLookup(el, st);
+  if (st.tab === "test")   return renderMoreTest(el, moreTestState());
+  return renderMoreHome(el);
+}
+
+/* 换子页。离开终端测试就当场停止播放（用户定的：不留在后台响）。 */
+function moreGo(tab){
+  if (tab !== "test") moreTestStop(true);
+  moreState().tab = tab;
+  renderAll();
+}
+/* 「‹ 返回」的唯一出口：两个子页顶栏和页内那枚都走这儿。 */
+function moreBackHome(){ moreGo("home"); }
+
+/* 子页共用的标题行。返回键只在宽屏出现（窄屏顶栏已经有一枚 #tbBack，
+   见 30-view-list.js 的 showBack）。 */
+function moreHeadHTML(title){
+  return '<div class="sec-head">'+
+    '<div class="title-row">'+
+      '<button class="btn btn-icon more-back" id="moreBack" type="button" '+
+        'title="返回更多功能" aria-label="返回更多功能">'+ICON.chevL+'</button>'+
+      '<h2 class="serif">'+esc(title)+'</h2>'+
+    '</div>'+
+  '</div>';
+}
+function bindMoreHead(el){
+  const b = el.querySelector("#moreBack");
+  if (b) b.onclick = moreBackHome;
+}
+
+/* ── 首页：卡片 ──────────────────────────────────────────────────── */
+function renderMoreHome(el){
   el.classList.add("headfix");
+  el.innerHTML =
+    '<div class="sec-head">'+
+      '<div class="title-row"><h2 class="serif">更多功能</h2></div>'+
+    '</div>'+
+    '<div class="page-body more-page">'+
+      '<div class="mod-grid">'+
+        '<button class="mod-card" type="button" data-mod="lookup">'+
+          '<span class="mod-ic">'+ICON.search+'</span>'+
+          '<span class="mod-tx"><span class="n">任务反查</span>'+
+            '<span class="d">查某一天哪些铃声和定时任务会执行</span></span>'+
+          '<span class="mod-go">'+ICON.chevR+'</span>'+
+        '</button>'+
+        '<button class="mod-card" type="button" data-mod="test">'+
+          '<span class="mod-ic">'+ICON.volume+'</span>'+
+          '<span class="mod-tx"><span class="n">终端测试</span>'+
+            '<span class="d">向选中的终端播放音频并检查实时状态</span></span>'+
+          '<span class="mod-go">'+ICON.chevR+'</span>'+
+        '</button>'+
+      '</div>'+
+    '</div>';
+  $$("[data-mod]", el).forEach(b => b.onclick = ()=> moreGo(b.dataset.mod));
+}
+
+/* ── 任务反查 ────────────────────────────────────────────────────── */
+function renderMoreLookup(el, st){
+  el.classList.add("fill");
   const chosen = moreAreaChosen(st.area);
 
   el.innerHTML =
-    '<div class="sec-head">'+
-      '<div class="title-row">'+
-        '<h2 class="serif">更多功能</h2>'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="page-body">'+
-
+    moreHeadHTML("任务反查")+
     '<div class="panel">'+
-      '<div class="panel-head"><h3>终端任务反查</h3>'+
-        '<span class="sub">选一天和一批终端，看它们那天会执行什么</span></div>'+
+      '<div class="panel-head"><h3>查询条件</h3>'+
+        '<span class="sub">选一天和一批点位，看它们那天会执行什么</span></div>'+
       '<div class="panel-body">'+
         '<div class="grid2">'+
           /* 日期这一格是**按钮**不是输入框：日期是点出来的，让人手敲一个
@@ -403,7 +404,7 @@ function renderMore(){
         '</div>'+
         /* 两个按钮都常驻、都靠右：重置在左、查询在右。**不做「有条件才出现」** ——
            按钮忽然长出来一个，右边那个查询键就横移一下，正要点的人会点空。 */
-        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:14px;flex-wrap:wrap">'+
+        '<div class="more-btns">'+
           /* 裸 .btn = 白底 + 实边框，和全项目那些「取消」按钮一个样。
              **别写成 btn-quiet** —— 那个是隐形款（透明底、透明边框），
              搁在「开始查询」左边看着像一行注释，不像能点的东西。 */
@@ -413,15 +414,12 @@ function renderMore(){
         '</div>'+
       '</div>'+
     '</div>'+
+    moreLookupResultHTML(st);
 
-    /* 这一页**不长出结果** —— 结果有它自己的两个去处（宽屏那个模态／竖屏那个
-       整页视图，见上）。表单页永远只是表单页：查完弹一层窗户上来，关上就还是
-       刚才那两个格子、那个日期，接着改下一个问题。 */
-    '</div>';
-
+  bindMoreHead(el);
   const q = s => el.querySelector(s);
   q("#moreDate").onclick = ev => openDatePicker(ev.currentTarget, st.date, day=>{
-    st.date = day; moreInvalidate(); renderMore();
+    st.date = day; moreInvalidate(); renderMain();
   });
   q("#moreArea").onclick = ()=>{
     /* 先把当前的选择拷进 S.dt.area 当种子（选择器是从那儿读的），回调里再拷回来。
@@ -430,7 +428,7 @@ function renderMore(){
     S.dt.area = {t:(st.area.t||[]).slice(), g:(st.area.g||[]).slice()};
     openAreaEditor("pick", null, a=>{
       st.area = {t:(a.t||[]).slice(), g:(a.g||[]).slice()};
-      moreInvalidate(); renderMore();
+      moreInvalidate(); renderMain();
     });
   };
   q("#moreRun").onclick = ()=> runMoreQuery();
@@ -440,6 +438,374 @@ function renderMore(){
     st.date = todayISO();
     st.area = {t:[], g:[]};
     S.dt.area = {t:[], g:[]};
-    moreInvalidate(); renderMore();
+    moreInvalidate(); renderMain();
   };
+}
+function moreLookupResultHTML(st){
+  if (st.busy)
+    return '<div class="panel grow"><div class="hint more-empty">正在查询…</div></div>';
+  if (!st.done)
+    return '<div class="panel grow"><div class="hint more-empty">选好日期和点位，点「开始查询」</div></div>';
+  if (!st.hits.length)
+    return '<div class="panel grow"><div class="hint more-empty">'+esc(MORE_EMPTY)+'</div></div>';
+  return moreResultsBoxHTML(st);
+}
+
+/* ── 终端测试 ────────────────────────────────────────────────────── */
+function renderMoreTest(el, st){
+  el.classList.add("fill");
+  const chosen = moreAreaChosen(st.area);
+  const idle = st.phase === "idle";
+
+  el.innerHTML =
+    moreHeadHTML("终端测试")+
+    '<div class="panel">'+
+      '<div class="panel-head"><h3>测试条件</h3>'+
+        '<span class="sub">选一个音源和一批分组，播放一次</span></div>'+
+      '<div class="panel-body">'+
+        '<div class="more-test-fields">'+
+          '<div class="field"><label>音源</label>'+
+            '<button type="button" class="select-btn" id="mtMedia" title="从媒体库里选一个音频文件">'+
+              '<span class="v'+(st.media?"":" ph")+'">'+esc(st.media || "选择音源...")+'</span>'+
+              '<span class="chev">'+ICON.music+'</span></button></div>'+
+          '<div class="field"><label>分组</label>'+
+            '<button type="button" class="select-btn" id="mtArea" title="选分组，可多选">'+
+              '<span class="v'+(chosen?"":" ph")+'">'+esc(moreAreaText(st.area))+'</span>'+
+              '<span class="chev">'+ICON.chevD+'</span></button></div>'+
+        '</div>'+
+        '<div class="more-btns">'+
+          '<span class="hint" id="mtMsg">'+esc(moreTestMsg(st))+'</span>'+
+          '<button class="btn" id="mtReset"'+(idle?' disabled':'')+'>重置测试</button>'+
+          (idle
+            ? '<button class="btn btn-primary" id="mtRun"'+
+                (st.media && chosen ? '' : ' disabled')+'>开始测试</button>'
+            : '<button class="btn btn-danger" id="mtRun">停止测试</button>')+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    moreTestStatBoxHTML(st);
+
+  bindMoreHead(el);
+  const q = s => el.querySelector(s);
+  q("#mtMedia").onclick = ()=>{
+    /* 换音源就是换条件：正在响的先停掉。停了要当场重画 —— 选择器取消时
+       回调不会来，不重画的话页面上还挂着「停止测试」。 */
+    if (!idle){ moreTestStop(true); renderMain(); }
+    openMediaPicker(st.media ? [st.media] : [], [], r=>{
+      const n = (r && r.media && r.media[0]) || "";
+      if (n !== st.media){
+        st.media = n; st.buf = null; st.bufMedia = ""; st.err = "";
+      }
+      renderMain();
+    }, {filesOnly:true, title:"选择音源", sub:"一个音频文件"});
+  };
+  q("#mtArea").onclick = ()=>{
+    if (!idle){ moreTestStop(true); renderMain(); }
+    S.dt.area = {t:(st.area.t||[]).slice(), g:(st.area.g||[]).slice()};
+    openAreaEditor("pick", null, a=>{
+      st.area = {t:(a.t||[]).slice(), g:(a.g||[]).slice()};
+      st.err = ""; renderMain();
+    });
+  };
+  q("#mtRun").onclick = ()=>{
+    if (moreTestState().phase === "idle") moreTestStart();
+    else moreTestStop();
+  };
+  q("#mtReset").onclick = ()=> moreTestStop();
+}
+
+function moreTestMsg(st){
+  if (st.err) return st.err;
+  if (st.phase === "loading")    return "正在准备音源…";
+  if (st.phase === "connecting") return "正在连接…";
+  if (st.phase === "playing")    return "正在播放 · " + st.count + " 台终端";
+  return "";
+}
+
+/* 选中的东西 → 状态列表的块。先按分组展开，再补上「直接选的终端」里
+   没有被任何已选分组盖住的那几台。分组找不到人也要留一个空块，
+   这样「我选了它，它却不在这儿」一眼看得出来。 */
+function moreTestBlocks(){
+  const st = moreTestState();
+  const a = st.area || {t:[],g:[]};
+  const byName = n => S.data.terminals.find(t=>t.name===n);
+  const seen = new Set();
+  const blocks = [];
+  (a.g||[]).forEach(g=>{
+    const terms = groupMembers(g).map(byName).filter(Boolean);
+    terms.forEach(t=> seen.add(t.name));
+    blocks.push({name:g, terms:terms, group:true});
+  });
+  const rest = (a.t||[]).filter(n=> !seen.has(n)).map(byName).filter(Boolean);
+  if (rest.length) blocks.push({name: blocks.length ? "单独选择" : "已选终端", terms:rest, group:false});
+  return blocks;
+}
+function moreTestAllTerms(){
+  const seen = new Set();
+  const out = [];
+  moreTestBlocks().forEach(b => b.terms.forEach(t=>{
+    if (seen.has(t.id)) return;
+    seen.add(t.id); out.push(t);
+  }));
+  return out;
+}
+const moreTestOn = t => { const s = statusOf(t.name); return s==="online" || s==="busy"; };
+/* 一行右边那句话：状态字，忙的时候再接上任务类型。 */
+function moreTestTermState(name){
+  const s = statusOf(name);
+  const ti = S.termTask[name];
+  let extra = "";
+  if (ti && ti.TaskID){
+    const sess = (S.sessions||[]).find(x=> String(x.TaskID) === String(ti.TaskID));
+    if (sess) extra = " · " + sessionTypeText(sess);
+  }
+  return STAT_TEXT[s] + extra;
+}
+function moreTestStatRowsHTML(blocks){
+  if (!blocks.length)
+    return '<div class="hint more-empty">尚未选择任何终端/分组</div>';
+  return blocks.map(b=>{
+    const on = b.terms.filter(moreTestOn).length;
+    return '<div class="tstat-grp">'+
+      '<div class="tstat-head">'+
+        '<span class="n" title="'+esc(b.name)+'">'+esc(b.name)+'</span>'+
+        '<span class="c">'+b.terms.length+' 台 · 在线 '+on+'</span>'+
+      '</div>'+
+      (b.terms.length
+        ? b.terms.map(t=>
+            '<div class="pick-row" title="'+statusTitle(t.name)+'">'+
+              statusDot(t.name)+
+              '<span class="nm">'+esc(t.name)+'</span>'+
+              '<span class="stt">'+esc(moreTestTermState(t.name))+'</span>'+
+              '<span class="ip">'+esc(t.ip_address||"")+'</span>'+
+            '</div>').join("")
+        : '<div class="hint" style="padding:10px 12px">组内没有终端</div>')+
+    '</div>';
+  }).join("");
+}
+function moreTestStatBoxHTML(st){
+  const blocks = moreTestBlocks();
+  const terms  = moreTestAllTerms();
+  const on = terms.filter(moreTestOn).length;
+  return '<div class="panel grow">'+
+    '<div class="panel-head"><h3>实时状态</h3>'+
+      '<span class="sub" id="mtSum">'+esc(moreTestSumText(blocks, terms, on))+'</span></div>'+
+    '<div class="more-tstat" id="mtStat">'+moreTestStatRowsHTML(blocks)+'</div>'+
+  '</div>';
+}
+function moreTestSumText(blocks, terms, on){
+  return (moreTestState().area.g||[]).length+" 个分组 · "+terms.length+" 台终端 · 在线 "+on;
+}
+/* 状态推送一到就重画这块。只换状态区，不动上面的表单和按钮 ——
+   重画整页会把正要看的状态列表滚动位置弹回顶上。 */
+function moreTestPaintStat(){
+  const box = $("#mtStat"); if (!box) return;
+  const top = box.scrollTop;
+  const blocks = moreTestBlocks();
+  const terms  = moreTestAllTerms();
+  const on = terms.filter(moreTestOn).length;
+  box.innerHTML = moreTestStatRowsHTML(blocks);
+  box.scrollTop = top;
+  const sum = $("#mtSum");
+  if (sum) sum.textContent = moreTestSumText(blocks, terms, on);
+}
+/* 常驻一条，不在页面上的时候一句话都不做。 */
+statusHooks.push(function(){
+  if (S.mode !== "more" || !S.dt.more || S.dt.more.tab !== "test") return;
+  moreTestPaintStat();
+});
+
+/* ══ 测试播放 ═══════════════════════════════════════════════════════
+   走的是和对讲／在线播放同一条代理通道：网页这边把音频解成 16k 单声道 PCM，
+   一帧帧丢给代理，代理套 20 字节头用 UDP 发给终端。本机静音。 */
+let mtCtx = null, mtNode = null, mtSrc = null, mtSink = null;
+
+async function moreTestStart(){
+  const st = moreTestState();
+  if (st.phase !== "idle") return;
+
+  /* 代理同一时刻只有一条会话。两条路都被占着的时候，先说清楚让谁让位。 */
+  const lv = liveState();
+  if (lv.phase === "calling" || lv.phase === "talking"){
+    st.err = "正在通话中，先挂断再测试"; renderMain(); return;
+  }
+  const pl = playState();
+  if (pl.phase === "connecting" || pl.phase === "playing" || pl.phase === "paused"){
+    st.err = "在线播放中，先停止再测试"; renderMain(); return;
+  }
+  const m = mediaByName(st.media);
+  if (!m){ st.err = "先选择音源"; renderMain(); return; }
+  const ids = liveAreaIds(st.area);
+  if (!ids.length){
+    st.err = liveChosen(st.area) ? "选中的分组里没有终端" : "先选择分组";
+    renderMain(); return;
+  }
+
+  const gen = ++st.gen;
+  st.err = ""; st.phase = "loading"; st.count = ids.length;
+
+  /* **音频上下文就在点击这一下建**，不等下载和解码。后面那两段 await 回来时
+     Safari 已经不认这次点击是「手势」了，那时再 new 出来的上下文会一直 suspended，
+     按了开始却没有声音。先建好、当场 resume，后面只往里接节点。 */
+  let actx;
+  try{
+    actx = new (window.AudioContext || window.webkitAudioContext)({sampleRate:16000});
+    if (actx.state === "suspended"){ try{ actx.resume().catch(()=>{}); }catch(e){} }
+  }catch(e){
+    st.phase = "idle"; st.err = "本机音频起不来"; renderMain(); return;
+  }
+  const closeActx = ()=>{
+    try{ const p = actx.close(); if (p && p.catch) p.catch(()=>{}); }catch(e){}
+  };
+
+  renderMain();
+
+  let buf;
+  try{ buf = await moreTestBuffer(m); }
+  catch(e){
+    closeActx();
+    if (gen === st.gen){
+      st.phase = "idle"; st.err = (e && e.message) || "音源读取失败"; renderMain();
+    }
+    return;
+  }
+  if (gen !== st.gen){ closeActx(); return; }
+
+  const noAddr = await liveEnsureAddr();
+  if (gen !== st.gen){ closeActx(); return; }
+  if (noAddr){ closeActx(); st.phase = "idle"; st.err = noAddr; renderMain(); return; }
+
+  st.phase = "connecting"; renderMain();
+
+  let g;
+  try{ g = await moreTestCtxMake(actx); }
+  catch(e){
+    closeActx();
+    if (gen === st.gen){ st.phase = "idle"; st.err = "本机音频起不来"; renderMain(); }
+    return;
+  }
+  if (gen !== st.gen){ moreTestCtxDrop(g); return; }
+
+  mtCtx = g.ctx; mtNode = g.node; mtSink = g.sink;
+  if (mtNode.port) mtNode.port.onmessage = moreTestFeed;
+  if (mtCtx.state === "suspended"){ try{ await mtCtx.resume(); }catch(e){} }
+  if (gen !== st.gen) return;
+
+  try{
+    await liveRequest("call", {
+      ws: S.wsIp, udp: liveAudioTarget(), token: S.token,
+      /* endpoints 必须是**字符串**数组（代理那边是 []string），见 liveCall 里那段。 */
+      endpoints: ids.map(String),
+      names: (st.area.t||[]).concat(st.area.g||[])
+    });
+  }catch(e){
+    if (gen === st.gen){
+      moreTestCtxDrop();
+      st.phase = "idle"; st.err = "连接播放代理失败!"; renderMain();
+    }
+    return;
+  }
+  /* 连接途中被人按了停止：代理那一路刚开起来，得撤掉。 */
+  if (gen !== st.gen){ liveRequest("hangup", {}).catch(()=>{}); return; }
+
+  st.phase = "playing";
+  const src = mtCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(mtNode);
+  src.onended = ()=>{ if (gen === st.gen) moreTestStop(); };
+  src.start();
+  mtSrc = src;
+  renderMain();
+}
+
+/* 停止 = 本地收干净 + 让代理撤任务。quiet 为真时只收声音不重画（切页／返回用，
+   那一趟本来就会重画整页）。noHangup 给「连接已经断了」那条路用 —— 那时候再发
+   hangup 会触发一次重连。已选的音源和点位一个字不动 ——「重置测试」就是这一句
+   （用户定的：只停止播放）。 */
+function moreTestStop(quiet, noHangup){
+  const st = moreTestState();
+  if (st.phase === "idle") return;
+  st.gen++;
+  st.phase = "idle";
+  moreTestCtxDrop();
+  if (!noHangup) liveRequest("hangup", {}).catch(()=>{});
+  if (!quiet) renderMain();
+}
+
+/* 本机这条链路：source → worklet/ScriptProcessor → gain(0) → destination。
+   gain(0) 是**本机静音** —— 测试的声音只该从终端出来。
+   ctx 是点击那一刻就建好的（见 moreTestStart），这里只往里接节点。 */
+async function moreTestCtxMake(ctx){
+  let node;
+  if (playWorkletOK()){
+    await ctx.audioWorklet.addModule(liveWorkletURL());
+    node = new AudioWorkletNode(ctx, "pcm16");
+  } else {
+    /* 明文 http 下没有 AudioWorklet，退到 ScriptProcessorNode（和 playCtxMake 同路）。 */
+    node = ctx.createScriptProcessor(1024, 1, 1);
+    node.onaudioprocess = e => moreTestTap(e.inputBuffer.getChannelData(0));
+  }
+  const sink = ctx.createGain();
+  sink.gain.value = 0;
+  node.connect(sink); sink.connect(ctx.destination);
+  return {ctx, node, sink};
+}
+/* 传进来的是「还没挂到全局变量上」的那一套，或者当前正在用的那一套。 */
+function moreTestCtxDrop(g){
+  if (g){
+    try{ if (g.node.port) g.node.port.onmessage = null; }catch(e){}
+    try{ g.node.onaudioprocess = null; }catch(e){}
+    try{ g.node.disconnect(); }catch(e){}
+    try{ g.sink.disconnect(); }catch(e){}
+    try{ const p = g.ctx.close(); if (p && p.catch) p.catch(()=>{}); }catch(e){}
+    return;
+  }
+  if (mtSrc){
+    try{ mtSrc.onended = null; mtSrc.stop(); }catch(e){}
+    try{ mtSrc.disconnect(); }catch(e){}
+  }
+  if (mtNode){
+    try{ if (mtNode.port) mtNode.port.onmessage = null; }catch(e){}
+    try{ mtNode.onaudioprocess = null; }catch(e){}
+    try{ mtNode.disconnect(); }catch(e){}
+  }
+  if (mtSink){ try{ mtSink.disconnect(); }catch(e){} }
+  const ctx = mtCtx;
+  mtSrc = mtCtx = mtNode = mtSink = null;
+  if (ctx){ try{ const p = ctx.close(); if (p && p.catch) p.catch(()=>{}); }catch(e){} }
+}
+function moreTestFeed(e){
+  if (moreTestState().phase !== "playing") return;
+  liveSendPcm(e.data);
+}
+/* ScriptProcessor 那条路：裁到 [-1,1] 再转 16 位，和 LIVE_WORKLET_SRC 逐行对应。 */
+function moreTestTap(ch){
+  if (!ch || !ch.length) return;
+  if (moreTestState().phase !== "playing") return;
+  const out = new Int16Array(ch.length);
+  for (let i = 0; i < ch.length; i++){
+    let v = ch[i];
+    v = v < -1 ? -1 : v > 1 ? 1 : v;
+    out[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  liveSendPcm(out);
+}
+
+/* 从服务器取音源并解码。同一首缓存一份；token 只在运行时拼进 URL，
+   绝不写进日志或报错文案。 */
+async function moreTestBuffer(m){
+  const st = moreTestState();
+  if (st.buf && st.bufMedia === m.name) return st.buf;
+  const url = BASE() + "/medias/download/" + encodeURIComponent(m.id) +
+              "?authorization=" + encodeURIComponent(S.token || "");
+  let res;
+  try{ res = await fetch(url); }
+  catch(e){ throw new Error("连不上服务器，音源下载失败"); }
+  if (!res.ok) throw new Error("音源下载失败（HTTP " + res.status + "）");
+  const ab = await res.arrayBuffer();
+  const f  = new File([ab], m.name, {type: res.headers.get("content-type") || "audio/mpeg"});
+  const it = await playLoadOne(f);
+  if (!it) throw new Error("这个音源解不出声音");
+  st.buf = it.buf; st.bufMedia = m.name;
+  return it.buf;
 }

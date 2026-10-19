@@ -6,7 +6,7 @@
    就这一个手写的常量，**发版时改它** —— 这项目没有构建步骤，浏览器也读不到 .git，
    没有别的地方能自动拿到版本号。设置页尾部「版本信息」那张表显示的就是它。
    （厂商那套的版本号不在这儿：那是服务器报上来的，见 S.srvVersion。） */
-const PANEL_VERSION = "1.0.3";
+const PANEL_VERSION = "1.0.4";
 
 
 /* ══ utils ══════════════════════════════════════════════════════════ */
@@ -17,15 +17,18 @@ const pad = n => String(n).padStart(2,"0");
 const uniq = a => Array.from(new Set(a));
 /* 「现在是不是竖屏」—— 全项目**唯一**一处 matchMedia。布局那一层（什么地方折行、
    哪一档收起来）一直由 css 的媒体查询说了算，这个函数管的是另一件事：js 得在动手
-   之前知道该把东西画进哪个容器。眼下有两处要问它，两处都是同一个岔路口 ——
-   宽屏弹模态、竖屏整页顶掉当前视图：
+   之前知道该把东西画进哪个容器。眼下这几处要问它：
 
      · 「更多功能 → 查询结果」（70-view-more，moreNarrow 只是它的别名）
      · 考试模式标题旁那枚眼镜后面的「改动预览」（40-view-exam）
+     · 考试安排的摆法：横屏且 >980px 用直接编辑表，其余用一场一行概览
+       （40-view-exam 的 examDirect，它还叠了一个方向判据）
 
    断点是 980px，和 css 里竖屏那一档同一个值（见 app.css 文件末尾那段）。
-   判据只在**点下去的那一下**看一眼，不挂 resize / matchMedia 监听 ——
-   窗口在结果页上被拉宽了，靠下一次重画收场（各页自己那一句）。 */
+   判据只在**用的时候**看一眼，默认不挂 resize / matchMedia 监听 ——
+   窗口在结果页上被拉宽了，靠下一次重画收场（各页自己那一句）。
+   唯一的例外是考试模式：横竖屏切换要当场换排版，它自己挂了一个
+   （见 40-view-exam 的 syncExamLayout）。 */
 const isNarrow = ()=> window.matchMedia("(max-width:980px)").matches;
 /* 竖屏 = 窄屏且竖着拿。css 里那几条手机专用的规则用的就是这个判据；
    少数控件只在竖屏换形状（单条添加 / 按节次生成的时间格，见 timePickHTML）。 */
@@ -74,7 +77,7 @@ function proxyStatusText(){
   const p = window.__ITC_PROXY;
   if (!p || !p.available) return "当前系统版本不支持代理设置（需要 iOS 17 及以上）。";
   if (!p.host) return "尚未设置代理服务器。";
-  const kind = p.type === "http" ? "HTTP" : "SOCKS5";
+  const kind = p.type === "faketls" ? "FakeTLS" : p.type === "http" ? "HTTP" : "SOCKS5";
   return (p.enabled ? "已启用" : "未启用") + " · " + kind + " · " + p.host + ":" + p.port;
 }
 /* App 里开着代理时，对讲和在线播放的音频走 UDP，代理带不了 —— 这两页直接换成
@@ -605,9 +608,13 @@ const ICON = {
      右边那两个动作键（清空 / 启用、关闭）摆在一起，而是挨着标题 —— 说的是
      「关于这一页」，不是「对服务器做点什么」。 */
   eye : svgIcon('<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>'),
-  /* check —— 批量条上的「启用」。和 x（停用）成对，两个都是只做一件事的图标键，
-     文字写在 title/aria-label 里。 */
+  /* check —— 考试页「有听力音频」那枚记号。 */
   check: svgIcon('<path d="M20 6 9 17l-5-5"/>'),
+  /* circle-check / circle-minus —— 铃声表和定时任务批量条上那对「全部启用 /
+     全部停用」：圈勾、圈横杠。两个都是只做一件事的图标键，文字写在
+     title/aria-label 里。 */
+  checkC: svgIcon('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
+  minusC: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>'),
   /* music —— 批量编辑菜单里「改音源」那一行。系统里没有第二个地方需要乐器记号，
      但那一列四个动作总得各自有个记号，光靠文字排一行分不出层次。 */
   music: svgIcon('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
@@ -652,6 +659,8 @@ const ICON = {
   /* volume —— 在线播放那根音量滑杆前头的记号（喇叭 + 两道声波）。它旁边那一行字
      写的才是这一页的关键：这个音量管的是**终端听见的那一份**，不是这台电脑。 */
   volume: svgIcon('<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'),
+  /* 静音时那一枚：喇叭还在，上面斜着划一道 —— 「划掉」的意思。同一套笔画。 */
+  volumeX: svgIcon('<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M22 8 2 20"/>'),
   /* delete —— 拨号盘号码行最右边那枚退格：向前删掉一位。
      它只在这一处用，所以没跟上面那两枚页签记号摆在一起说。 */
   bksp : svgIcon('<path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2"/><path d="m18 9-6 6"/><path d="m12 9 6 6"/>'),
@@ -689,7 +698,8 @@ async function api(method, path, opts){
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   let res;
   try{
-    res = await fetch(url, {method, headers, body: opts.body!==undefined ? JSON.stringify(opts.body) : undefined});
+    res = await fetch(url, {method, headers, signal: opts.signal,
+                            body: opts.body!==undefined ? JSON.stringify(opts.body) : undefined});
   }catch(e){
     const err = new Error("无法连接服务器（浏览器可能拦截了跨域请求，见右下角说明）");
     err.network = true; throw err;

@@ -109,7 +109,8 @@ let sendChain = Promise.resolve();      /* 即时模式下一条接一条，不�
 
    计数式：一次用户操作可能排进十几条，全排空了才松。busyOn() 交回一个凭据，
    busyOff() 认凭据 —— 免得中途哪条路走岔了把账算错，挡板就永远摘不下来。 */
-const BUSY_SLOW = 400;                  /* 排队超过这么久才值得吱一声 */
+const BUSY_SLOW = 0;                    /* 0 = 一挂上挡板就显示（用户定的）。
+                                           这一项留着：以后想再压一压闪烁，调大即可。 */
 let busyN = 0, busySlowT = null;
 
 function busyOn(){

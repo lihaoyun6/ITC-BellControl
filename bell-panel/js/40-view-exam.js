@@ -275,15 +275,32 @@ const LISTEN_VOL_DEFAULT = 85;
    但页面上一行只放得下一天，一科考两天（比如上午语文下午数学）分成两行更清楚。
    音源留空（显示「无」）：没人替用户挑，挑错了是考场上放错音；空着就归
    examRowBad 管，启用考试模式那一下会拦。 */
+/* 本组（分区）已经排过科目时，新一行的默认开考时间接在**最后一个科目**的
+   结束时间之后 10 分钟（用户定的）；还没有科目就还是 08:00。
+   时刻在行里可能是 "HH:MM" 也可能是 "HH:MM:SS"，统一按秒算再取回 "HH:MM"；
+   真排到午夜之后没有意义，停在 23:59。 */
+function examNextStart(sec){
+  const last = sec && sec.bells && sec.bells.length ? sec.bells[sec.bells.length-1] : null;
+  if (!last || !last.end) return "08:00";
+  const t = hmsToSec(last.end) + 10*60;
+  return secToHMS(Math.min(t, 23*3600 + 59*60)).slice(0,5);
+}
 /* n 是这一行在列表里的位次（1 起）：科目默认就叫「科目n」。按位次而不是按
    已有行数取名是有意的 —— 用户把第一行改叫「语文」之后再添加一行，新行仍然
-   叫「科目2」而不是「科目1」。 */
-const blankExamRow = (n)=>({
-  date: todayISO(),
-  start:"08:00", end:"09:00", subject:"科目"+(n||1),
-  media:"", vol:70,
-  listen:"", listenVol:LISTEN_VOL_DEFAULT
-});
+   叫「科目2」而不是「科目1」。start 由调用方按本组上一科算好（见上），
+   没给就沿用老默认 08:00。结束时间跟着开考走：默认一小时（用户定的），
+   所以没有上一科时还是 08:00–09:00，有上一科时就是「上一科结束+10 分」起、
+   再考一小时。 */
+const blankExamRow = (n, start)=>{
+  const st = start || "08:00";
+  const en = secToHMS(Math.min(hmsToSec(st)+3600, 23*3600 + 59*60)).slice(0,5);
+  return {
+    date: todayISO(),
+    start: st, end: en, subject:"科目"+(n||1),
+    media:"", vol:70,
+    listen:"", listenVol:LISTEN_VOL_DEFAULT
+  };
+};
 /* 一行考试安排缺什么。返回 {media?/subject?/end?}，齐了就是空对象。
    启用考试模式前逐行过一遍（examSectionHTML 按它标红、enableExam 按它拦截）：
    这三格空着写出去的就是一条没音源 / 没科目名 / 没有结束铃的铃声。 */
@@ -1150,12 +1167,40 @@ setInterval(()=>{
   syncExamDone();
 }, EXAM_DONE_POLL);
 
+/* 考试安排摆成哪一份：**横屏且够宽**用九列表格直接编辑，其余用「一场一行」
+   概览 + 编辑弹窗（用户定的）。
+   - 竖屏不管多宽都用概览 —— 一排输入框在竖着拿的屏上摆不开；
+   - 横屏的表格最窄压到 980px 那一档为止，再窄就回到概览。
+   宽度判据跟 css 同一个门槛（isNarrow 是 ≤980px）；方向是另一件事，
+   两者都要满足才画表。 */
+const examDirect = ()=> !isNarrow() && window.matchMedia("(orientation:landscape)").matches;
+
+/* 转屏 / 窗口跨过 980px 时当场换排版，不等下一次重画（用户要的动态切换）。
+   两个判据都听着；只在**真的换了档**时重画。手上正敲着的格子先 blur，
+   让它照 change 那条路把值落下来，别被这一趟重画吞掉。 */
+let examDirectLast = examDirect();
+function syncExamLayout(){
+  const now = examDirect();
+  const changed = now !== examDirectLast;
+  examDirectLast = now;
+  if (!changed) return;
+  if (S.view !== "app" || S.mode !== "exam") return;
+  const ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){ try{ ae.blur(); }catch(e){} }
+  renderAll();
+}
+["(orientation:landscape)","(max-width:980px)"].forEach(q=>{
+  const mq = window.matchMedia(q);
+  if (mq.addEventListener) mq.addEventListener("change", syncExamLayout);
+  else if (mq.addListener) mq.addListener(syncExamLayout);   /* 老 WKWebView */
+});
+
 function renderExam(){
   const el = $("#main"); if (!el) return;
-  /* 竖屏上点开的那份「改动预览」是**整页顶掉这一页**的（见 openExamPreview）。
-     窗口要是停在它上面被拉宽了 —— 没有 resize 监听，所以只能等下一次重画 ——
-     当场退回考试模式这一页，和「终端任务反查」同一个处理（见 70-view-more）。 */
-  if (S.dt.exPreview && !isNarrow()) S.dt.exPreview = false;
+  /* 概览那一档点开的那份「改动预览」是**整页顶掉这一页**的（见 openExamPreview）。
+     转到直接编辑那一档（横屏且够宽）时，那一页已经没有存在的理由，当场退回
+     考试模式这一页，和「终端任务反查」同一个处理（见 70-view-more）。 */
+  if (S.dt.exPreview && examDirect()) S.dt.exPreview = false;
   if (S.dt.exPreview) return renderExamPreviewFull(el);
   el.classList.add("headfix");   /* 「考试模式」那一行钉住，下面整块（面板 + 分区）自己滚 */
   /* S.exam 是**开工前就得有**的东西：刷新页面停在考试模式这一页时，第一帧会赶在
@@ -1365,12 +1410,12 @@ function renderExam(){
        加完就在表里改，省掉一层弹窗。竖屏仍然弹「添加考试」，一屏一个科目慢慢填。 */
     q("[data-act=addbell]").onclick = ()=>{
       if (!isPortraitNarrow()){
-        sec.bells.push(blankExamRow(sec.bells.length+1));
+        sec.bells.push(blankExamRow(sec.bells.length+1, examNextStart(sec)));
         saveExamLocal();
         renderAll();
         return;
       }
-      openExamEdit(sec, blankExamRow(sec.bells.length+1), true);
+      openExamEdit(sec, blankExamRow(sec.bells.length+1, examNextStart(sec)), true);
     };
     /* 区域胶囊上的一下：把点中的那个名字从**这一块**的区域里摘掉。
        点位和分组分在两个数组里（sec.t / sec.g），所以这儿得看 k。 */
@@ -1384,9 +1429,9 @@ function renderExam(){
   $$("[data-sec] [data-row]", el).forEach(tr=>{
     const sec = examSection(tr.closest("[data-sec]").dataset.sec);
     const row = sec.bells[Number(tr.dataset.row)];
-    /* 竖屏的概览行上没有输入框，只有末尾那两枚按钮；别的都不用接。
+    /* 概览行上没有输入框，只有末尾那两枚按钮；别的都不用接。
        （同一份 [data-row] 选择器两边共用，所以在这儿按门槛分岔。） */
-    if (isNarrow()){
+    if (!examDirect()){
       tr.querySelector("[data-f=edit]").onclick = ()=> openExamEdit(sec, row);
       tr.querySelector("[data-f=del]").onclick = ()=>{ sec.bells.splice(sec.bells.indexOf(row),1); saveExamLocal(); renderAll(); };
       return;
@@ -1594,10 +1639,9 @@ function openExamEdit(sec, row, isNew){
 }
 
 function examSectionHTML(s){
-  /* 竖屏和 css 里 .tbl-exam 那一档用同一个门槛（isNarrow 就是 ≤980px）。
-     这一档不摆那排输入框，改成「一场一行」的概览，编辑走弹窗 —— 理由见
-     下面 sumRows 那段。 */
-  const narrow = isNarrow();
+  /* 直接编辑（横屏且够宽）之外的档都不摆那排输入框，改成「一场一行」的
+     概览，编辑走弹窗 —— 理由见下面 sumRows 那段。 */
+  const narrow = !examDirect();
   const onlyOne = S.exam.sections.length === 1;
   /* 上一次点「启用考试模式」被拦下来过（e.checked），这一行的缺格才标红；改对了
      就随重画自己消失。没被拦过的时候一格红都不挂 —— 新加的一行本来就是空的。 */
@@ -1736,8 +1780,8 @@ function examSectionHTML(s){
     '</div>'+
     (s.bells.length?
       (narrow ?
-        /* 竖屏：一场一行，末尾两枚按钮（编辑 / 删除）。表头和行共用 css 里
-           那一份列宽，所以各场之间自然对齐。 */
+        /* 概览那一档（竖屏，或横屏 ≤980px）：一场一行，末尾两枚按钮
+           （编辑 / 删除）。表头和行共用 css 里那一份列宽，所以各场之间自然对齐。 */
         '<div class="ex-sum">'+
           '<div class="ex-sum-row ex-sum-head">'+
             '<span>科目</span><span>日期</span><span>开考</span><span>结束</span>'+
@@ -1746,9 +1790,10 @@ function examSectionHTML(s){
           '</div>'+ sumRows +
         '</div>'
        :
-        /* 宽屏：还是那张表。tbl-exam 这个类留着 —— css 里 ≤980px 那一档虽然
-           轮不到它（同一个门槛下这里已经画成 .ex-sum 了），但它还带着那几格
-           在中等宽度下的最小宽度，删掉就得把那些尺寸另找地方放。 */
+        /* 直接编辑那一档（横屏且 >980px）：还是那张表。tbl-exam 这个类留着 ——
+           css 里 ≤980px 那一档还挂着它那套 flex 排法（现在轮不到它：≤980px
+           早已画成 .ex-sum），但宽屏这档那几格的最小宽度也挂在类上，删掉就得
+           把那些尺寸另找地方放。 */
         '<div class="tbl-wrap"><table class="tbl tbl-exam"><thead><tr>'+
           '<th style="width:225px">考试科目</th>'+
           /* 这张 <thead> 和上面每一行 <td> 的 data-lab 一一对应，改一个记得改另一个。
@@ -1781,7 +1826,7 @@ function examSectionHTML(s){
    那边已经付过一次学费了，不再另发明一种。
    宽度写死 760px 是给宽屏那一档的（就是 --mw 那个上限）。 */
 function openExamPreview(){
-  if (isNarrow()){
+  if (!examDirect()){
     if (S.dt.exPreview) return;
     /* 走 renderAll() 不走 renderMain()：那枚「‹ 返回」住在顶栏里，
        不重画顶栏它不会长出来。 */

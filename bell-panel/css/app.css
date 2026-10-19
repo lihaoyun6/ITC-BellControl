@@ -10,7 +10,7 @@
   /* 控件组标题栏的底与两级标题色、组内行的副标题色（用户定的 Klein 浅色）。
      其余配色和深色模式照旧用 --surface-2 / --fg-2 / --fg-3，见下面 summer
      和各暗色块里的回落。 */
-  --panel-head-bg:#E5E5E8;
+  --panel-head-bg:#E4E4EC;
   --panel-title:#5a5a5c; --panel-sub:#818184; --row-sub:#929298;
   /* 长名单的**隔行底**（见下面「隔行换底」那几条）。是一层极浅的中性灰，
      比 --accent-soft（选中用的那档）还浅一头 —— 两个色各有各的活：
@@ -607,6 +607,16 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
    字那一边其实还各留着 2px 内边距（.chip-link 的 padding），所以图标和字看上去
    还有 4px；那点边距是鼠标划过来时下划线的余地，不能再动了。 */
 .topbar .stat{display:inline-flex;align-items:center;gap:2px}
+/* 「已连接」「终端 xx/xx」这两格：自己的记号和自己那行字之间再各加 2px
+   （用户定的，2 → 4）。注销那一格不动。 */
+.topbar .tb-stats>#connCell,
+.topbar .tb-stats>#termCell{gap:4px}
+/* 顶栏那三枚可点的读数（已连接 / 终端 / 注销）之间再各多让 2px —— 用户定的，
+   横竖屏都算数。窄屏那档 .tb-stats 是 flex + gap:6px，这里是在它上面再加；
+   宽屏是 .topbar-inner 的 gap:14px，同理。 */
+.topbar .tb-stats>.stat+.stat{margin-left:2px}
+/* 「已连接」到「终端 xx/xx」这一档再各多让 1px（用户定的，2 → 3）。 */
+.topbar .tb-stats>#connCell+#termCell{margin-left:3px}
 /* 用户头像：图标库里那个人头（ICON.user），**不套圈** —— 就是一颗 16px 的绿图标，
    和左边那颗显示器（.icostat .ic）同尺寸、同「一格里一个记号」的排法，看着才是一套的。
    绿色是固定的，不跟连接状态走：它说的是「这是登录用户那一格」，不是任何状态。
@@ -850,9 +860,9 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
 }   /* 填满可用宽度；只有超宽屏才居中留白 */
 /* 「铃声计划」页：整页不滚，两栏各滚各的。
    内边距单独写全（不靠基线那条 `padding:20px 24px 80px`）：这一页顶上那条是页签
-   底下的第一块内容，20px 有点空，收到 16px；左右反而比别的页松一点（24 → 20 是
-   往回收，但竖屏那一档的 16px 会被这条 (0,2,0) 压住，所以两边都按 20px 走）。
-   底部照旧 0 —— 这一页的滚动条长在里层，底下再留白就是一条穿帮的空白。 */
+   底下的第一块内容，20px 有点空，收到 16px；左右 20px 比其它页松一点，
+   **窄屏那一档会被拨回全站的 16px**（见文件末尾）；底部照旧 0 —— 这一页的
+   滚动条长在里层，底下再留白就是一条穿帮的空白。 */
 .main-inner.pane{overflow:hidden;padding:16px 20px 0;display:flex;flex-direction:column}
 /* 整页不滚那一版式：顶栏 + 面板标题 + 表头都钉住，只滚里面那张表。
    「更多功能」的查询结果和考试模式那份「改动预览」用它（都是「一条标题 + 一张
@@ -880,6 +890,12 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
    底部照旧留给 .page-body 那 80px。窄屏那一档在文件末尾有一条把它拨回
    全站统一的 16px，别以为这条在那儿也生效。 */
 .main-inner.headfix.setpage{padding:16px 20px 0}
+/* 横屏（宽屏那一档）：设置页跟其它页用同一套外边距（20 / 24）。
+   基线那条的 16 / 20 是竖屏观感定的，横屏上就比别的页各窄 4px（用户报的）。
+   底部不动 —— 仍由 .page-body 那 80px 管。 */
+@media (min-width:981px) and (orientation:landscape){
+  .main-inner.headfix.setpage{padding:20px 24px 0}
+}
 /* 考试模式排布下去之后，这一整块是锁着的（lockExam 挂的 .is-locked）。
    控件都已经 disabled 了，但光靠 disabled 看不出来 —— 白底的输入框和下拉
    在浏览器里只有光标变一下，长得和能填的一模一样。所以整块压暗一档、
@@ -1179,6 +1195,56 @@ table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
      藏的是第 4 列，数着 nth-child 来的 —— 宽屏那份 <thead> 加一格记得跟着改这儿。 */
   .tbl-more th:nth-child(4),.tbl-more td:nth-child(4){display:none}
 }
+/* ── 「更多功能」首页的两张卡片 ─────────────────────────────────────
+   照「选择设备分组」那套 .grp-card 的样子：描边、圆角、白底，扫一眼就是一格
+   能点进去的东西。图标 + 标题/说明 + 右箭头，宽屏自动铺、窄屏一列。 */
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.mod-card{display:flex;align-items:flex-start;gap:12px;width:100%;min-width:0;
+  padding:14px 16px;text-align:left;cursor:pointer;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+.mod-card:hover{border-color:var(--border-strong);background:var(--surface-2)}
+.mod-card .mod-ic{flex:none;width:34px;height:34px;border-radius:var(--r-sm);
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--accent-soft);color:var(--accent)}
+.mod-card .mod-ic svg{width:18px;height:18px}
+.mod-card .mod-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.mod-card .mod-tx .n{font-weight:600;font-size:14px;color:var(--fg)}
+.mod-card .mod-tx .d{font-size:12px;color:var(--fg-3);line-height:1.45}
+.mod-card .mod-go{flex:none;align-self:center;color:var(--fg-3)}
+.mod-card .mod-go svg{width:16px;height:16px}
+@media (max-width:640px){.mod-grid{grid-template-columns:1fr}}
+/* 子页标题行里那枚返回键：宽屏才有（窄屏顶栏已经有一枚 #tbBack）。 */
+.more-back{display:none}
+@media (min-width:981px){.more-back{display:inline-flex}}
+/* 终端测试那两格条件：竖屏上下摞，横屏（含手机横持）并排一行。
+   不用 .grid2 —— 它在 ≤980px 一律收成一列，手机横屏也会被收掉。 */
+.more-test-fields{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:981px),(orientation:landscape){
+  .more-test-fields{grid-template-columns:1fr 1fr}
+}
+/* 条件区底下那排按钮：靠右；前面若有一句状态字，它自己占左边。 */
+.more-btns{display:flex;align-items:center;justify-content:flex-end;gap:10px;
+  margin-top:14px;flex-wrap:wrap}
+.more-btns .hint{margin-right:auto}
+/* 结果／状态面板里什么都没有时那一句。 */
+.more-empty{padding:28px 16px}
+/* 终端测试下面那份「分组 + 终端」两层状态。整块自己滚（和 .tbl-wrap 在
+   .panel.grow 里的角色一样，只是这里装的不是表）。 */
+.more-tstat{flex:1;min-height:0;overflow-y:auto;padding:12px 14px}
+.tstat-grp{border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);overflow:hidden}
+.tstat-grp + .tstat-grp{margin-top:12px}
+.tstat-head{display:flex;align-items:baseline;gap:8px;padding:8px 12px;
+  border-bottom:1px solid var(--border);background:var(--panel-head-bg)}
+.tstat-head .n{min-width:0;font-weight:600;font-size:13px;color:var(--panel-title);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tstat-head .c{margin-left:auto;flex:none;font-size:11px;color:var(--fg-3);
+  font-family:"IBM Plex Mono",monospace}
+/* 行借 .pick-row 的排版（点 + 名字 + 右边两格），但这里点不动。 */
+.tstat-grp .pick-row{cursor:default}
+.tstat-grp .pick-row:hover{background:transparent}
+.tstat-grp .pick-row:nth-child(even){background:var(--row-alt)}
+.tstat-grp .pick-row .stt{flex:none;white-space:nowrap;font-size:11px;color:var(--fg-3)}
 .tbl-bells .c-act{width:106px}
 /* 「时间属性」和「播放时长」—— 只在横屏上存在的两列（竖屏按列号收掉，见 ≤980px）。
    两列的字都是短字符串（「周二到周五」「00:00:30」），钉死宽度，别让它们跟着
@@ -1259,9 +1325,82 @@ table.tbl-exam .select-btn{height:calc(1.55em + 10px)}
   /* 该让位的三格各自的底线 —— 不给的话会一路缩到几个像素，框窄得打不了字，
      比横向滚难用得多 */
   table.tbl-exam td[data-lab="考试科目"] .input{min-width:118px}
-  table.tbl-exam td[data-lab="考试铃声"] > .select-btn{min-width:100px}
-  table.tbl-exam td[data-lab="听力音频"] > .select-btn{min-width:86px}
+  /* 考试铃声 / 听力音频这两格可以让到很小（用户要的：横屏直接编辑一直压到
+     980px 那一档为止）。它们是「长得像下拉」的按钮，文件名长了有自己的省略号，
+     不像科目和时刻那样非留住可读宽度不可；底线只留到「还看得出是个选择框」。
+     另外得把按钮的**内容**从列宽计算里摘出去：选了长文件名的那一列，内容会
+     把自己的 max-content 撑大，表宽不够时浏览器就先保它 —— 看着就是「只有
+     听力音频在缩、考试铃声始终不动」（用户实测）。inline-size 的包含让固有
+     宽度按内容之外算，列宽只认格子上写死的 150px 与下面这条底线，两列才会
+     一起让位；按钮自己照旧 width:100% 铺满格子，宽屏上不会留空。
+     别的格不动 —— 整张表要滚动之前，先让这两格让位。 */
+  table.tbl-exam td[data-lab="考试铃声"] > .select-btn{min-width:64px;contain:inline-size}
+  table.tbl-exam td[data-lab="听力音频"] > .select-btn{min-width:48px;contain:inline-size}
 }
+
+/* ── 考试概览（一场一行）─────────────────────────────────────────────
+   「直接编辑」那一档（横屏且 >980px）画的是上面那张 .tbl-exam；其余档 ——
+   竖屏（不论多宽，iPad 也算）和横屏 ≤980px —— JS 画的是这组行。所以这套
+   规则**不能放进宽度媒体查询里**：iPad 竖屏比 980px 宽，放进去就匹配不到。
+   表头和数据行共用同一份列宽，所以场次再多也是对齐的：
+     科目（吃零头）/ 日期 / 开考 / 结束 / 听力 / 编辑 / 删除
+   固定列按内容量给：日期 10 个等宽字符在 11px 下约 66px；时刻 5 个字符
+   约 33px；听力只有一个状态点；两枚按钮各 24px。375 的屏上科目那列
+   还剩一百来像素，长科目名自己打省略号。 */
+/* 行高 38px、题头 30px，行与行之间一道横线（用户定的，和别的长名单一个口径）。
+   上下内边距归零，高度交给 height —— 行尾按钮才 26px 高，38 放得下。 */
+.ex-sum-row{
+  display:grid;align-items:center;column-gap:6px;
+  grid-template-columns:minmax(0,1fr) 70px 40px 40px 24px 24px 24px;
+  height:38px;padding:0 10px;border-bottom:1px solid var(--border);
+}
+/* 最后一行贴着下面的「听力音频延迟」那格（它自己有 border-top），
+   再挂一根就成了双线 */
+.ex-sum-row:last-child{border-bottom:0}
+/* 竖线一根都不要：列与列靠列宽和留白分开。横线两道 —— 题头底下一根，
+   行与行之间一根（用户定的，和铃声表 / 任务表那两张长名单一个口径）。
+   隔行换底照旧留着。 */
+/* 隔行换底，和表格里 `tbody tr:nth-child(even)` 同一个相位：
+   表头占掉第 1 个孩子位，所以表体的第 2、4… 行是 odd。表头不垫底。 */
+.ex-sum-head ~ .ex-sum-row:nth-child(odd){background:var(--row-alt)}
+/* 表头照宽屏 <th> 的样子来：11px 那一档再小一号、复写间距、不加粗到压眼。 */
+.ex-sum-head{
+  height:30px;padding-top:0;padding-bottom:0;
+  color:var(--fg-3);
+  font-size:10px;font-weight:700;letter-spacing:.06em;
+  border-bottom:1px solid var(--border);
+}
+.ex-sum-head span{white-space:nowrap}
+.ex-sum-row .mono{font-size:11px}
+.ex-sum-row .c-subject{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:13px;
+}
+.ex-sum-row .c-date,.ex-sum-row .c-time{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* 听力这一列只放一枚状态点：有 = 绿圈勾，没有 = 灰圈横线，横向居中。
+   表头那两个字也跟着居中对齐到点子上，否则左对齐的字和居中的点看着像错位。 */
+.ex-sum-row .c-listen{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--fg-2)}
+.ex-sum-head .c-listen{font-size:10px;color:var(--fg-3)}
+.ex-sum-row .ex-dot{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;border-radius:50%;
+}
+.ex-sum-row .ex-dot>.ic{width:8px;height:8px;stroke-width:3.2}
+.ex-sum-row .ex-dot.yes{background:var(--good);color:var(--surface)}
+.ex-sum-row .ex-dot.no{background:var(--surface-3);color:var(--fg-3)}
+.ex-sum-row .is-bad{color:var(--crit)}
+/* 行尾两枚按钮和 .rowacts .ric 一个尺寸、一种 hover；铅笔点在缺格时带红。 */
+.ex-ic{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:26px;padding:0;border:0;border-radius:5px;
+  background:transparent;color:var(--fg-2);cursor:pointer;
+}
+.ex-ic:hover{background:var(--surface-3);color:var(--fg)}
+.ex-ic.danger:hover{background:var(--crit-soft);color:var(--crit)}
+.ex-ic.warn{color:var(--crit)}
+.ex-ic:disabled{opacity:.45;cursor:not-allowed}
+.ex-ic .ic{width:15px;height:15px}
+
 td.t{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:14px;white-space:nowrap}
 td.n{font-weight:500}
 td .sub{font-size:12px;color:var(--row-sub)}
@@ -1544,9 +1683,19 @@ table.tbl-tasks tbody td{height:38px;padding-top:4px;padding-bottom:4px;
 
 /* 添加/编辑铃声顶上那四格（名称 / 执行时间 / 执行周期 / 优先级）：宽屏一行，
    名称吃掉剩下的全部宽度，后三格给死尺寸（用户定的：名称自动充满横向剩余空间，
-   优先级跟在执行周期后面）。竖屏另排两行，靠 [data-bf] 上的 order 和 span
-   重排，见文件末尾竖屏那一大段。 */
+   优先级跟在执行周期后面）。竖屏另排两行，靠外面包的两层 .bf-row 重排，
+   见文件末尾竖屏那一大段。 */
+/* 四格外面包的两层（第一行名称+优先级，第二行时间+周期）：宽屏上直接摊平，
+   等于没有这两层；竖屏才让它们各成一条网格（见文件末尾）。 */
+.bell-top>.bf-row{display:contents}
 .grid3.bell-top{grid-template-columns:minmax(0,1fr) 112px 132px 55px}
+/* 四列的宽度是按「名称 / 执行时间 / 执行周期 / 优先级」给的，而 DOM 里两行是按
+   「名称 + 优先级」「执行时间 + 执行周期」包的，所以用 order 把这四格摆回列序。
+   竖屏里每一行各自只有两格（1+4、2+3），排出来仍是原来的先后。 */
+.bell-top .bf-name{order:1}
+.bell-top [data-bf=time]{order:2}
+.bell-top [data-bf=strat]{order:3}
+.bell-top [data-bf=pri]{order:4}
 /* 音源那块里「播放模式 / 播放时长 / 音量」一行：前两格平分剩下的宽度（用户定的），
    音量固定 55px。用 flex 而不是定列数的 grid —— 只有两格时 flex 自己就分满了。 */
 .bell-play{display:flex;align-items:flex-start;gap:12px}
@@ -1865,8 +2014,9 @@ html.in-app #mHead > .chk{margin-left:2px}
 
 /* 发送期间的整页挡板（只在草稿模式关着时挂上，见 js/50-drawer.js 的 busyOn）。
    底色是全透明的 —— 点一下开关那种一两百毫秒的，用户除了光标变忙之外一个像素
-   都看不到，不会「啪地闪一下」。只有真排上队、过了 0.4 秒还没排空，body 上才多
-   一个 busy-slow，那行字才淡出来（没排到 0.4 秒就散了的话，它压根没机会出现）。
+   都看不到，不会「啪地闪一下」。现在 BUSY_SLOW 是 0（用户定的：立即显示），
+   挡板一挂上，body 上就多
+   一个 busy-slow，那行字才淡出来（BUSY_SLOW 在哪一档见 js）。
    z-index 90 要压过所有点得动的东西：时间转轮 70、通知 60、弹窗 50、抽屉 41。
    **那行字放顶边居中**（用户定的，原来是底边居中）：它是一句「正在写入」，视线
    在等的时候是往上找的 —— 顶栏本来就在头顶，浮在它正中间那条空档上最显眼，
@@ -1875,6 +2025,11 @@ html.in-app #mHead > .chk{margin-left:2px}
    11px 是照顶栏量的：.topbar-inner 高 54px，这枚胶囊约 33px，两边各余 10 左右。 */
 .busy-veil{display:none}
 body.busy .busy-veil{display:block;position:fixed;top:0;right:0;bottom:0;left:0;z-index:90;cursor:progress}
+/* 灰底 + 模糊（BUSY_SLOW 现为 0，挡板一挂上就出现）：批量改设置这种几十条报文要跑
+   十几秒，光挡住点击的话界面看不出「现在点不动」，像是卡住了。快的单条不压 ——
+   不然「啪地闪一下」又回来了。 */
+body.busy-slow .busy-veil{background:rgba(0,0,0,.18);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);animation:fade .18s ease}
 .busy-tip{position:absolute;left:50%;top:calc(11px + env(safe-area-inset-top,0px));
   transform:translateX(-50%);padding:7px 15px;border-radius:999px;
   background:var(--surface);border:1px solid var(--border-strong);box-shadow:var(--shadow-md);
@@ -2073,8 +2228,13 @@ body.tip-show .busy-tip{opacity:1}
 /* 图标 20→22px（110%，用户定的），和上面那行字号同一个倍数。 */
 .dialpad .key .ic{width:22px;height:22px}
 /* 数字键划过按过变一层浅底。三个动作键的颜色来源是下面 `.dialpad .act.xxx`
-   —— 同权重、排在后面，所以这一红一绿不会被这两条冲掉。 */
-.dialpad .key:hover{background:var(--surface-2)}
+   —— 同权重、排在后面，所以这一红一绿不会被这两条冲掉。
+   划过那一条只给真有鼠标的设备：触摸屏的 :hover 会粘在刚点过的那颗键上，
+   点完数字键就一直留着一层灰（用户实测，重画之后那块灰还在）。按下去
+   那一条（:active）照旧，手指抬起就没了。 */
+@media (hover:hover) and (pointer:fine){
+  .dialpad .key:hover{background:var(--surface-2)}
+}
 .dialpad .key:active{background:var(--surface-3)}
 /* 停用的键：眼下只有退格（号码空着时）。`:not(.act)` 是必须的 ——
    少了它，下面那条 `[disabled]:hover`（权重更高）会盖住挂断键的红，
@@ -2096,10 +2256,13 @@ body.tip-show .busy-tip{opacity:1}
    `.dialpad .act.xxx`（同权重，但排在后面），所以鼠标划过、按下都不会把红/绿
    冲成一片浅灰。按下时改成「整体压暗一点点」—— 那一下的反馈还得有。 */
 .dialpad .act.hang{background:var(--crit);border-color:var(--crit);color:#fff}
-.dialpad .act.hang:not([disabled]):hover{filter:brightness(1.12)}
-.dialpad .act.hang:not([disabled]):active{filter:brightness(.94)}
 .dialpad .act.call{background:var(--good);border-color:var(--good);color:#fff}
-.dialpad .act.call:not([disabled]):hover{filter:brightness(1.12)}
+/* 划过提亮同样只给鼠标：触摸屏上它会粘在点过的键上。按下压暗照旧。 */
+@media (hover:hover) and (pointer:fine){
+  .dialpad .act.hang:not([disabled]):hover{filter:brightness(1.12)}
+  .dialpad .act.call:not([disabled]):hover{filter:brightness(1.12)}
+}
+.dialpad .act.hang:not([disabled]):active{filter:brightness(.94)}
 .dialpad .act.call:not([disabled]):active{filter:brightness(.94)}
 /* 暂停键。没接通是灰的（下面这条基线），**接通后就是一块纯色实心、无边框**
    （用户定的）—— 原来是浅黄底 + 深黄边，那一圈边就是用户要去掉的东西。
@@ -2116,7 +2279,9 @@ body.tip-show .busy-tip{opacity:1}
 .dialpad .act.pause:not([disabled]){background:var(--warn-dot);border-color:var(--warn-dot);color:#fff}
 /* 划过按下都走「整体提亮一档」，和挂断/呼叫同一个手法（它们原来就用 filter）——
    底色已经是最饱和的琥珀，再往 `background` 上加没有东西可加了。 */
-.dialpad .act.pause:not([disabled]):hover{filter:brightness(1.06)}
+@media (hover:hover) and (pointer:fine){
+  .dialpad .act.pause:not([disabled]):hover{filter:brightness(1.06)}
+}
 .dialpad .act.pause:not([disabled]):active{filter:brightness(.94)}
 .dialpad .act.pause.on{background:var(--warn-dot);border-color:var(--warn-dot);color:#fff}
 
@@ -2196,6 +2361,14 @@ body.tip-show .busy-tip{opacity:1}
 .page-body.is-fill .live-pick .grp-grid{flex:1 1 auto;min-height:0;overflow-y:auto}
 .page-body.is-fill .live-pick .pick{max-height:none}
 .page-body.is-fill .live-pick .grp-grid{align-content:start}
+/* 实时对讲 / 在线播放 / 更多功能 / 全局设置四页：「标题那一行」到底下内容之间
+   加 2px（用户定的，16 → 18）。
+   只认这四页 —— 对讲的 page-body 挂着 .is-fill，播放页 .play-page，更多功能
+   .more-page，设置页是 #main 上的 .setpage，别的页都没有这些标记。 */
+.main-inner.headfix:has(> .page-body.is-fill) > .sec-head,
+.main-inner.headfix:has(> .page-body.play-page) > .sec-head,
+.main-inner.headfix:has(> .page-body.more-page) > .sec-head,
+.main-inner.headfix.setpage > .sec-head{margin-bottom:18px}
 
 /* 窄屏：键盘矮一档（56→52）。底下多了一条导航栏要养（.navbar，约 52px），
    不矮这一档，390×844 的机器上「呼叫」那一排会被压到折线以下要滚一下才够得着。 */
@@ -2304,7 +2477,14 @@ body.tip-show .busy-tip{opacity:1}
    竖屏这个位置站的是音量滑杆。 */
 .pl-h{display:none}
 .pl-vol{display:flex;align-items:center;gap:8px;flex:1 1 150px;min-width:0;max-width:240px;color:var(--fg-3)}
-.pl-vol>svg.ic{width:15px;height:15px;flex:none}
+/* 标题栏那枚喇叭现在是个按钮：点一下静音、再点一下恢复（见 js 的 playVolToggleMute）。
+   视觉尺寸和它跟滑杆的间距都没变；::before 把可点范围往四周各撑 8px，
+   手指按得中又不占布局。 */
+.pl-vol-mute{position:relative;display:inline-flex;align-items:center;justify-content:center;
+  flex:none;padding:0;border:0;background:transparent;color:inherit;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.pl-vol-mute::before{content:"";position:absolute;inset:-8px}
+.pl-vol-mute>svg.ic{width:15px;height:15px;flex:none;display:block}
 /* 滑杆用的是浏览器**原生**的 input[type=range]，只拿 accent-color 染一下拇指和
    已选那段（和那一排复选框同一个做法）—— 它是项目里第一根 range。不照 .pl-scrub
    那样自己造一根：拖拽、键盘方向键、无障碍朗读都是原生白送的，自己写要把这三样
@@ -2324,17 +2504,35 @@ body.tip-show .busy-tip{opacity:1}
   .pl-vol input[type=range]{-webkit-appearance:none;appearance:none;height:26px}
   .pl-vol input[type=range]::-webkit-slider-runnable-track{
     height:4px;border-radius:4px;
+    /* 未选那段用 --fg-3（三级字灰）而不是 --surface-3：这根滑杆坐在面板题头上，
+       题头底是 --panel-head-bg，Klein 浅色里它和 --surface-3 几乎同色
+       （#E4E4EC / #E5E5EA），整段看着像没有轨道。 */
     background:linear-gradient(to right,
-      var(--accent-fill) var(--p,0%), var(--surface-3) var(--p,0%))}
+      var(--accent-fill) var(--p,0%), var(--fg-3) var(--p,0%))}
   /* 抓手 14 → 22px（用户定的）：触屏上 14px 的圆点太难点。轨道 4px，
-     (4−22)/2 = −9，圆点仍然压在轨道正中。 */
+     (4−22)/2 = −9，圆点仍然压在轨道正中。
+     实心圆点改成描边（用户定的）：去掉阴影，留一圈重点色描边，里头是面板底色。
+     box-sizing 让 2px 描边算在 22px 里面，圆点总大小和贴轨道的位置都不变。 */
   .pl-vol input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
+    box-sizing:border-box;
     width:22px;height:22px;margin-top:-9px;border-radius:50%;
-    background:var(--accent-fill)}
+    background:var(--surface);border:2px solid var(--accent-fill);box-shadow:none}
+  /* 进度条的抓手也跟着放大到 22px（用户定的）：和音量抓手同一个尺寸。
+     保持原来的重点色实心，不加描边；位置靠 top:50% + translate 自己居中，
+     只改大小就行。热区仍是 .pl-scrub 那 26px。 */
+  .pl-scrub>b{width:22px;height:22px}
+  /* 抓手放大后，滑到 0 / 100 会越出轨道两端、压到左右两个时间读数上。
+     两侧各让出 8px 接住探出去的那半个圆点：圆点边缘到读数还有 7px
+     （8 + 原来的 10px gap − 半径 11）。拖动比例按元素自身矩形换算，
+     margin 不影响它。 */
+  .pl-scrub{margin:0 8px}
   /* 百分比离滑杆近一点（用户定的）：整条的 gap 收到 2px，喇叭和滑杆之间
      那 8px 拆出来补在图标自己的右边距上 —— 只动滑杆右侧那一处。 */
   .pl-vol{gap:2px}
-  .pl-vol>svg.ic{margin-right:6px}
+  .pl-vol-mute{margin-right:6px}
+  /* 竖屏的音量读数用主要文字颜色（用户定的）：--fg-3 在手机上太淡。
+     喇叭图标也是 currentColor，跟着一起变。 */
+  .pl-vol,.pl-vol .pc{color:var(--fg)}
 }
 
 /* 三枚圆键。**不用 .btn**：那是方角的一档，这儿要的是圆盘底下那几颗圆的
@@ -2508,6 +2706,11 @@ body.tip-show .busy-tip{opacity:1}
      DOM 一个字不动，只改 order —— 单子从底下挪到最上面，标题栏（音量、添加文件）
      沉到最底下。 */
   .page-body.play-page > .panel:last-child > .panel-head{order:2}
+  /* 标题栏挪到底以后，它自带的 border-bottom 正好贴在面板自己的底边框上，
+     底边看着像两道描边（用户看到的）。线改挂到上边：题头和数据之间照样分开，
+     底边只剩面板那一圈。 */
+  .page-body.play-page > .panel:last-child > .panel-head{
+    border-bottom:0;border-top:1px solid var(--border)}
   .page-body.play-page > .panel:last-child > .panel-body{order:1}
   .pl-deck .pl-side{order:-1}
   /* 竖屏不要那条分隔线（用户定的）：上下两栈直接排着，靠单子自己的上边距分开。 */
@@ -2724,6 +2927,14 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
      正文左右边距收到 16px；网格一律塌成一列。
      先写这一组，后面那些 (0,2,0) 的专门排布才压得住它。 */
   .main-inner{padding:16px 16px 90px}
+  /* 铃声计划这一页的左右本来单独给的是 20px（基线那条 (0,2,0) 压得住上面这
+     一条），竖屏上就比别的页各多出 4px，整页看着往内收了一圈（用户报的）。
+     这里按全站的 16px 拨回来；底部仍是 0（这一页的滚动在里层）。 */
+  .main-inner.pane{padding:16px 16px 0}
+  /* 铃声详情页顶上「任务名称」那一行，到下面第一块内容之间 16px 偏大，收到 13px
+     （10px 偏上、14px 又略松，用户定的：13px）。只认 .wb-main 里这一份 ——
+     其它页的 .sec-head 不动。 */
+  .wb-main > .sec-head{margin-bottom:13px}
   /* 设置页那一份（基线的 .main-inner.headfix.setpage，左右 20）在这一档要跟着
      全站的 16px 走 —— 不拨回来的话，窄屏上只有设置这一页左右各多 4px，
      和其它页对着看就是「这一页没对齐」。顶部 16 两边一致，不用改。
@@ -2835,20 +3046,18 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
      但基线里那条「模态框里的网格列间距 12px」是 (0,2,0)，光写 .bell-top 的
      (0,1,0) 压不住 —— 不加这一节，竖屏会悄悄从 8px 变成 12px，十列的行上就是
      多出 36px 的缝。带上它两边同分，靠源码顺序（这一档在后面）赢。 */
-  .grid3.bell-top{grid-template-columns:repeat(10,minmax(0,1fr));gap:8px}
-  /* 竖屏两行（用户定的）：第一行「名称 + 优先级」，第二行「执行时间 + 执行周期」。 */
-  .bell-top .bf-name      {grid-column:span 8; order:1}
-  .bell-top [data-bf=pri]  {grid-column:span 2; order:2}
-  .bell-top [data-bf=time] {grid-column:span 5; order:3}
-  .bell-top [data-bf=strat]{grid-column:span 5; order:4}
-  /* 手机横放（仍然 ≤980）：顶上四格排成一行，顺序是
-     「名称 / 执行时间 / 执行周期 / 优先级」（12 列：3+3+4+2）。 */
+  /* 竖屏两行（用户定的）：第一行「名称 + 优先级」，第二行「执行时间 + 执行周期」。
+     两行各是一个独立的网格，名称那格是 1fr —— 除优先级那 55px 以外**全部**归它，
+     右边不会再留下填不满的空当。 */
+  .grid3.bell-top{display:flex;flex-direction:column;gap:8px}
+  .bell-top>.bf-row{display:grid;gap:8px}
+  .bell-top>.bf-row.r1{grid-template-columns:minmax(0,1fr) 55px}
+  .bell-top>.bf-row.r2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* 手机横放（仍然 ≤980）：顶上四格排成一行，
+     顺序是「名称 / 执行时间 / 执行周期 / 优先级」。 */
   @media (orientation:landscape){
-    .grid3.bell-top{grid-template-columns:minmax(0,1fr) 112px 132px 55px}
-    .bell-top .bf-name      {grid-column:auto; order:1}
-    .bell-top [data-bf=time]{grid-column:auto; order:2}
-    .bell-top [data-bf=strat]{grid-column:auto; order:3}
-    .bell-top [data-bf=pri]  {grid-column:auto; order:4}
+    .grid3.bell-top{display:grid;grid-template-columns:minmax(0,1fr) 112px 132px 55px}
+    .bell-top>.bf-row{display:contents}
   }
   /* 播放模式 / 播放时长 / 音量：间距收到 8px —— 竖屏三格并排本来就窄，
      14px 的缝横在中间太宽。列宽沿用基线（前两格平分，音量 55px）。 */
@@ -3281,69 +3490,6 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
   .tbl-exam td[data-lab="铃声音量"]{order:5;flex:0 0 58px}
   .tbl-exam td[data-lab="听力音频"]{order:5;flex:1 1 64px}          /* 听力音频 ← 吃零头 */
   .tbl-exam td[data-lab="听力音量"]{order:5;flex:0 0 58px}
-
-  /* ── 竖屏的考试概览（一场一行）─────────────────────────────────────
-     JS 在同一个门槛（isNarrow，也是 ≤980px）下已经不再画上面那张 .tbl-exam，
-     换成这组行 —— 上面那一整段 flex 三行排法现在谁也匹配不到，留着只当
-     这段历史；真正管事的是下面这几条。
-     表头和数据行共用同一份列宽，所以场次再多也是对齐的：
-       科目（吃零头）/ 日期 / 开考 / 结束 / 听力 / 编辑 / 删除
-     固定列按内容量给：日期 10 个等宽字符在 11px 下约 66px；时刻 5 个字符
-     约 33px；听力只有一个状态点；两枚按钮各 24px。375 的屏上科目那列
-     还剩一百来像素，长科目名自己打省略号。 */
-  /* 行高 38px、题头 30px，行与行之间一道横线（用户定的，和别的长名单一个口径）。
-     上下内边距归零，高度交给 height —— 行尾按钮才 26px 高，38 放得下。 */
-  .ex-sum-row{
-    display:grid;align-items:center;column-gap:6px;
-    grid-template-columns:minmax(0,1fr) 70px 40px 40px 24px 24px 24px;
-    height:38px;padding:0 10px;border-bottom:1px solid var(--border);
-  }
-  /* 最后一行贴着下面的「听力音频延迟」那格（它自己有 border-top），
-     再挂一根就成了双线 */
-  .ex-sum-row:last-child{border-bottom:0}
-  /* 竖线一根都不要：列与列靠列宽和留白分开。横线两道 —— 题头底下一根，
-     行与行之间一根（用户定的，和铃声表 / 任务表那两张长名单一个口径）。
-     隔行换底照旧留着。 */
-  /* 隔行换底，和表格里 `tbody tr:nth-child(even)` 同一个相位：
-     表头占掉第 1 个孩子位，所以表体的第 2、4… 行是 odd。表头不垫底。 */
-  .ex-sum-head ~ .ex-sum-row:nth-child(odd){background:var(--row-alt)}
-  /* 表头照宽屏 <th> 的样子来：11px 那一档再小一号、复写间距、不加粗到压眼。 */
-  .ex-sum-head{
-    height:30px;padding-top:0;padding-bottom:0;
-    color:var(--fg-3);
-    font-size:10px;font-weight:700;letter-spacing:.06em;
-    border-bottom:1px solid var(--border);
-  }
-  .ex-sum-head span{white-space:nowrap}
-  .ex-sum-row .mono{font-size:11px}
-  .ex-sum-row .c-subject{
-    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-    font-size:13px;
-  }
-  .ex-sum-row .c-date,.ex-sum-row .c-time{white-space:nowrap;font-variant-numeric:tabular-nums}
-  /* 听力这一列只放一枚状态点：有 = 绿圈勾，没有 = 灰圈横线，横向居中。
-     表头那两个字也跟着居中对齐到点子上，否则左对齐的字和居中的点看着像错位。 */
-  .ex-sum-row .c-listen{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--fg-2)}
-  .ex-sum-head .c-listen{font-size:10px;color:var(--fg-3)}
-  .ex-sum-row .ex-dot{
-    display:inline-flex;align-items:center;justify-content:center;
-    width:14px;height:14px;border-radius:50%;
-  }
-  .ex-sum-row .ex-dot>.ic{width:8px;height:8px;stroke-width:3.2}
-  .ex-sum-row .ex-dot.yes{background:var(--good);color:var(--surface)}
-  .ex-sum-row .ex-dot.no{background:var(--surface-3);color:var(--fg-3)}
-  .ex-sum-row .is-bad{color:var(--crit)}
-  /* 行尾两枚按钮和 .rowacts .ric 一个尺寸、一种 hover；铅笔点在缺格时带红。 */
-  .ex-ic{
-    display:inline-flex;align-items:center;justify-content:center;
-    width:24px;height:26px;padding:0;border:0;border-radius:5px;
-    background:transparent;color:var(--fg-2);cursor:pointer;
-  }
-  .ex-ic:hover{background:var(--surface-3);color:var(--fg)}
-  .ex-ic.danger:hover{background:var(--crit-soft);color:var(--crit)}
-  .ex-ic.warn{color:var(--crit)}
-  .ex-ic:disabled{opacity:.45;cursor:not-allowed}
-  .ex-ic .ic{width:15px;height:15px}
 
   /* ── 时/分/秒 转轮：这一档不再是 popover，改成一块居中的模态 ──────────
      贴在输入框边上时它总共才 216px 宽，三列各六十几像素 —— 竖屏上那点地方

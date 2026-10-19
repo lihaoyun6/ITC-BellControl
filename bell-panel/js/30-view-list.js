@@ -207,7 +207,7 @@ function renderTopbar(){
      窄屏一栏时左栏让位，出口就只剩这一枚。 */
   const showBack = ((!S.mode||S.mode==="list") && S.showDetail) ||
                    S.mode==="tasks" ||
-                   (S.mode==="more" && S.dt.more && S.dt.more.full) ||
+                   (S.mode==="more" && S.dt.more && S.dt.more.tab && S.dt.more.tab!=="home") ||
                    (S.mode==="exam" && S.dt.exPreview);
   /* 里面再套一层 .topbar-inner：横条本身通栏（分隔线要顶到两边），
      但内容跟下面 .main-inner 用同一套左右边距，上下边缘才对得齐。
@@ -433,16 +433,18 @@ function renderTopbar(){
   /* 必须是 renderAll() 而不是只 renderMain()：这个按钮住在顶栏里，不重画顶栏
      它自己不会消失。renderAll() 顺带 closeDatePicker()，和别的「整页换视图」同路。
 
-     「更多功能」那一支只把 st.full 收掉，**不碰 st.hits** —— 退回表单页之后
-     再点一次「开始查询」就重新出来；查过的东西是这一趟会话的事，不是错误，
-     没有理由顺手清掉。（真正要清的是「日期/终端改了」，那条路走 moreInvalidate。） */
+     「更多功能」那一支只换回卡片首页 —— 查询结果和测试条件都是这一趟会话的
+     东西，没有理由顺手清掉；测试还在放的话由 moreBackHome() 先停。 */
   if (tbBack) tbBack.onclick = ()=>{
     /* 定时任务那一页：退回「铃声计划」，侧栏（那张卡片就在它底下）跟着回来。
        S.showDetail 一个字不碰 —— 进来之前那一位是真是假，退回去就还是哪一位：
        从某张列表的详情页点卡片进来的，退回那张详情页；从左侧那份列表点进来的，
        退回那份列表。 */
     if (S.mode==="tasks"){ S.mode = "list"; renderAll(); return; }
-    if (S.mode==="more" && S.dt.more && S.dt.more.full){ S.dt.more.full = false; renderAll(); return; }
+    if (S.mode==="more" && S.dt.more && S.dt.more.tab && S.dt.more.tab!=="home"){
+      if (typeof moreBackHome === "function") moreBackHome();
+      return;
+    }
     /* 考试模式那份「改动预览」同一个道理：收掉这一格，退回**考试模式这一页**，
        手上那份安排（S.exam）一个字都没动过 —— 预览是只读的，退出来就是原来那一页。 */
     if (S.mode==="exam" && S.dt.exPreview){ S.dt.exPreview = false; renderAll(); return; }
@@ -474,6 +476,9 @@ function renderTopbar(){
    从铃声计划起步。初值是 list（S.mode 一开始是空串，那也是铃声计划）。 */
 let lastMode = LS.get("lastMode", "list");
 function goMode(m){
+  /* 离开「更多功能」= 离开终端测试页，正在响的测试当场停（用户定的）。
+     静默停：下面这一趟 renderAll 本来就会把整页重画。 */
+  if (m !== "more" && S.dt.more && S.dt.more.test) moreTestStop(true);
   /* 拨号框里的号**不跟着切页清空**（用户定的）：号码只在挂断或手动清空时抹掉，
      切去别的页再回来还留在框里，可以接着按呼叫。 */
   if (m !== "tasks"){ lastMode = m; LS.set("lastMode", m); }
@@ -525,7 +530,7 @@ function renderNavbar(){
     item("more",  ICON.grid,  "更多功能")+
     /* 设置是底部导航栏的最后一格（用户定的）：和别的页签一样是常规页，
        点开就在这一条上高亮，不再靠顶栏的返回键退出。 */
-    item("settings", ICON.gear, "设置");
+    item("settings", ICON.gear, "全局设置");
   $$("[data-mode]", el).forEach(b => b.onclick = ()=> goMode(b.dataset.mode));
 }
 
@@ -825,7 +830,9 @@ function renderMain(){
            （见 css 的 ≤980px 那一档），那时候「时间属性」回到名称底下、
            「播放时长」连同「音源」整列不显示。两套写法都在 DOM 里，谁说谁不显示
            由断点定，JS 里没有分支。 */
-        '<th style="width:92px">时间</th><th>名称</th>'+
+        /* 时间这一列留 72px（原 92px，用户分两次各收 10px）：时刻只有五个字，
+           宽出来的那截全落在「时间」和「名称」之间，看着空一截。 */
+        '<th style="width:72px">时间</th><th>名称</th>'+
         '<th class="c-stg">时间属性</th><th>音源</th><th class="c-dur">播放时长</th>'+
         '<th>区域</th><th class="c-sw">状态</th><th class="c-act"></th>'+
       '</tr></thead><tbody id="rows"></tbody></table></div>'+
@@ -1133,14 +1140,14 @@ function renderSelbar(){
   norm.hidden = n > 0;
   bulk.hidden = n === 0;
   if (!n){ bulk.innerHTML = ""; return; }
-  /* 四枚图标键：铅笔（批量编辑，底下还有四个动作）、对勾（启用）、✕（停用）、
-     垃圾桶（删除）。文字改到 title / aria-label 里 —— 七个文字按钮在这条栏上
-     窄屏要折两行，折完还看不出哪几个是一组。 */
+  /* 四枚图标键的次序是用户定的：圈勾（启用）、圈横杠（停用）、铅笔（批量编辑，
+     底下还有四个动作）、垃圾桶（删除）。文字改到 title / aria-label 里 ——
+     七个文字按钮在这条栏上窄屏要折两行，折完还看不出哪几个是一组。 */
   bulk.innerHTML =
     '<span class="bulk-n">'+n+'</span><span class="dimmer">条已选</span>'+
+    '<button class="btn btn-icon" data-act="on" title="启用这些铃声" aria-label="启用">'+ICON.checkC+'</button>'+
+    '<button class="btn btn-icon" data-act="off" title="停用这些铃声" aria-label="停用">'+ICON.minusC+'</button>'+
     '<button class="btn btn-icon" data-act="edit" title="批量编辑：改区域 / 改音源 / 改时间 / 恢复默认" aria-label="批量编辑">'+ICON.edit+'</button>'+
-    '<button class="btn btn-icon" data-act="on" title="启用这些铃声" aria-label="启用">'+ICON.check+'</button>'+
-    '<button class="btn btn-icon" data-act="off" title="停用这些铃声" aria-label="停用">'+ICON.x+'</button>'+
     '<button class="btn btn-icon btn-danger" data-act="del" title="删除这些铃声" aria-label="删除">'+ICON.del+'</button>';
 }
 function onSelbarClick(e){
@@ -1290,14 +1297,23 @@ function openBellEditor(bell){
         const priField =
           '<div class="field" data-bf="pri"><label>优先级</label><input class="input mono" id="bPri" type="number" value="'+Number(b.priority)+'"></div>';
         return '<div class="grid3 bell-top">'+
-          '<div class="field bf-name" data-bf="name"><label>名称</label><input class="input" id="bName" value="'+esc(b.name)+'" placeholder="铃声1"></div>'+
-          '<div class="field" data-bf="time"><label>执行时间</label>'+
-            (isPortraitNarrow() ? timePickHTML("bTime", b.time)
-                        : quickTimeHTML('id="bTime"', b.time))+'</div>'+
-          '<div class="field" data-bf="strat"><label>执行周期</label><select class="select" id="bStrat">'+
-            S.data.strategies.map(s=>'<option value="'+s.id+'"'+(Number(b.strategyId)===Number(s.id)?" selected":"")+'>'+esc(s.name)+'</option>').join("")+
-          '</select></div>'+
-          priField+
+          /* 两行各包一层：宽屏 / 横屏上这两层是 display:contents（等于不存在，
+             还是原来那一行四格）；竖屏上它们各成一条网格 —— 第一行名称吃掉
+             除优先级那 55px 以外的**全部**宽度，第二行执行时间和执行周期对半分。
+             不这么拆的话，十列网格里优先级占两列、输入框却只有 55px，右边会
+             留下一条填不上的空当（用户看到的就是「名称没占满空余宽度」）。 */
+          '<div class="bf-row r1">'+
+            '<div class="field bf-name" data-bf="name"><label>名称</label><input class="input" id="bName" value="'+esc(b.name)+'" placeholder="铃声1"></div>'+
+            priField+
+          '</div>'+
+          '<div class="bf-row r2">'+
+            '<div class="field" data-bf="time"><label>执行时间</label>'+
+              (isPortraitNarrow() ? timePickHTML("bTime", b.time)
+                          : quickTimeHTML('id="bTime"', b.time))+'</div>'+
+            '<div class="field" data-bf="strat"><label>执行周期</label><select class="select" id="bStrat">'+
+              S.data.strategies.map(s=>'<option value="'+s.id+'"'+(Number(b.strategyId)===Number(s.id)?" selected":"")+'>'+esc(s.name)+'</option>').join("")+
+            '</select></div>'+
+          '</div>'+
         '</div>'+
         /* 音源区：一行**已选清单**（多个音源 / 多个文件夹 / 混着选，各自都能点掉），
            右上「选择音源」开多选器。这里不再摆一排「常用」快捷按钮 —— 挑音源

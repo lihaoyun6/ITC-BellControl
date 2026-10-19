@@ -186,12 +186,13 @@ function renderTkSelbar(){
   norm.hidden = n > 0;
   bulk.hidden = n === 0;
   if (!n){ bulk.innerHTML = ""; return; }
-  /* 和铃声表那条一模一样的四枚图标键（见 30-view-list.js 的 renderSelbar） */
+  /* 和铃声表那条一模一样的四枚图标键，次序也一样：
+     启用 → 停用 → 批量编辑 → 删除（见 30-view-list.js 的 renderSelbar） */
   bulk.innerHTML =
     '<span class="bulk-n">'+n+'</span><span class="dimmer">条已选</span>'+
+    '<button class="btn btn-icon" data-tkact="on" title="启用这些任务" aria-label="启用">'+ICON.checkC+'</button>'+
+    '<button class="btn btn-icon" data-tkact="off" title="停用这些任务" aria-label="停用">'+ICON.minusC+'</button>'+
     '<button class="btn btn-icon" data-tkact="edit" title="批量编辑：改区域 / 改音源 / 改时间" aria-label="批量编辑">'+ICON.edit+'</button>'+
-    '<button class="btn btn-icon" data-tkact="on" title="启用这些任务" aria-label="启用">'+ICON.check+'</button>'+
-    '<button class="btn btn-icon" data-tkact="off" title="停用这些任务" aria-label="停用">'+ICON.x+'</button>'+
     '<button class="btn btn-icon btn-danger" data-tkact="del" title="删除这些任务" aria-label="删除">'+ICON.del+'</button>';
 }
 

@@ -583,8 +583,10 @@ function openMediaPicker(media, groups, onDone, opts){
 function shiftFieldHTML(id){
   return '<div class="field"><label>时间平移</label>'+
     '<div style="display:flex;gap:8px;align-items:center">'+
-      '<input class="input mono" id="'+id+'N" type="number" step="1" value="0" style="width:120px">'+
-      '<select class="select" id="'+id+'U" style="width:88px">'+
+      /* 数值框吃掉单位下拉之外的全部宽度（用户定的）—— 钉 120px 时右边会空一截。 */
+      '<input class="input mono" id="'+id+'N" type="number" step="1" value="0"'+
+        ' style="flex:1 1 auto;min-width:0;width:auto">'+
+      '<select class="select" id="'+id+'U" style="width:88px;flex:none">'+
         '<option value="1">秒</option><option value="60" selected>分</option><option value="3600">时</option>'+
       '</select>'+
     '</div>'+

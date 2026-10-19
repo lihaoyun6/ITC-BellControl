@@ -6,6 +6,24 @@
 (function boot(){
   const saved = savedSession();          /* 本机留着没过期的令牌吗（见 10-data.js） */
   if (!saved){ forgetLogin(); renderAll(); return; }   /* 没有 / 已过期 → 停在登录页 */
+
+  /* 记住登录这一趟：5 秒还没连上就作废令牌，回登录页。
+     计时到探针成功为止 —— 后面 loadAll 再慢也已经算「连上了」。
+     超时之后要保证在途的探针 / 静默续登都不能再把会话救回来。 */
+  let bootDone = false, bootTimedOut = false;
+  const bootAbort = new AbortController();
+  const bootTimer = setTimeout(()=>{
+    if (bootDone) return;
+    bootDone = bootTimedOut = true;
+    bootAbort.abort();
+    reLoginDead = true;                /* 在途的 reLogin 回来也不许再写令牌 */
+    forgetLogin();
+    closeStatusFeed();
+    S.conn = "idle"; S.view = undefined;
+    renderAll();
+    toast("连接超时，请重新登录", "err");
+  }, 5000);
+  const bootSettled = ()=>{ bootDone = true; clearTimeout(bootTimer); };
   /* **先把界面画成主界面，再去问服务器。** 这一笔就是「不闪登录页」的全部：
      先画登录页、等结果回来再换成主界面，人就会看见登录页闪一下 —— 而答案其实
      早在开局就知道了（savedSession() 是同步的），没理由先画错的再改。
@@ -53,10 +71,22 @@
      它看都不看（带 Bearer 前缀也一样）。以前这里问的就是 /auth，于是拿着有效令牌
      也必然吃「用户名不能为空」，还把令牌当场删掉 —— 「记住登录状态」等于摆设。
      实测见 30-view-list.js 里「探针为什么不是 /auth」那段。 */
-  api("GET","/timing-bells-groups/all",{params:{withUser:"true"}})
-    .then(()=>{ S.conn = "ok"; return loadAll(); })
+  api("GET","/timing-bells-groups/all",{params:{withUser:"true"}, signal: bootAbort.signal})
+    .then(()=>{
+      if (bootTimedOut) return;        /* 已经踢回登录页，这一趟的结果作废 */
+      bootSettled();
+      S.conn = "ok";
+      return loadAll();
+    })
     /* 这一支**不碰 S.mode**：第一帧就已经把页签摆对了，数据回来只是把页面上那句
        「正在连接…」换成真东西（顺带顶栏从「连接中」改成「已连接」）。 */
-    .then(()=>{ renderAll(); openStatusFeed(); })
-    .catch(()=>{ forgetLogin(); S.conn = "idle"; S.view = undefined; renderAll(); });
+    .then(()=>{
+      if (bootTimedOut) return;
+      renderAll(); openStatusFeed();
+    })
+    .catch(()=>{
+      if (bootTimedOut) return;
+      bootSettled();
+      forgetLogin(); S.conn = "idle"; S.view = undefined; renderAll();
+    });
 })();

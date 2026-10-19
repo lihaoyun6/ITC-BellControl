@@ -112,7 +112,8 @@ function reLogin(){
      这个标记也是「/auth 自己不再走重登」那道闸（noRetry，见 00-core.js）。 */
   reLoginP = api("GET","/auth",{params:{userinfo:"true",withRoles:"true",withUsersConfig:"true",name,password}, noRetry:true})
     .then(r=>{
-      if (!r || !r.token) return "failed";
+      /* 这一趟回来之前已经被送回登录页（比如开机 5 秒超时）：不许再把令牌写回去。 */
+      if (reLoginDead || !r || !r.token) return "failed";
       S.token = String(r.token);
       if (r.user) S.user = r.user;
       setSrvVersion(r);
