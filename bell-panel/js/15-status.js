@@ -119,10 +119,12 @@ function linkStateText(){
    图省事：搜索框是个正在输入的控件，把它整个换掉会当场掐断输入法 —— 打拼音时
    候选框一闪就没了。名册里没有输入中的东西，整块换掉无所谓。
 
-   **刷新在右上角，添加设备在底栏最右**（用户定的）：三个页签加两枚按钮挤在
-   一行里，窄屏上「添加设备」会被顶出框外。添加设备留在底栏 —— 底栏本来就要一条
-   给「显示终端IP」开关（左：开关在左、文字在右）。刷新只留一个图标，搬去右上角，
-   和挑音源弹窗里那枚同一尺寸、同一位置（见 20-ui.js 的 addModalRefresh）。
+   **刷新在竖屏右上角，横屏摆到添加设备左边**（用户定的）：三个页签加两枚按钮
+   挤在一行里，窄屏上「添加设备」会被顶出框外，所以两枚按钮都住在底栏 —— 底栏
+   本来就要一条给「显示终端IP」开关（左：开关在左、文字在右）。竖屏底栏还要摆
+   「关闭」，刷新就只留一个图标收在右上角，和挑音源弹窗里那枚同一尺寸、同一位置
+   （见 20-ui.js 的 addModalRefresh）；横屏没有「关闭」那枚，刷新就跟着「添加设备」
+   一起站在底栏右头。
    底栏那一格开关**横竖屏都在**（用户定的）：原先只在竖屏露出来，理由是「宽屏地方
    够，IP 一直摆着，用不着它」—— 可那等于把「想不想看 IP」这件事按屏幕宽度替人
    决定了。现在两档一个样，挡位记在浏览器里，见下面 termShowIp。
@@ -160,10 +162,14 @@ function openTermList(){
     mount(b, f, mm){
       b.classList.add("grow-body");     /* 页签钉住，只让下面这份名册自己滚 */
       const subEl = $(".modal-head .sub", mm.host);   /* 副标题里的台数跟着名册走 */
-      /* 底栏：左头是「显示IP」开关，右头是添加设备（刷新在右上角，见 addModalRefresh）。
+      /* 底栏：左头是「显示IP」开关，右头是刷新 / 添加设备。
+         刷新**横屏**摆在底栏、紧挨「添加设备」左边（用户定的）—— 宽屏上这两枚
+         都是「把这份名册动一下」的动作，凑在一起比隔着整个弹窗强；竖屏仍旧收在
+         右上角，和别处的刷新一个位置（见下面 addModalRefresh 那一支）。
          开关**在左、文字在右** —— .switch 默认排法是文字在前，这里把两段调个个儿。
          竖屏上 IP 和名字挤在一行里，想只看名字的，把这段 IP 收起来；
          默认开着 —— 关掉之后行里连 IP 都不显示，那是反直觉的状态，不该是默认值。 */
+      const reloadInFoot = !isPortraitNarrow();
       f.classList.add("term-foot");
       f.innerHTML =
         '<label class="switch" title="关掉之后，这份名册里不再显示终端 IP">'+
@@ -171,6 +177,7 @@ function openTermList(){
           '<span class="track"></span><span class="dimmer">显示IP</span>'+
         '</label>'+
         '<span class="spacer"></span>'+
+        (reloadInFoot ? '<button class="btn btn-icon" data-act="reload" title="刷新" aria-label="刷新">'+ICON.refresh+'</button>' : '')+
         '<button class="btn" data-act="add">'+ICON.plus+' 添加设备</button>'+
         /* 竖屏收掉了右上角的 ×，出口在底栏。宽屏有 ×，不再多摆一枚。 */
         (isNarrow() ? '<button class="btn" data-act="close">关闭</button>' : '');
@@ -242,13 +249,17 @@ function openTermList(){
         if (tab==="sessions") statSendSessions();
         paint();
       });
-      /* 刷新在右上角，和挑音源弹窗里那枚是同一个控件（addModalRefresh）。 */
-      addModalRefresh(mm.host, async (btn)=>{
+      /* 横屏那枚刷新在底栏（见上面 reloadInFoot）；竖屏仍在右上角，
+         和挑音源弹窗里那枚是同一个控件（addModalRefresh）。 */
+      const reload = async (btn)=>{
         if (btn.disabled) return;
         btn.disabled = true;
         await reloadTerminals();
         btn.disabled = false;
-      });
+      };
+      const footReload = f.querySelector('[data-act="reload"]');
+      if (footReload) footReload.onclick = ()=> reload(footReload);
+      else addModalRefresh(mm.host, reload);
       /* 添加设备住在底栏里（f），不在 b 里 —— 它不参与重画，绑一次就够。 */
       f.querySelector('[data-act="add"]').onclick    = ()=> openDeviceAdd();
       const cls = f.querySelector('[data-act="close"]');

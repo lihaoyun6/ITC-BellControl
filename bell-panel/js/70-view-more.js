@@ -444,6 +444,19 @@ function renderMedia(){
   };
   const gCount = id => files.filter(x=> String(x.medias_groups_id)===String(id)).length;
   const dur = x => secToHMS(Number(x.length)||0).slice(3);
+  /* 刷新媒体信息：重拉音频和媒体库两份缓存（见 refreshMediaLib），回来重画这一页。
+     两套版式各有一枚刷新键 —— 宽屏在侧栏底部「新建媒体库」右边，竖屏在标题栏
+     那排按钮的最右边 —— 走的是同一条路。拉到一半人已经切走的话就不再重画
+     （renderMain 会去画当前那一页）。 */
+  const reloadMedia = async (btn)=>{
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const ok = await refreshMediaLib();
+    btn.disabled = false;
+    if (!ok){ toast("刷新失败，请检查网络后重试", "err"); return; }
+    if (S.mode === "media") renderMain();
+    toast("媒体信息已刷新", "ok");
+  };
 
   /* ── 横屏 / 宽屏：左边侧栏 + 右边音频 ──────────────────────────── */
   if (!isPortraitNarrow()){
@@ -493,7 +506,10 @@ function renderMedia(){
             groups.map(g=> railRow(String(g.id), g.name, gCount(g.id), String(m.g)===String(g.id))).join("")+
           '</div>'+
           '<div class="rail-foot">'+
+            /* 和铃声计划那一排同一个摆法：「新建媒体库」占着 flex:1，刷新只剩
+               一个图标、被顶到最右端（用户定的）。 */
             '<button class="btn" id="mmNewGrp" style="flex:1;justify-content:center">'+ICON.plus+' 新建媒体库</button>'+
+            '<button class="btn btn-quiet btn-icon" id="mmReload" title="刷新媒体信息" aria-label="刷新媒体信息">'+ICON.refresh+'</button>'+
           '</div>'+
         '</aside>'+
         '<div class="wb-main">'+
@@ -527,7 +543,7 @@ function renderMedia(){
                         '<input class="input" id="mmQ" placeholder="搜索音频文件" value="'+esc(m.q)+'" spellcheck="false" autocomplete="off">'+
                       '</span>'+
                     '</span>'+
-                    '<button class="btn btn-sm btn-primary mm-up" id="mmUpload">'+ICON.plus+' 上传音频</button>'+
+                    '<button class="btn btn-sm mm-up" id="mmUpload">'+ICON.plus+' 上传音频</button>'+
                   '</span>'+
                   '<span class="hd-seg" id="mmBulk" hidden></span>'+
                 '</span>'+
@@ -586,6 +602,7 @@ function renderMedia(){
       if (e.target.closest("[data-bulkdel]")) mediaBulkDelete(Array.from(m.sel));
     };
     $("#mmNewGrp").onclick = ()=> openMediaGroupEdit(null);
+    $("#mmReload").onclick = ()=> reloadMedia($("#mmReload"));
     $("#mmUpload").onclick = ()=> openMediaUpload(m.g);
     if (selGroup && !isPinnedLib(selGroup)){
       $("#mmRenGroup").onclick = ()=> openMediaGroupEdit(selGroup);
@@ -623,6 +640,13 @@ function renderMedia(){
   el.innerHTML =
     '<div class="sec-head">'+
       '<div class="title-row"><h2 class="serif">媒体管理</h2></div>'+
+      /* 刷新站在**页面标题栏**的最右边（用户定的），是枚无边框图标键：
+         控件组标题栏那边留给「新建媒体库 / 上传音频」这两个跟着页签走的动作，
+         刷新跟页签无关、两页都该有，就提到页标题这一行来。
+         .sec-head > .acts 自带 margin-left:auto，这一格自然贴右。 */
+      '<span class="acts">'+
+        '<button class="btn btn-sm btn-quiet btn-icon" id="mmReload" title="刷新媒体信息" aria-label="刷新媒体信息">'+ICON.refresh+'</button>'+
+      '</span>'+
     '</div>'+
     '<div class="panel grow">'+
       '<div class="panel-head">'+
@@ -631,7 +655,7 @@ function renderMedia(){
           /* 两枚按钮跟着页签露：音频页只能上传，媒体库页只能新建 —— 同时摆着
              既挤，也容易对着「媒体库」页点「上传音频」却不知道传进哪个库。 */
           '<button class="btn btn-sm" id="mmNewGrp" hidden>'+ICON.plus+' 新建媒体库</button>'+
-          '<button class="btn btn-sm btn-primary" id="mmUpload" hidden>'+ICON.plus+' 上传音频</button>'+
+          '<button class="btn btn-sm" id="mmUpload" hidden>'+ICON.plus+' 上传音频</button>'+
         '</span>'+
       '</div>'+
       '<div class="mm-bar">'+
@@ -684,8 +708,9 @@ function renderMedia(){
     /* 竖屏选中音频之后：搜索框和库下拉锁住，顶栏那枚上传键原地变成「删除已选」。 */
     if (m.tab === "file"){
       up.innerHTML = n ? ICON.del+" 删除已选" : ICON.plus+" 上传音频";
+      /* 上传是普通色按钮（用户定的）：这一页的主色留给真正「主操作」的地方，
+         上传只是媒体页里的一个日常动作。选中音频时那枚仍旧变红（删除）。 */
       up.classList.toggle("btn-danger", n > 0);
-      up.classList.toggle("btn-primary", n === 0);
     }
     $("#mmQ").disabled = n > 0;
     $("#mmG").disabled = n > 0;
@@ -743,6 +768,7 @@ function renderMedia(){
     paint();
   };
   $("#mmNewGrp").onclick = ()=> openMediaGroupEdit(null);
+  $("#mmReload").onclick = ()=> reloadMedia($("#mmReload"));
   $("#mmUpload").onclick = ()=> m.sel.size
     ? mediaBulkDelete(Array.from(m.sel))
     : openMediaUpload(m.g);

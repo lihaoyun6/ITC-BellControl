@@ -539,7 +539,9 @@ function renderNavbar(){
     item("exam",  ICON.exam,  "考试模式")+
     /* 「播音对讲」和顶栏那排页签同一条规矩：两条路都走不通（拿不到麦克风、
        也没有 Web Audio）才整格不摆。 */
-    ((liveUsable() || playUsable()) ? item("live", ICON.phone, "播音对讲") : "")+
+    /* 图标用话筒（用户定的）：这一格现在是「播音对讲」，不只是打电话找人，
+       话筒比听筒更像这一页在做的事。 */
+    ((liveUsable() || playUsable()) ? item("live", ICON.mic, "播音对讲") : "")+
     /* 「媒体管理」从「更多功能」提上来的常规页。 */
     item("media", ICON.music, "媒体管理")+
     item("more",  ICON.grid,  "更多功能")+
@@ -615,10 +617,10 @@ function renderRail(){
       '</button>'+
     '</div>'+
     '<div class="rail-foot">'+
-      /* 刷新在左、「新建任务」在右（用户定的）：主操作贴着右端那一边，
-         它又占着 flex:1，于是左边那颗刷新键被稳稳顶到最前头。 */
-      '<button class="btn btn-sm btn-quiet btn-icon" id="reloadAll" title="重新拉取" aria-label="重新拉取">'+ICON.refresh+'</button>'+
+      /* 「新建任务」占着 flex:1，刷新只剩一个图标、被顶到最右端（用户定的：
+         主操作在左、刷新在右）。 */
       '<button class="btn btn-sm" id="newGroup" style="flex:1;justify-content:center">'+ICON.plus+' 新建任务</button>'+
+      '<button class="btn btn-sm btn-quiet btn-icon" id="reloadAll" title="重新拉取" aria-label="重新拉取">'+ICON.refresh+'</button>'+
     '</div>';
   /* 窄屏上「点列表」= 要去看它的详情，所以那一栏也切过去。并排显示时这个值不参与
      布局（CSS 只在 ≤980px 认它），写它没有副作用。
@@ -658,6 +660,29 @@ function renderRail(){
   el.querySelector("#newGroup").onclick = ()=> examGuard(openNewGroup);
   el.querySelector("#railTasks").onclick = openTasks;
   el.querySelector("#reloadAll").onclick = async ()=>{ try{ await loadAll(); toast("数据已刷新","ok"); }catch(e){ toast(e.message,"err"); } };
+}
+
+/* 竖屏详情页的滚动分工（css 里 .page-body.bell-page 那一档）：
+   正文一路滚到底之前，铃声明细那张表**不许自己滚** —— 手指落在表上时手势得交给
+   .page-body，先把上面「打铃区域 / 铃声分组」送走；滚到底之后再把表的纵向滚动
+   打开，后面就由表身接着滚，面板标题栏和表头钉在顶上。
+   判据就是「正文滚到底了没有」：那张面板在竖屏里拿的是正文的满高、排在 .duo
+   后面，正文滚到底时它的上沿正好贴到正文顶（见 css 那条 height:100%）。
+   宽屏 / 横屏上正文本来就不滚（clientHeight 和 scrollHeight 相等），这里顺手把
+   类名挂着，css 那边只在竖屏认它，什么也不会发生。 */
+function bellPageBind(el){
+  const pb = el.querySelector(".page-body.bell-page");
+  if (!pb) return;
+  const sync = ()=>{
+    const atEnd = pb.scrollTop + pb.clientHeight >= pb.scrollHeight - 2;
+    pb.classList.toggle("is-bell-stuck", atEnd);
+  };
+  /* 竖屏每次整页重画都会换一个新的 .page-body，监听跟着这个元素一起走，
+     旧的随元素一起丢掉，不会越攒越多。 */
+  pb.addEventListener("scroll", sync, {passive:true});
+  /* 这里读的是刚放回去的滚动位置（scrollKeepRestore 在调用点前面），
+     所以重画之后那一帧的类名就是对的。 */
+  sync();
 }
 
 function renderMain(){
@@ -772,7 +797,9 @@ function renderMain(){
        留在盒子外面，竖屏上因此钉得住，只有这里面的东西跟着滚。
        和「全局设置」「考试模式」两页的 .headfix 是同一件事，只是这一页的正文
        长在右栏里，所以这类规则挂在 .wb-main 下面而不是 .main-inner 上（见 css）。 */
-    '<div class="page-body">'+
+    /* .bell-page：竖屏（≤980px 且竖着拿）那一档的滚动分工认这个类 ——
+       正文滚到底之后，铃声明细那块钉住、由表身接着滚（见 css 的同名那一段）。 */
+    '<div class="page-body bell-page">'+
     /* 铃声还在路上（S.gLoad）：正文整块让位给一句话。**三块一起让** —— 手上那份
        S.bells / S.listArea / S.grpMeta 都还是上一条任务的，只把表身换掉的话，
        上面「打铃区域」「铃声分组」两块照旧摆着别人家的内容。
@@ -885,6 +912,7 @@ function renderMain(){
   renderRail();      /* #rail 是刚造出来的空壳，得填。放在这里 = 单独调 renderMain() 也不会留下空侧栏 */
   el.dataset.scrollKey = scrollKey;
   scrollKeepRestore(el, scrollSnap);
+  bellPageBind(el);
 }
 
 /* 一条任务都没选中时的「铃声计划」页。和正常那份一样是 .wb 两栏，右栏换成一句
@@ -1164,7 +1192,7 @@ function renderSelbar(){
     '<span class="bulk-n">'+n+'</span><span class="dimmer">条已选</span>'+
     '<button class="btn btn-icon" data-act="on" title="启用这些铃声" aria-label="启用">'+ICON.checkC+'</button>'+
     '<button class="btn btn-icon" data-act="off" title="停用这些铃声" aria-label="停用">'+ICON.minusC+'</button>'+
-    '<button class="btn btn-icon" data-act="edit" title="批量编辑：改区域 / 改音源 / 改时间 / 恢复默认区域" aria-label="批量编辑">'+ICON.edit+'</button>'+
+    '<button class="btn btn-icon" data-act="edit" title="批量编辑：改区域 / 改音源 / 改模式 / 改时间 / 恢复默认区域" aria-label="批量编辑">'+ICON.edit+'</button>'+
     '<button class="btn btn-icon btn-danger" data-act="del" title="删除这些铃声" aria-label="删除">'+ICON.del+'</button>';
 }
 function onSelbarClick(e){
@@ -1174,6 +1202,18 @@ function onSelbarClick(e){
   if (act==="edit") return openBulkMenu("批量编辑 "+list.length+" 条铃声", "这些改动会一起写进服务器", [
     {icon:ICON.monitor, label:"改区域",   sub:"统一改成同一组点位和分组",     onPick:()=>openAreaEditor("bulk", list)},
     {icon:ICON.music,   label:"改音源",   sub:"换掉这些铃声正在放的音频文件", onPick:()=>openMediaBulk(list)},
+    /* 模式从「改音源」里拆出来了：只想把一批铃声换成循环播放，不该逼人重挑一遍音源。 */
+    {icon:ICON.loop,    label:"改模式",   sub:"只换播放模式，音源不动",       onPick:()=>openModeBulk(list, {
+      title:"批量修改播放模式（"+list.length+" 条）",
+      sub:"只改这些铃声的播放模式，音源不动",
+      apply(mode){
+        list.forEach(x=>{
+          x.sound = Object.assign({}, x.sound, {play_model: mode});
+          queueUpdate(x,"改模式");
+        });
+        S.sel.clear(); renderAll(); toast(wroteWord(),"ok");
+      }
+    })},
     {icon:ICON.clock,   label:"改时间",   sub:"平移时刻，或整批换成同一个周期", onPick:()=>openTimeBulk(list)},
     /* 分组存在服务器上（写进铃声名字的尾巴里，见 js/35-groups.js），所以这一项
        和别的批量动作一样要发报文、一样能撤销。 */
@@ -1963,21 +2003,20 @@ function openEditGroup(){
 }
 
 /* ══ bulk helpers ═══════════════════════════════════════════════════ */
-/* 批量改音源：和单条编辑框开的是**同一个**多选器（音频 · 媒体库），
-   底下借 opts.extra 挂一格「播放模式」。
+/* 批量改音源：和单条编辑框开的是**同一个**多选器（音频 · 媒体库）。
+   播放模式从这儿**拆出去**了（见下面的 openModeBulk）：以前它埋在多选器底下，
+   想只换模式也得重挑一遍音源，两件事被捆成一个动作。
    播放时长**没有**了 —— 它是跟着音源总长算出来的，一批几十条各算各的，在这儿填
    一个数字等于把它们全抹成同一个值。要改时长去单条编辑框里改。
    以前这套是另一个实现（mediaPickerHTML 那三件套），顶上一排「常用」按钮，正是
    这一轮从别处删掉的那种「常用行」。 */
 function openMediaBulk(list){
   const first = list[0] || {};
-  let mode = Number((first.sound && first.sound.play_model) || 0) || 0;
   openMediaPicker((first.mediaNames||[]).slice(), (first.mediaGroupNames||[]).slice(), r=>{
     const ms = (r && r.media) || [], gs = (r && r.groups) || [];
     list.forEach(x=>{
       x.mediaNames = ms.slice();
       x.mediaGroupNames = gs.slice();
-      x.sound = Object.assign({}, x.sound, {play_model: mode});
       /* 时长只有「只挑文件」时算得出来：选了整个媒体库文件夹的话，本地不知道里面
          有多少、多长，那就沿用原来的值 —— 和批量改音源（tkBulkMedia）同一条规矩。 */
       if (ms.length && !gs.length) x.sound.life_time = lifeTimeOf(ms);
@@ -1987,20 +2026,29 @@ function openMediaBulk(list){
   }, {
     title:"批量修改音源（"+list.length+" 条）",
     sub:"这些铃声统一改用这些音源",
-    validate(r){ if (r.media.length || r.groups.length) return true; toast("请选择音源","err"); return false; },
-    extra:{
-      /* 这一格占满整行宽（从前钉着 max-width:220px）—— 它和铃声/任务编辑器里那格
-         「播放模式」是同一件事，那两处现在各占半行、把整行分掉，这里只有它一格，
-         就自己把整行占了；钉着 220px 会显得是另一套排法。 */
-      html:'<div class="field"><label>播放模式</label>'+
-        '<select class="select" id="mbMode"><option value="0">列表播放</option><option value="1">循环播放</option><option value="2">随机播放</option></select></div>',
-      mount(box){
-        const s = box.querySelector("#mbMode"); if (!s) return;
+    validate(r){ if (r.media.length || r.groups.length) return true; toast("请选择音源","err"); return false; }
+  });
+}
+
+/* 批量改播放模式。铃声和定时任务共用这一张框 —— 两边改的都是 sound.play_model
+   （0 列表 / 1 循环 / 2 随机），只是写回队列的函数和说明句不一样，所以交给
+   opt.apply 去做。默认值取第一条的现值：这一批多半同一种模式，点开直接确定就行。 */
+function openModeBulk(list, opt){
+  const first = list[0] || {};
+  let mode = Number((first.sound && first.sound.play_model) || 0) || 0;
+  openModal({ title: opt.title, sub: opt.sub, width:"420px",
+    mount(b,f,mm){
+      b.innerHTML = '<div class="field"><label>播放模式</label>'+
+        '<select class="select" id="mbMode"><option value="0">列表播放</option><option value="1">循环播放</option><option value="2">随机播放</option></select></div>';
+      const s = b.querySelector("#mbMode"); if (s){
         s.value = String(mode);
         s.onchange = ()=> mode = Number(s.value)||0;
       }
-    }
-  });
+      f.innerHTML = '<span class="spacer"></span><button class="btn" id="mbC">取消</button>'+
+        '<button class="btn btn-primary" id="mbOk">确定</button>';
+      f.querySelector("#mbC").onclick = ()=> closeModal(mm.id);
+      f.querySelector("#mbOk").onclick = ()=>{ closeModal(mm.id); opt.apply(mode); };
+    }});
 }
 
 /* 批量改时间：周期和执行偏移在同一张框里。

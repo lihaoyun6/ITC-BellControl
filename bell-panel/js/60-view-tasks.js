@@ -38,6 +38,13 @@ function renderTasks(){
       '<div style="min-width:0">'+
         '<h2 class="serif">定时任务</h2>'+
       '</div>'+
+      /* 刷新只在竖屏有，站在**页面标题栏的最右边**（用户定的）：宽屏上这一页
+         不摆刷新，表头那一排留给搜索和「添加任务」。无边框图标键，和媒体管理
+         竖屏那枚一个位置、一个样式。 */
+      (isPortraitNarrow() ?
+        '<span class="acts">'+
+          '<button class="btn btn-sm btn-quiet btn-icon" id="tkReload" title="重新拉取" aria-label="重新拉取">'+ICON.refresh+'</button>'+
+        '</span>' : "")+
     '</div>'+
 
     '<div class="panel grow">'+
@@ -45,9 +52,10 @@ function renderTasks(){
       '<div class="panel-head"><h3>任务</h3><span class="sub" id="tkFoot">共 '+S.tasks.length+' 条</span>'+
         '<span class="acts" id="tkActs">'+
           /* 表头这三样的次序是用户定的：刷新 → 搜索 → 添加任务。搜索框夹在中间，
-             宽度钉在 css 的 `.hd-seg > .sbox` 上（竖屏要收窄，内联的 width 收不动）。 */
+             宽度钉在 css 的 `.hd-seg > .sbox` 上（竖屏要收窄，内联的 width 收不动）。
+             刷新现在只住在竖屏的页标题栏里（见上面 sec-head），这一排横竖屏都
+             只有搜索和「添加任务」。 */
           '<span class="hd-seg" id="tkNormal">'+
-            '<button class="btn btn-sm btn-quiet" id="tkReload">'+ICON.refresh+'</button>'+
             '<span class="sbox sbox-sm">'+ICON.search+
               '<input class="input" id="tkQ" placeholder="搜索名称 / 时间" value="'+esc(S.dt.tkq||"")+'">'+
             '</span>'+
@@ -56,21 +64,26 @@ function renderTasks(){
           '<span class="hd-seg" id="tkBulk" hidden></span>'+
         '</span>'+
       '</div>'+
-      /* tbl-tasks 这个类只给竖屏用：≤980px 时收掉「音源」「详情」「执行周期」
-         三列（见 css/app.css 末尾）。 */
+      /* tbl-tasks 这个类只给窄屏用：≤980px 时收掉「播放时长」那一列
+         （见 css/app.css 末尾）。列序：勾选 / 时间 / 名称 / 执行周期 /
+         播放时长 / 详情 / 状态 / 操作。 */
       '<div class="tbl-wrap"><table class="tbl tbl-tasks"><thead><tr>'+
         '<th style="width:34px"><input type="checkbox" id="tkSelAll"></th>'+
-        '<th style="width:78px">时间</th><th>名称</th><th>音源</th><th class="c-detail">详情</th>'+
+        '<th class="c-time">时间</th><th>名称</th><th>执行周期</th><th>播放时长</th>'+
+        '<th class="c-detail">详情</th>'+
         /* 「详情」和「状态」、行尾那一格的宽度都在 CSS 里，见 .tbl-tasks 的
-           .c-detail / .c-sw / .c-act —— 竖屏上要各收一档，写在这儿就盖不动了。 */
-        '<th>执行周期</th><th class="c-sw">状态</th><th class="c-act"></th>'+
+           .c-time / .c-detail / .c-sw / .c-act —— 竖屏上要各收一档，
+           写在这儿就盖不动了。 */
+        '<th class="c-sw">状态</th><th class="c-act"></th>'+
       '</tr></thead><tbody id="tkRows"></tbody></table></div>'+
     '</div>'+          /* .panel.grow */
     '</div>'+          /* .wb-main */
     '</div>';          /* .wb */
 
   el.querySelector("#tkNew").onclick = ()=> openTaskEditor(null);
-  el.querySelector("#tkReload").onclick = async ()=>{ await loadTasks(); toast("数据已刷新","ok"); };
+  /* 刷新键只在竖屏的页标题栏里出现（见上面 sec-head），宽屏这一页没有。 */
+  const tkReload = el.querySelector("#tkReload");
+  if (tkReload) tkReload.onclick = async ()=>{ await loadTasks(); toast("数据已刷新","ok"); };
   /* 搜索框**只画上面那一趟**，打字只重画表身（drawTkRows）。这一格必须钉死：
      把正在输入的控件整个换掉，中文输入法的候选框会当场断掉（铃声表那个 #f-q 是
      同一分工，见 30-view-list.js）。 */
@@ -93,12 +106,14 @@ function renderTasks(){
   renderRail();      /* #rail 是刚造出来的空壳，得填（它底下那张「定时任务」卡片也靠它画） */
 }
 
-/* 搜索：名字、时刻、音源一起比，大小写不论 —— 和铃声表那个 visibleBells() 一条口径。
+/* 搜索：名字和时刻一起比，大小写不论 —— 和铃声表那个 visibleBells() 一条口径。
+   音源从前也一起比，可表里已经没有「音源」这一列了：搜一个在屏幕上根本看不见的
+   词，冒出来几行却看不出为什么匹配，不如不比。
    它管的是「看得见哪几行」，勾选、全选、底下那个计数都跟着它走。 */
 function visibleTasks(){
   const q = (S.dt.tkq||"").trim().toLowerCase();
   if (!q) return S.tasks;
-  return S.tasks.filter(t=> (t.name+" "+hm(t.time)+" "+t.mediaNames.join(" ")).toLowerCase().indexOf(q)>=0);
+  return S.tasks.filter(t=> (t.name+" "+hm(t.time)).toLowerCase().indexOf(q)>=0);
 }
 
 /* 表身单独一画：搜索框在 renderTasks 的 innerHTML 里画过就不再动，打字走这里。
@@ -192,7 +207,7 @@ function renderTkSelbar(){
     '<span class="bulk-n">'+n+'</span><span class="dimmer">条已选</span>'+
     '<button class="btn btn-icon" data-tkact="on" title="启用这些任务" aria-label="启用">'+ICON.checkC+'</button>'+
     '<button class="btn btn-icon" data-tkact="off" title="停用这些任务" aria-label="停用">'+ICON.minusC+'</button>'+
-    '<button class="btn btn-icon" data-tkact="edit" title="批量编辑：改区域 / 改音源 / 改时间" aria-label="批量编辑">'+ICON.edit+'</button>'+
+    '<button class="btn btn-icon" data-tkact="edit" title="批量编辑：改区域 / 改音源 / 改模式 / 改时间" aria-label="批量编辑">'+ICON.edit+'</button>'+
     '<button class="btn btn-icon btn-danger" data-tkact="del" title="删除这些任务" aria-label="删除">'+ICON.del+'</button>';
 }
 
@@ -203,6 +218,19 @@ function onTkBarClick(e){
   if (act==="edit") return openBulkMenu("批量编辑 "+list.length+" 个定时任务", "这些改动会一起写进服务器", [
     {icon:ICON.monitor, label:"改区域", sub:"统一改成同一组点位和分组",   onPick:()=>tkBulkArea(list)},
     {icon:ICON.music,   label:"改音源", sub:"换掉这些任务的音源",         onPick:()=>tkBulkMedia(list)},
+    /* 和铃声那边一样，模式单独一个动作：只换播放模式时不用重挑音源。 */
+    {icon:ICON.loop,    label:"改模式", sub:"只换播放模式，音源不动",     onPick:()=>openModeBulk(list, {
+      title:"批量修改播放模式（"+list.length+" 个任务）",
+      sub:"只改这些任务的播放模式，音源不动",
+      apply(mode){
+        list.forEach(t=>{
+          t.sound = Object.assign({}, t.sound, {play_model: mode});
+          t.mode = mode;
+          queueTaskSave(t);
+        });
+        S.tsel.clear(); renderMain(); toast(wroteWord(),"ok");
+      }
+    })},
     {icon:ICON.clock,   label:"改时间", sub:"平移时刻，或整批换成同一个周期", onPick:()=>tkBulkShift(list)}
   ]);
   if (act==="del"){
@@ -273,11 +301,24 @@ function tkBulkShift(list){
     }});
 }
 
+/* 表里「执行周期」只写两种：指定日期 / 按周重复。每天、周几、具体哪几天都是
+   「这条怎么排」的细节 —— 一句话说不完，挂进 title 和「详情」里。
+   面板只建得出这两种（timeType 0 / 3）。服务器上还可能有厂商前端建的
+   「按天重复」「按日期区间」这类任务，面板原样保留、不改写：那两种落回
+   taskWhen 的原文，写成「按周重复」等于撒谎。 */
+function taskWhenKind(t){
+  const ty = Number(t.timeType);
+  if (ty === 3) return "指定日期";
+  if (ty === 0) return "按周重复";
+  return taskWhen(t);
+}
+
 function taskRowHTML(t){
   const on = Number(t.isDone)===1;
   const key = taskKey(t);
   const sel = S.tsel.has(key);
   const hasArea = !!(t.termNames.length + t.groupNames.length);
+  const pm = pmodeOf(t.sound && t.sound.play_model);
   return '<tr data-tk="'+esc(key)+'" class="task-row'+(on?"":" off")+(sel?" sel":"")+'">'+
     '<td class="selcell"><input type="checkbox" class="rowsel" '+(sel?"checked":"")+'></td>'+
     /* 时间不进按钮了：以前点它展开一行详情，跟「详情」那一栏的圈 i 是同一件事的
@@ -287,23 +328,20 @@ function taskRowHTML(t){
        建好任务之后就几乎不再动，不值得每行都占一行高度；要看就点「详情」
        那个圈 i（openTaskInfo 里两个都在）。 */
     '<td><div class="nm">'+esc(t.name||"(未命名)")+'</div></td>'+
-    /* 「音源」这一格从前是一串胶囊。改成和铃声表那一格一样的素文字 —— 一列胶囊在
-       表里既占宽又要换行，扫一眼还不如一行字快；要看完整清单点「详情」那个圈 i，
-       那儿仍旧是胶囊（taskMediaChips 现在只剩那一个调用点）。
-       文件和文件夹混着选的时候两样都写出来，用「、」连。
-       顺带修好一处：条件从前只看 mediaNames，于是**只挑了文件夹**的任务在这一格
-       显示「未选」，明明它有东西可放。 */
-    '<td class="med">'+ ((t.mediaNames.length + t.mediaGroupNames.length)
-      ? esc(t.mediaNames.concat(t.mediaGroupNames).join("、"))
-      : '<span class="hint">未选</span>') +'</td>'+
+    /* 「执行周期」表里只写两种：指定日期 / 按周重复（见 taskWhenKind）。
+       原来那一格写「周二到周五」「10-13 10-14 10-15 等 8 天」，一列长文本把
+       名称挤没了；具体哪几天、哪几个日期挂在 title 上，点开「详情」也看得全。
+       这一格和「播放时长」一样是次级文字（不加粗、压一档灰）。 */
+    '<td class="when" title="'+esc(taskWhen(t))+'">'+esc(taskWhenKind(t))+'</td>'+
+    /* 播放时长：和铃声表同一套 —— 时长走等宽，播放模式缩成图标挂在后头
+       （见 30-view-list.js 的 pmodeOf），模式的名字挪进 title。 */
+    '<td class="dur mono">'+esc((t.sound && t.sound.life_time)||"")+
+      '<span class="pmode" title="'+pm.word+'">'+pm.icon+'</span></td>'+
     /* 区域明细搬进了圈 i 后面的弹框：一列 chip 挤在表里既占宽又要换行，
        而且列表要的是「扫一眼有哪几条任务」，不是逐条读区域。
        没设区域的任务不会响，所以那个圈 i 变琥珀色，别让它悄悄混在里面。 */
     '<td><button class="cell-btn'+(hasArea?"":" warn")+'" data-tk-area title="'+
       esc(hasArea?"查看任务信息与执行区域":"未设置执行区域 —— 这个任务不会响，点开看看")+'">'+ICON.info+'</button></td>'+
-    /* 「执行周期」和上面那格「音源」一样是次级文字（不加粗、压一档灰）——
-       css 里它们和铃声表那三列共用一条规则，两页的观感才是一套。 */
-    '<td class="when">'+esc(taskWhen(t))+'</td>'+
     /* 和铃声表一样：启停是开关，行尾是编辑 / 复制 / 删除三枚图标，
        竖屏上这三枚收成第四枚「⋯」（css 换的，两套零件都在 DOM 里）。 */
     '<td class="swcell"><button class="sw-mini'+(on?" on":"")+'" data-tk-on role="switch" aria-checked="'+on+'" '+

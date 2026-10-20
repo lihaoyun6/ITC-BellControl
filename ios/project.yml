@@ -1,0 +1,72 @@
+name: ITCBellControl
+options:
+  bundleIdPrefix: com.lihaoyun6
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  ITCBellControl:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ITCBellControl
+    # 面板本体就是仓库里的 bell-panel/，构建时整份拷进 .app 的 bell-panel/。
+    # **不再走蓝文件夹引用**：蓝文件夹会把目录里的一切原样拷进去，而 bell-panel/
+    # 里有 README.md（写着内网服务器地址）和可能出现的 config.json（真实终端名、
+    # 考试安排）—— 这两样都不该跟着 App 发出去。用一段拷贝脚本按白名单式的
+    # 排除规则做，仓库里那份原封不动。
+    postBuildScripts:
+      - name: 拷贝 bell-panel 网页
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          SRC="$SRCROOT/../bell-panel"
+          DEST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/bell-panel"
+          rm -rf "$DEST"
+          mkdir -p "$DEST"
+          rsync -a \
+            --exclude 'README.md' \
+            --exclude 'config.json' \
+            --exclude 'config.json.tmp' \
+            --exclude '.DS_Store' \
+            "$SRC/" "$DEST/"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lihaoyun6.ITCBellControl
+        PRODUCT_NAME: ITCBellControl
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: ITCBellControl/Info.plist
+      properties:
+        CFBundleDisplayName: ITC 广播控制台
+        CFBundleShortVersionString: "1.0.5"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        # iPhone 只留竖屏（用户定的：横屏试过，不要了）。iPad 那组四向全开不动。
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSMicrophoneUsageDescription: 实时对讲需要采集麦克风声音并推送到广播终端。
+        NSLocalNetworkUsageDescription: 需要访问校园网内的广播服务器。
+        NSAppTransportSecurity:
+          # 广播服务器是明文 HTTP（例如 http://<服务器IP>:81），ATS 默认会拦掉。
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        # 设置页的「前往下载」把 zip 存进 Documents，打开「文件」App 就能看到。
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true

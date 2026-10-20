@@ -797,16 +797,28 @@ function renderSettings(){
       '</div>'+
     '</div>' : "")+
 
-    /* 「显示设置」：界面缩放在上，界面主题在下。
-       界面缩放只有 App 里有（浏览器自己的缩放归浏览器管，面板碰不到）：三档
-       按钮，点一下由原生当场换 WKWebView 的 viewScale，和浏览器里改网页缩放
-       一样是整页按比例重排。当前档位由原生注入。
+    /* 「显示设置」：界面主题在上，界面缩放在下（用户定的次序，两边换过一次）。
        界面主题：两套配色，各自都有浅色/深色（深浅跟着系统走）。klein = 苹果
        系统色，summer = 原来的暖色。纯本机偏好（存 localStorage），点一下只换
-       <html data-palette>，不重画这一页。 */
+       <html data-palette>，不重画这一页。
+       界面缩放只有 App 里有（浏览器自己的缩放归浏览器管，面板碰不到）：三档
+       按钮，点一下由原生当场换 WKWebView 的 viewScale，和浏览器里改网页缩放
+       一样是整页按比例重排。当前档位由原生注入。 */
     '<div class="panel">'+
       '<div class="panel-head"><h3>显示设置</h3></div>'+
       '<div class="panel-body">'+
+        '<div class="set-row">'+
+          '<div class="set-lab">'+
+            '<div class="set-t">界面主题</div>'+
+            '<div class="hint">切换控制台配色方案</div>'+
+          '</div>'+
+          '<div class="set-ctl">'+
+            '<div class="tabbar" id="stPalette">'+
+              '<button data-pal="klein"'+(S.palette==="klein"?' class="on"':"")+'>Klein</button>'+
+              '<button data-pal="summer"'+(S.palette==="summer"?' class="on"':"")+'>Summer</button>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
         (IS_APP ?
         '<div class="set-row">'+
           '<div class="set-lab">'+
@@ -821,18 +833,6 @@ function renderSettings(){
             '</div>'+
           '</div>'+
         '</div>' : "")+
-        '<div class="set-row">'+
-          '<div class="set-lab">'+
-            '<div class="set-t">界面主题</div>'+
-            '<div class="hint">切换控制台配色方案</div>'+
-          '</div>'+
-          '<div class="set-ctl">'+
-            '<div class="tabbar" id="stPalette">'+
-              '<button data-pal="klein"'+(S.palette==="klein"?' class="on"':"")+'>Klein</button>'+
-              '<button data-pal="summer"'+(S.palette==="summer"?' class="on"':"")+'>Summer</button>'+
-            '</div>'+
-          '</div>'+
-        '</div>'+
       '</div>'+
     '</div>'+
 

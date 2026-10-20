@@ -869,10 +869,10 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
 /* 底边距 18 → 10：这一排下面就是窗口底边（竖屏是那条底部导航栏），原来空得太多，
    按钮像是悬在半空（用户实测）。上边距不动，那条分隔线的位置就还在这儿。 */
 .rail-foot{padding:10px 18px 10px 2px;display:flex;gap:6px;position:relative}
-/* 这一格两枚键都加高到 38px（.btn-sm 本来约 27px）。「新建任务」在**右边**、占着
-   flex:1，是这一栏唯一的主操作，手机上是第一眼要找的东西，太扁了不好按；左边那颗
-   刷新只剩一个图标，同一个高度才不显得是个零碎。两枚都是 .rail-foot 的直接子元素，
-   一条规则一起管。 */
+/* 这一格两枚键都加高到 38px（.btn-sm 本来约 27px）。「新建任务」占着 flex:1，
+   是这一栏唯一的主操作，手机上是第一眼要找的东西，太扁了不好按；右边那颗刷新
+   只剩一个图标，同一个高度才不显得是个零碎。两枚都是 .rail-foot 的直接子元素，
+   一条规则一起管。媒体管理那一排（新建媒体库 + 刷新）也吃这一条。 */
 .rail-foot > .btn{height:38px}
 /* 这一栏底部那一排（刷新 / 新建任务）上面那条线**左右都要留边距**，所以不能用 border-top：
    border 画在边框盒上，会一路铺到元素右边缘 —— 而右边那 18px 是留给两栏之间那道分隔线
@@ -1377,6 +1377,7 @@ table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tbl-bells .c-dur{width:106px}
 /* 「详情」那一格（那枚圈 i）：宽屏给 62px 让它和旁边的「音源」「执行周期」排得开，
    竖屏收成图标自己的宽度（见 ≤980 那一档）。 */
+.tbl-tasks .c-time{width:78px}
 .tbl-tasks .c-detail{width:62px}
 /* 定时任务行尾也是三枚（编辑 / 复制 / 删除）：28×3 + 两道 1px 的缝 ≈ 86px，
    加上单元格左右内边距就是这条。原来只有编辑和删除两枚（74px）。
@@ -1564,7 +1565,7 @@ td .sub{font-size:12px;color:var(--row-sub)}
    音源那格本身没有类（散文名和「无音源」都在这格里），加个 `.med` 才点得到它；
    tasks 那边同理，见 60-view-tasks.js 的 taskRowHTML。 */
 .tbl-bells td.stg,.tbl-bells td.med,.tbl-bells td.dur,
-.tbl-tasks td.med,.tbl-tasks td.when{color:var(--fg-2)}
+.tbl-tasks td.dur,.tbl-tasks td.when{color:var(--fg-2)}
 /* 这一条只圈**铃声表和任务表**的题头（「时间 / 名称 / 音源」那一行），
    不是上面那条 `.panel-head` 标题栏。11px 的全大写小字挂着 9px 的上下内边距，
    量出来 38.55px —— 和一条数据行一样高，等于表顶上白站了一行。收到 5px 之后
@@ -2032,8 +2033,8 @@ html.in-app #mHead > .chk{margin-left:2px}
    一条竖着的 flex（.grow-body），滚的是下面那份名册（.term-list 是 flex:1），
    这一行不许跟着一起被压扁。 */
 .term-bar + .pick-search{flex:none}
-/* 终端管理的底栏：左头「显示终端IP」开关，右头刷新 / 添加设备。那两枚按钮从表头
-   搬到了这儿（表头三个页签再加两枚按钮，窄屏上「添加设备」会被顶出框外）。
+/* 终端管理的底栏：左头「显示终端IP」开关，右头刷新 / 添加设备（竖屏的刷新，
+   以及「关闭」那枚，另见 15-status.js 的 reloadInFoot）。
    左头那枚开关**横竖屏都摆着**（用户定的）—— 它借的就是 .switch 自己那套
    （inline-flex，顶栏「草稿模式」同一个），这里一个字都不用写，也没有哪一档把它
    藏起来。 */
@@ -2966,7 +2967,9 @@ body.tip-show .busy-tip{opacity:1}
      管着，它们不参与伸缩），所以这一栏改成 flex 竖排、自己不滚，钉住的效果就出来了。
      滚的是里面的 .page-body，而它在这一档得是**块级**的：写成 flex 竖排的话，
      里面那个 .panel.grow 会拿到一个确定的高度，于是表自己滚、上面「区域 / 分组」
-     两块钉死 —— 那不是这一档要的样子（正文是一整段，一起滚）。 */
+     两块钉死 —— 那不是这一档要的样子（正文是一整段，一起滚）。
+     唯一的例外是竖屏（见下面那段 .page-body.bell-page）：那里铃声明细确实会
+     拿到「满高」，但不是一上来就钉住，而是正文先整段滚、滚到它才接手。 */
   .wb.show-main .wb-main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
   /* 底部只留全站那 16px 页边距。原来留 90px，是按「导航栏浮在正文上面」算的；
      可导航栏是 .app 这一列里实打实的最后一块（见 .navbar 那段），正文早就让出了
@@ -3013,6 +3016,27 @@ body.tip-show .busy-tip{opacity:1}
      上面把内边距收到 2px 了，这里得跟着收，否则它一头还悬在 18px 处。 */
   .wb:not(.show-main) .rail-foot::before{right:2px}
 
+}
+
+/* ── 竖屏详情页：滚到底之后，铃声明细那块钉住、表身接着滚 ──────────────
+   用户要的：手机竖着拿时，正文先整段滚，「打铃区域 / 铃声分组」两块一路被送出
+   屏幕；滚到「铃声」那块时，它的标题栏和列表题头就停在顶上不动了，只有表身
+   继续滚。横屏（含宽屏）一个字都不改 —— 那一档本来就是表自己滚、上面两块钉着，
+   是另一套版式（见上面 .panel.grow 那两条）。
+
+   做法：正文还是块级、还是一整段滚（上面那条的理由不变），只是铃声明细那块
+   在竖屏里多拿一份「满高」：`height:100%` 量的是正文的内容盒（底下那 16px
+   页边距不算进来），而它排在 .duo 后面 —— 正文滚到底时它的上沿正好贴到正文
+   顶上，再往下的滚动就只能落在 .tbl-wrap 里。面板标题栏在 .tbl-wrap 外面，
+   表头是 sticky 的，于是「标题栏 + 题头」两层都钉住。
+
+   表什么时候可以自己滚，由 30-view-list.js 的 bellPageBind 说了算（给正文挂
+   .is-bell-stuck）：没滚到底之前必须让表吃不到手势，否则手指正好落在表上时，
+   表格会先把自己的行滚起来，「区域 / 分组」两块就永远送不出去了。 */
+@media (max-width:980px) and (orientation:portrait){
+  .wb.show-main .wb-main > .page-body.bell-page > .panel.grow{height:100%}
+  .wb.show-main .wb-main > .page-body.bell-page > .panel.grow > .tbl-wrap{overflow-y:hidden}
+  .wb.show-main .wb-main > .page-body.bell-page.is-bell-stuck > .panel.grow > .tbl-wrap{overflow-y:auto}
 }
 
 /* ══ 视图切换段控（铃声计划 / 考试模式 / 实时对讲 / 在线播放 / 更多功能）══ */
@@ -3494,14 +3518,10 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
 
   /* ── 表头那两格筛选框在竖屏上收窄 ─────────────────────────────────────
      铃声表头和定时任务表头各一格，宽屏都是 150px（见上面 `.hd-seg > .sbox`）。
-     两行都按同一个算法推（字号和内边距都是 CSS 里的，不用量）：
-       · 定时任务：「任务」26 + 缝 10 +「共 N 条」约 55 + 缝 10 + 右边那一组
-         （刷新键 30 + 缝 6 + 筛选框 + 缝 6 +「添加」约 62）= 205 + 框宽；
-         150 是 355px，390px 的手机只有 328px —— 必折两行；120 是 325px，一行排得下。
-       · 铃声：「铃声」26 + 缝 10 +「共 N 条」约 55 + 缝 10 +（缝 6 + 筛选框 +
-         缝 6 +「添加」约 62）= 175 + 框宽；150 是 325px，本来就排得下，跟着一起
-         收到 120 是 295px —— 这一行比任务那一行少一枚刷新键，收窄不是为它自己，
-         是让两张表头的筛选框看起来一样宽。
+     两行现在组成一样了（定时任务那枚刷新键搬去了页标题栏，见 60-view-tasks.js）：
+     「标题」26 + 缝 10 +「共 N 条」约 55 + 缝 10 +（缝 6 + 筛选框 + 缝 6 +
+     「添加」约 62）= 175 + 框宽；150 是 325px，本来就排得下，收到 120 是 295px ——
+     收窄不是为排不下，是让表头这一行不至于把筛选框撑得比旁边那页宽。
      实测：390 / 412 / 430 上两行都是 53px（一行），360 上仍是两行 —— 360 那一档
      要一行得压到 96px 以下，那时候框子里只剩六十来像素、占位那句话必被切，不值当。
      代价只有一处：框子里的地方从 116px 落到 86px，占位那句「筛选名称 / 时间」
@@ -3519,18 +3539,15 @@ button.badge-stop:hover,button.badge-on:hover{filter:brightness(.95)}
   ::-webkit-scrollbar{display:none}
   *{scrollbar-width:none}
 
-  /* 定时任务：竖屏上收掉「音源」「执行周期」两列（第 4、6 列）。
-     剩下的 勾选/时间/名称/详情/状态/操作 六列正好排满一屏。
-     执行周期那一格是「周二到周五」这种长文本，又是这六列里最宽的一格；
-     它和上面的时间、名称一起看才有意义，手机上先让它们三个排得下 ——
-     要看这条任务哪天跑，点「编辑」里看得见（宽屏上它仍然在表里）。
-
-     **「详情」那一列（第 5 列，那枚圈 i）竖屏上留着**：它是「这条任务会不会响」
-     唯一的入口（执行区域 + 优先级 + 音量 + 音源都在它后面），原来跟着一起收掉，
-     等于手机上根本没法核对一台设备到底跑不跑。行尾三枚图标收成一枚「⋯」之后
-     省下来的地方，正好够它站住（那一列在这张表里只有二十几像素，见下）。 */
-  .tbl-tasks th:nth-child(4),.tbl-tasks td:nth-child(4),
-  .tbl-tasks th:nth-child(6),.tbl-tasks td:nth-child(6){display:none}
+  /* 定时任务：窄屏（≤980px）收掉「播放时长」一列（第 5 列）。
+     现在列序是 勾选/时间/名称/执行周期/播放时长/详情/状态/操作，音源整列已经
+     没有了。400px 的屏上这几列排下来，执行周期和播放时长只容得下一个 ——
+     留执行周期：它是「指定日期 / 按周重复」两种短标签，一条任务什么时候跑
+     一眼能看出来；播放时长和它后面那枚模式图标，点「编辑」里看得全
+     （用户定的）。时间列在窄屏上只要 50px（11px 的「07:30」加左右内边距约 45px），
+     省下的宽全归名称。 */
+  .tbl-tasks th:nth-child(5),.tbl-tasks td:nth-child(5){display:none}
+  .tbl-tasks .c-time{width:50px}
   /* 那一格只装一枚 26px 的图标键，宽屏给的 62px 在竖屏上纯属浪费，退回它自己的宽度 */
   .tbl-tasks .c-detail{width:34px}
 
@@ -3757,4 +3774,11 @@ html{touch-action:pan-x pan-y}
   .mm-list .rowacts .mm-del{display:none}
   .mm-list .rowacts .mm-more{display:inline-flex}
   .mm-list .rowacts .mm-more svg{width:18px;height:18px}
+}
+
+/* ── 媒体库列表（竖屏）：第一列（库名）前边距 +2px（用户定的）─────────
+   这排只有竖屏那一套有 —— 宽屏媒体库在左栏侧栏里（.rail-item），不是这份名单。
+   音频行不进这条：它有勾选框打头，名字本来就没贴边。 */
+@media (max-width:980px) and (orientation:portrait){
+  .mm-list .pick-row:not(.mm-file) > .nm{padding-left:2px}
 }
