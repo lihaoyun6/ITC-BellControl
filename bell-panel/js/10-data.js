@@ -112,7 +112,7 @@ function reLogin(){
      这个标记也是「/auth 自己不再走重登」那道闸（noRetry，见 00-core.js）。 */
   reLoginP = api("GET","/auth",{params:{userinfo:"true",withRoles:"true",withUsersConfig:"true",name,password}, noRetry:true})
     .then(r=>{
-      /* 这一趟回来之前已经被送回登录页（比如开机 5 秒超时）：不许再把令牌写回去。 */
+      /* 这一趟回来之前已经被送回登录页（比如开机 6 秒超时）：不许再把令牌写回去。 */
       if (reLoginDead || !r || !r.token) return "failed";
       S.token = String(r.token);
       if (r.user) S.user = r.user;
@@ -173,8 +173,13 @@ async function doLogin(name, password){
   S.mode = "list"; S.showDetail = false; lastMode = "list";
   S.conn = "busy"; renderAll();
   reLoginDead = false;                 /* 人手登了一趟，那扇「送回登录页」的门重新开张 */
+  /* 登录这一趟也有 6 秒的钟（用户定的）。代理 / 隧道卡住时 fetch 可以一直挂着，
+     登录键就永远不回来 —— 和开机探针同一个时限，超时按连不上处理。 */
+  const ac = new AbortController();
+  const timer = setTimeout(()=>ac.abort(), 6000);
   try{
-    const r = await api("GET","/auth",{params:{userinfo:"true",withRoles:"true",withUsersConfig:"true",name,password}});
+    const r = await api("GET","/auth",{params:{userinfo:"true",withRoles:"true",withUsersConfig:"true",name,password}, signal: ac.signal});
+    clearTimeout(timer);
     if (!r || !r.token) throw new Error("登录失败：服务器未返回令牌");
     S.token = String(r.token);
     S.user  = r.user || {};
@@ -191,8 +196,10 @@ async function doLogin(name, password){
     openStatusFeed();                  /* 在线状态是另一条 WebSocket，连不上不影响用 */
     toast("已连接 " + S.server.replace(/^https?:\/\//,""), "ok");
   }catch(e){
+    clearTimeout(timer);
     S.conn = "bad"; S.token = null; closeStatusFeed(); renderAll();
-    toast(e.message || "登录失败", "err");
+    toast(e && e.name === "AbortError" ? "连接超时，请检查服务器地址与代理设置"
+                                       : (e.message || "登录失败"), "err");
   }
 }
 
@@ -300,16 +307,19 @@ async function reloadGroups(){
   renderMain(); renderRail();
 }
 
-/* ══ 媒体库：每次挑音源都重拉一遍 ═══════════════════════════════════
-   S.data.medias 是开面板时（loadAll）拉的一份快照，但音频文件是**在厂商原后台上传**
-   的 —— 拿着那份快照去开「挑音源」，刚传上去的文件在这儿根本不存在，人会觉得
-   「面板没同步」。所以每次打开选择器前重拉一次。
+/* ══ 媒体库：第一次拉完之后就用手里这份 ═════════════════════════════
+   S.data.medias 是开面板时（loadAll）拉的一份，挑音源的弹窗直接用它 —— **不再每次
+   开框都重拉**（用户定的）。以前每开一次框都要先等一趟网络，慢的时候框里先摆一句
+   「正在读取…」，等一两秒才长出列表。
+
+   音频文件是**在厂商原后台上传**的：刚传上去的文件，手里这份里还没有。所以每个
+   挑音源的弹窗右上角都有一枚刷新，按下去走下面这个函数重拉一遍再重画。
 
    顺带把时长也刷新了：听力铃声的 life_time 就是从这张表里量出来的（lifeTimeOf），
    算的是拉下来那一刻的时长。
 
-   并发去重：同一瞬间开两个选择器（考试那两格挨着点）只发一轮请求。
-   失败**不抛**，用手里这份旧的照常开框 —— 打不开比看到一份稍微旧的列表糟得多。 */
+   并发去重：同一瞬间按了两处刷新只发一轮请求。
+   **不抛**：失败时留着手里这份旧的，返回 false 让调用方自己决定怎么说。 */
 let mediaRefreshing = null;
 function refreshMediaLib(){
   if (mediaRefreshing) return mediaRefreshing;
@@ -320,7 +330,8 @@ function refreshMediaLib(){
   ]).then(([medias, mgs])=>{
     S.data.medias      = unwrap(medias).filter(legacyMediaHide);   /* 同上：把那两样滤掉 */
     S.data.mediaGroups = unwrap(mgs).filter(legacyMediaHide);
-  }).catch(()=>{}).then(()=>{ mediaRefreshing = null; });
+    return true;
+  }).catch(()=> false).then(ok=>{ mediaRefreshing = null; return ok; });
   return mediaRefreshing;
 }
 

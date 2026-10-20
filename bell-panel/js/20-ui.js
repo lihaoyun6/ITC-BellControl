@@ -5,11 +5,14 @@
 /* ══ modal shell ════════════════════════════════════════════════════ */
 let modalStack = [];
 const modalOnClose = {};      /* id → 关掉时要跑的清理（比如摘掉状态刷新回调） */
+const modalCfg = {};          /* id → 开弹窗时那份配置（Esc 要查 locked 挡一下） */
 function openModal(cfg){
   const id = "m"+Math.random().toString(36).slice(2,8);
   const scrim = document.createElement("div");
   scrim.className="scrim"; scrim.dataset.for=id;
-  if (!modalStack.length) scrim.onclick = ()=> closeModal(id);
+  /* locked：弹窗自己把出口全收起来的那段时间（比如上传正在跑）——
+     点遮罩、按 Esc、点 × 都不关，免得传到一半被误关。 */
+  if (!modalStack.length) scrim.onclick = ()=> { if (cfg.locked) return; closeModal(id); };
   const host = document.createElement("div");
   host.className="modal-host"; host.id=id; host.dataset.scrim=scrim.dataset.for;
   host.style.setProperty("--mw", cfg.width || "560px");
@@ -36,11 +39,12 @@ function openModal(cfg){
   $("#layers").appendChild(host);
   modalStack.push(id);
   if (cfg.onClose) modalOnClose[id] = cfg.onClose;
+  modalCfg[id] = cfg;
   const m = {id, host, scrim, cfg};
   /* 头里那几枚「关掉」（眼下只有一枚 ×，但模态头将来可能不止一枚）—— 它们都是
      data-close，一枚一枚接过去。原来这里只 querySelector 第一枚，多出来的那枚
      就成了个按不动的摆设（点它什么都不会发生）。 */
-  $$("[data-close]", host).forEach(b=> b.onclick = ()=> closeModal(id));
+  $$("[data-close]", host).forEach(b=> b.onclick = ()=> { if (cfg.locked) return; closeModal(id); });
   document.addEventListener("keydown", escHandler);
   cfg.mount && cfg.mount(host.querySelector(".modal-body"), host.querySelector(".modal-foot"), m);
   /* 竖屏：所有弹窗都收掉右上角的 ×，出口改到底部的「取消」。
@@ -65,7 +69,13 @@ function openModal(cfg){
   }
   return m;
 }
-function escHandler(e){ if(e.key==="Escape" && modalStack.length) closeModal(modalStack[modalStack.length-1]); }
+function escHandler(e){
+  if (e.key!=="Escape" || !modalStack.length) return;
+  const top = modalStack[modalStack.length-1];
+  const c = modalCfg[top];
+  if (c && c.locked) return;    /* 锁着的时候 Esc 也不放行（上传中） */
+  closeModal(top);
+}
 function closeModal(id){
   const i = modalStack.indexOf(id); if (i<0) return;
   modalStack.splice(i,1);
@@ -73,6 +83,7 @@ function closeModal(id){
   if (h) h.remove(); if (s) s.remove();
   if (!modalStack.length) document.removeEventListener("keydown", escHandler);
   const fn = modalOnClose[id]; delete modalOnClose[id];
+  delete modalCfg[id];
   if (fn){ try{ fn(); }catch(e){} }
 }
 function closeTopModal(){ if (modalStack.length) closeModal(modalStack[modalStack.length-1]); }
@@ -114,14 +125,16 @@ function openConfirm(title, body, onYes, yesLabel, danger){
   return m;
 }
 
-/* 点位选择器顶上那行红绿点说明（用户定的）：**三个点，永远三个点**。
+/* 点位选择器顶上那行红黄绿点说明（用户定的）：**三个点，永远三个点**。
    它是一份图例，图例就该老老实实摆着，不该跟着连接状态变形。
    原来推送没连上时这儿会换成一整句「未连接终端状态推送，点位在线情况未知」——
-   那句话其实是多余的：推送一断，名单上的点本来就全变成灰的空心圈，而「灰点＝
-   未知」这条图例就在旁边，两下一对就明白了。 */
+   那句话其实是多余的：推送一断，名单上的点本来就全变成灰的空心圈，一眼就知道
+   没有状态，用不着图例再解释。
+   第三个点讲**忙碌**（黄点，用户定的，原来是「未知」）：终端被通话或放音占着的
+   时候点就是黄的，这个状态比「未知」更常出现在名单上，也更需要一行说明。 */
 function statLegend(){
   return '<div class="pick-legend"><span class="tdot online"></span>在线'+
-    '<span class="tdot offline"></span>离线<span class="tdot unknown"></span>未知</div>';
+    '<span class="tdot offline"></span>离线<span class="tdot busy"></span>忙碌</div>';
 }
 
 /* ══ 批量编辑菜单 ════════════════════════════════════════════════════
@@ -390,6 +403,24 @@ function mountSoundChips(box, onRemove){
   $$("[data-rm]", box).forEach(btn => btn.onclick = ()=> onRemove(btn.dataset.rm, btn.dataset.n));
 }
 
+/* 弹窗右上角那枚「刷新」。挑音源和终端管理两处各有一枚，样子必须一模一样：
+   尺寸、位置都跟着统一走这一条 —— .btn-sm .btn-quiet .btn-icon，插在关闭键
+   （.m-x）左边。竖屏上 openModal 会收掉 .m-x，它就单独站在右上角。
+   返回那枚按钮，调用方要按「刷新中」把它禁掉时用得上。 */
+function addModalRefresh(host, onClick){
+  const head = host.querySelector(".modal-head");
+  if (!head) return null;
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "btn btn-sm btn-quiet btn-icon modal-refresh";
+  b.title = "刷新";
+  b.setAttribute("aria-label", "刷新");
+  b.innerHTML = ICON.refresh;
+  b.onclick = ()=> onClick(b);
+  head.insertBefore(b, head.querySelector(".m-x"));
+  return b;
+}
+
 /* ══ 二级模态：挑音源 ════════════════════════════════════════════════
    这个系统既能放单个 mp3，也能整包放一个媒体文件夹 —— 所以两类一起选，
    一起回传。onDone({media:[名字], groups:[文件夹名]})。
@@ -407,18 +438,26 @@ function openMediaPicker(media, groups, onDone, opts){
   openModal({
     title: opts.title || "选择音源", sub: opts.sub || "一个或多个音源文件，或整个媒体文件夹", width:"760px", tall:true,
     mount(body, foot, mm){
-      /* 音频文件是在**厂商原后台**上传的，手里这份 S.data.medias 是开面板时拉的快照 ——
-         不重拉，刚传上去的文件在这个框里根本不存在，人会以为是面板没同步。
-         所以先把框开出来、报一句「读着呢」，拉完再画内容（见 refreshMediaLib）。
-         拉失败也照画：用的是手里那份旧的，总比框打不开强。 */
-      body.innerHTML = '<div class="stack">'+
-        '<div class="hint" style="padding:28px 4px">正在读取服务器上的音源列表…</div></div>';
-      foot.innerHTML = '<span class="spacer"></span><button class="btn" id="mCancel">取消</button>';
-      foot.querySelector("#mCancel").onclick = ()=> closeModal(mm.id);
-      refreshMediaLib().then(draw);
+      /* 音源列表在登录 / 开机那一趟（loadAll）已经拉过一份，这个框直接用它 ——
+         **不再每次开框都重拉**（用户定的）。以前每开一次都要先等一趟网络，慢的时候
+         框里先摆一句「正在读取…」，等一两秒才长出列表。
+         音频是在**厂商原后台**上传的，刚传上去的数手里这份里还没有：右上角那枚
+         刷新重拉一遍再重画（见 refreshMediaLib）。 */
+      let wired = false;
+      draw();
+      addModalRefresh(mm.host, async (btn)=>{
+        if (btn.disabled) return;
+        btn.disabled = true;
+        const ok = await refreshMediaLib();
+        btn.disabled = false;
+        if (!mm.host.isConnected) return;       /* 拉的这一趟里框被关了 */
+        if (!ok){ toast("刷新失败，请检查网络后重试", "err"); return; }
+        draw();
+        toast("音源列表已刷新", "ok");
+      });
 
       /* 画完的内容区、页签计数、三个 draw* 都在这一个作用域里 ——
-         也正因为整块重画，页签上「音频 · N」那个数才是刚拉回来的那个。 */
+         也正因为整块重画，页签上「音频 · N」那个数才是库里最新的那个。 */
       function draw(){
         /* 顶上那格「已选」整块去掉了（用户要的）：那排胶囊和下面列表里勾着的
            是同一件事，还各带一枚 × ——「在哪儿取消」就这么有了两个入口。
@@ -536,31 +575,36 @@ function openMediaPicker(media, groups, onDone, opts){
           drawAllRow(S.data.mediaGroups.map(g=>g.name), "groups");
         };
 
-        body.addEventListener("click", e=>{
-          const tb = e.target.closest("[data-t]");
-          if (tb && tb.parentElement.id==="mTabs"){
-            st.tab = tb.dataset.t;
-            $$("#mTabs button").forEach(x=>x.classList.toggle("on", x===tb));
-            drawPane();
-          }
-        });
-        body.addEventListener("change", e=>{
-          const f = e.target.closest("[data-med]"), d = e.target.closest("[data-dir]");
-          /* 勾一行**不重画列表**，只把全选那一格和它右边那句「已选择 N 个」
-             跟上 —— 重画会把滚动条弹回顶上。 */
-          if (f){ const n=f.dataset.med;
-            /* 只挑一个的地方：勾中一个就把别的让出来，等于单选 ——
-               列表重画一遍，「上一个勾」才会跟着取消。 */
-            if (filesOnly){ st.media = f.checked ? [n] : []; drawFiles(); return; }
-            const i=st.media.indexOf(n);
-            if (f.checked && i<0) st.media.push(n);
-            if (!f.checked && i>=0) st.media.splice(i,1);
-            syncAllRow(); return; }
-          if (d){ const n=d.dataset.dir, i=st.groups.indexOf(n);
-            if (d.checked && i<0) st.groups.push(n);
-            if (!d.checked && i>=0) st.groups.splice(i,1);
-            syncAllRow(); }
-        });
+        /* 委托监听挂在 body 上，而刷新会把 draw 再走一遍 —— 不设这道闸，每刷一次
+           就多叠一层，点一下页签跑两遍。 */
+        if (!wired){
+          wired = true;
+          body.addEventListener("click", e=>{
+            const tb = e.target.closest("[data-t]");
+            if (tb && tb.parentElement.id==="mTabs"){
+              st.tab = tb.dataset.t;
+              $$("#mTabs button").forEach(x=>x.classList.toggle("on", x===tb));
+              drawPane();
+            }
+          });
+          body.addEventListener("change", e=>{
+            const f = e.target.closest("[data-med]"), d = e.target.closest("[data-dir]");
+            /* 勾一行**不重画列表**，只把全选那一格和它右边那句「已选择 N 个」
+               跟上 —— 重画会把滚动条弹回顶上。 */
+            if (f){ const n=f.dataset.med;
+              /* 只挑一个的地方：勾中一个就把别的让出来，等于单选 ——
+                 列表重画一遍，「上一个勾」才会跟着取消。 */
+              if (filesOnly){ st.media = f.checked ? [n] : []; drawFiles(); return; }
+              const i=st.media.indexOf(n);
+              if (f.checked && i<0) st.media.push(n);
+              if (!f.checked && i>=0) st.media.splice(i,1);
+              syncAllRow(); return; }
+            if (d){ const n=d.dataset.dir, i=st.groups.indexOf(n);
+              if (d.checked && i<0) st.groups.push(n);
+              if (!d.checked && i>=0) st.groups.splice(i,1);
+              syncAllRow(); }
+          });
+        }
         $("#mCancel").onclick = ()=> closeModal(mm.id);
         $("#mOk").onclick = ()=>{
           const r = {media:st.media.slice(), groups:st.groups.slice()};
@@ -627,8 +671,8 @@ function setDebug(on){
    「环境检测」问的是 window.isSecureContext，也就是浏览器自己那一条：https，以及
    **本机回环上的 http**（localhost / 127.0.0.1 / [::1]）和 file:// 算安全，别的
    明文 http 算非安全。这条线是有后果的 —— 安全上下文里才拿得到麦克风和 AudioWorklet，
-   「实时对讲」「在线播放」那两个页签出不出现问的是同一个值（见 75-view-live.js 的
-   liveUsable）—— 所以它值得写在这一页上：对讲用不了的时候，人第一眼该看到的是
+   「播音对讲」那一格出不出现问的就是这两个能力（见 75-view-live.js 的 liveUsable /
+   playUsable）—— 所以它值得写在这一页上：对讲用不了的时候，人第一眼该看到的是
    「非安全上下文」，而不是去查是不是代理没起。
    这一格排在最后一行：它是个**诊断**读数，不是要天天看的信息。 */
 function versionInfoHTML(){
@@ -651,7 +695,7 @@ function versionInfoHTML(){
        安全的时候它是句用不上的警告，白占一行。 */
     (window.isSecureContext ? "" :
     '<div class="hint" style="margin-top:10px">'+
-      "在非安全上下文中无法使用「实时对讲」功能, 请本机运行或使用 HTTPS 托管。"+
+      "在非安全上下文中无法使用「播音对讲」功能, 请本机运行或使用 HTTPS 托管。"+
     '</div>');
 }
 
@@ -666,6 +710,9 @@ function renderSettings(){
      headfix，而用户要的只是**设置这一页**收一收，所以另起一个类名，别去改 headfix
      那条基线 —— 那一条一改，考试模式页跟着变。 */
   el.classList.add("headfix","setpage");
+  /* 当前缩放档位：App 在文档开始时注入到 __ITC_DISPLAY（见 00-core.js）。
+     浏览器里这一行不渲染，取到的 100 也不会用到。 */
+  const scaleCur = displayPercent();
   el.innerHTML =
     '<div class="sec-head">'+
       '<div class="title-row">'+
@@ -685,7 +732,7 @@ function renderSettings(){
         '<div class="set-row">'+
           '<div class="set-lab">'+
             '<div class="set-t">通过代理访问服务器</div>'+
-            '<div class="hint">'+esc(proxyStatusText())+'</div>'+
+            '<div class="hint">'+proxyStatusHTML()+'</div>'+
           '</div>'+
           '<div class="set-ctl"><button class="btn" id="stProxyBtn">设置代理</button></div>'+
         '</div>'+
@@ -735,7 +782,7 @@ function renderSettings(){
       '<div class="panel-body">'+
         '<div class="set-row agent-row">'+
           '<div class="set-lab">'+
-            '<div class="set-t">通过播放代理在网页端使用实时对讲和在线播放功能</div>'+
+            '<div class="set-t">通过播放代理在网页端使用播音对讲和在线播放功能</div>'+
             '<div class="hint">运行 ITC-PlayAgent 的服务器地址, 默认为本机, 远程托管用户可自行修改</div>'+
           '</div>'+
           '<div class="set-ctl agent">'+
@@ -750,15 +797,34 @@ function renderSettings(){
       '</div>'+
     '</div>' : "")+
 
-    /* 「外观」：两套配色，各自都有浅色/深色（深浅跟着系统走）。
-       klein = 苹果系统色，summer = 原来的暖色。纯本机偏好（存 localStorage），
-       点一下只换 <html data-palette>，不重画这一页。 */
+    /* 「显示设置」：界面缩放在上，界面主题在下。
+       界面缩放只有 App 里有（浏览器自己的缩放归浏览器管，面板碰不到）：三档
+       按钮，点一下由原生当场换 WKWebView 的 viewScale，和浏览器里改网页缩放
+       一样是整页按比例重排。当前档位由原生注入。
+       界面主题：两套配色，各自都有浅色/深色（深浅跟着系统走）。klein = 苹果
+       系统色，summer = 原来的暖色。纯本机偏好（存 localStorage），点一下只换
+       <html data-palette>，不重画这一页。 */
     '<div class="panel">'+
-      '<div class="panel-head"><h3>外观</h3></div>'+
+      '<div class="panel-head"><h3>显示设置</h3></div>'+
       '<div class="panel-body">'+
+        (IS_APP ?
         '<div class="set-row">'+
           '<div class="set-lab">'+
-            '<div class="set-t">配色主题</div>'+
+            '<div class="set-t">界面缩放</div>'+
+            '<div class="hint">放大或缩小整个面板界面</div>'+
+          '</div>'+
+          '<div class="set-ctl">'+
+            '<div class="tabbar" id="stScale">'+
+              '<button data-scale="100"'+(scaleCur===100?' class="on"':"")+'>正常</button>'+
+              '<button data-scale="110"'+(scaleCur===110?' class="on"':"")+'>放大</button>'+
+              '<button data-scale="120"'+(scaleCur===120?' class="on"':"")+'>特大</button>'+
+            '</div>'+
+          '</div>'+
+        '</div>' : "")+
+        '<div class="set-row">'+
+          '<div class="set-lab">'+
+            '<div class="set-t">界面主题</div>'+
+            '<div class="hint">切换控制台配色方案</div>'+
           '</div>'+
           '<div class="set-ctl">'+
             '<div class="tabbar" id="stPalette">'+
@@ -809,7 +875,7 @@ function renderSettings(){
   /* 「在线对讲」那枚提示音开关：翻一下就存，不重画这一页（这一点只影响下一次响不响）。 */
   const chimeSw = $("#stChime");
   if (chimeSw) chimeSw.onchange = e => { S.chime = e.target.checked; LS.set("chime", S.chime); };
-  /* 「外观」那两枚色板：点一下换 <html data-palette>、存本机，不重画这一页。 */
+  /* 「显示设置」里那两枚色板：点一下换 <html data-palette>、存本机，不重画这一页。 */
   const palSw = $("#stPalette");
   if (palSw) $$("button", palSw).forEach(b => b.onclick = ()=>{
     S.palette = applyPalette(b.dataset.pal);
@@ -819,6 +885,13 @@ function renderSettings(){
   /* 「代理设置」那枚「设置代理」：开原生弹窗（只有 App 里才有这一行）。 */
   const pBtn = $("#stProxyBtn");
   if (pBtn) pBtn.onclick = openNativeProxySettings;
+  /* 「显示设置」里那三枚缩放档位：把百分比发给原生，点亮被点的那一枚。
+     不重画这一页 —— 原生换完缩放，页面自己会重排。 */
+  const scaleSw = $("#stScale");
+  if (scaleSw) $$("button", scaleSw).forEach(b => b.onclick = ()=>{
+    setNativeDisplayScale(Number(b.dataset.scale));
+    $$("button", scaleSw).forEach(x => x.classList.toggle("on", x === b));
+  });
 }
 
 /* ══ 月历控件（考试模式的「考试日期」和定时任务的「指定日期」共用这一个）═══

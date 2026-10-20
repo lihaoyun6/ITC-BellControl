@@ -41,10 +41,25 @@ function splitServer(v){
 
 function renderLogin(){
   const root = $("#root");
-  const busy = S.conn==="busy";
+  /* 「还在登录」有两段：/auth 那一趟（busy），以及认证已经过了、loadAll 还在
+     拉数据的这几秒 —— 那时 S.conn 已经是 ok，可视图还没切到面板，登录页仍摆在
+     眼前。只看 busy 的话，转圈只亮到 /auth 回来就没了（代理慢的时候一两秒），
+     人对着一个「连接」干等三五秒。视图还没到 app，就算仍在登录。 */
+  const busy = S.conn==="busy" || (S.conn==="ok" && S.view!=="app");
   if ($("#login")){
     $("#loginErr").textContent = S.conn==="bad" ? "连接失败，请检查用户名、密码与服务器地址。" : "";
-    $("#loginBtn").disabled = busy;
+    const btn = $("#loginBtn");
+    /* 登录中：按钮里转一圈，再写上「登录中…」。这里走的是「登录页已经画好、
+       只更新状态」那条路（点「连接」→ S.conn="busy" → renderAll），所以文字
+       和转圈也得在这条路上换，重画那条只负责初始的「连接」。
+       只在状态真的变了才改 innerHTML —— 每次重画都重设一遍的话，里面的转圈
+       会从 0 度重新开始，看着一顿一顿的。 */
+    const state = busy ? "busy" : "idle";
+    if (btn.dataset.state !== state){
+      btn.dataset.state = state;
+      btn.innerHTML = busy ? '<span class="spin"></span>登录中…' : "连接";
+    }
+    btn.disabled = busy;
     return;
   }
   const srv = splitServer(S.server);
@@ -74,7 +89,7 @@ function renderLogin(){
       '</div>'+
       '<label class="chk"><input type="checkbox" id="lg-remember"'+(LS.get("remember",true)?" checked":"")+'> 记住登录状态</label>'+
       '<div id="loginErr" class="hint" style="color:var(--crit)"></div>'+
-      '<button class="btn btn-primary" id="loginBtn" style="justify-content:center">连接</button>'+
+      '<button class="btn btn-primary" id="loginBtn" data-state="idle" style="justify-content:center">连接</button>'+
     '</div>'+
   '</div></div>';
 
@@ -147,19 +162,18 @@ const userNameText = ()=> ((S.user && S.user.name) || LS.get("userName","") || "
    （这句提示语跟着格子上的字样走：按钮现在写「注销」，提示语就不能还叫「退出登录」。） */
 const logoutTitle = ()=>{ const n = userNameText(); return "点击注销" + (n ? "："+n : ""); };
 
-/* 哪一格该带角上那颗小圆点。三件事同一个意思：这一项**正在跑**，人不在那一页
-   也看得见 —— 「考试模式」启用中、「实时对讲」接通中、「在线播放」连接/播放/暂停中。
+/* 哪一格该带角上那颗小圆点。两件事同一个意思：这一项**正在跑**，人不在那一页
+   也看得见 —— 「考试模式」启用中、「播音对讲」通话中或者在线播放中。
+   对讲和在线播放已经合成一页，所以「播音对讲」这一格吃两个判据，任一成立就亮。
    与 syncSessionBadge 用的判据是同一套（通话的 calling/talking、播放的三档），
    两边别各写各的。 */
 function modeDotOn(m){
   if (m === "exam") return !!(S.exam && S.exam.on);
   if (m === "live"){
     const lv = S.dt.live;
-    return !!(lv && (lv.phase === "calling" || lv.phase === "talking"));
-  }
-  if (m === "online"){
     const pl = S.dt.play;
-    return !!(pl && (pl.phase === "connecting" || pl.phase === "playing" || pl.phase === "paused"));
+    return !!((lv && (lv.phase === "calling" || lv.phase === "talking")) ||
+              (pl && (pl.phase === "connecting" || pl.phase === "playing" || pl.phase === "paused")));
   }
   return false;
 }
@@ -184,16 +198,14 @@ function syncModeDots(){
   };
   const seg = $("#modeSeg");
   const nav = $("#navbar");
-  put(seg && seg.querySelector('button[data-mode="exam"]'),   "seg-dot", "exam",   "考试模式启用中");
-  put(seg && seg.querySelector('button[data-mode="live"]'),   "seg-dot", "live",   "正在通话中");
-  put(seg && seg.querySelector('button[data-mode="online"]'), "seg-dot", "online", "正在播放中");
+  put(seg && seg.querySelector('button[data-mode="exam"]'), "seg-dot", "exam", "考试模式启用中");
+  put(seg && seg.querySelector('button[data-mode="live"]'), "seg-dot", "live", "正在通话或播放");
   const ni = m=>{
     const b = nav && nav.querySelector('.navbar-btn[data-mode="'+m+'"]');
     return b && b.querySelector(".navbar-ic");
   };
-  put(ni("exam"),   "navbar-dot", "exam");
-  put(ni("live"),   "navbar-dot", "live");
-  put(ni("online"), "navbar-dot", "online");
+  put(ni("exam"), "navbar-dot", "exam");
+  put(ni("live"), "navbar-dot", "live");
 }
 
 function renderTopbar(){
@@ -291,21 +303,17 @@ function renderTopbar(){
            点了它之后右边那一栏从「某张列表」换成「定时任务」，左边那份列表照旧站着。 */
         '<button data-mode="exam"'+(S.mode==="exam"?' class="on"':"")+'>考试模式'+
           (modeDotOn("exam")?'<span class="seg-dot" title="考试模式启用中"></span>':"")+'</button>'+
-        /* 「实时对讲」和「在线播放」：这两件是**对着终端说话／放东西**，
-           和左边那两个「排班打铃」是两种活，所以单摆一段。位置在「更多功能」之前
-           —— 那两个是日常会用的，更多功能是「其余」，谁在后头谁更边缘。
-
-           「实时对讲」那一个**只在能拿到麦克风的页面里才摆**（见 75-view-live.js
-           的 liveUsable）：明文 http 打开时浏览器根本不给 mediaDevices，摆出来
-           就是个按下去必然失败的页签。「在线播放」不受这条管 —— 它不要麦克风，
-           AudioWorklet 在明文 http 下虽然没有，但那条路还有 ScriptProcessorNode
-           可以退，所以它在非安全上下文里**照样摆得出来**（见 playUsable）。 */
-        (liveUsable() ?
-          '<button data-mode="live"'+(S.mode==="live"?' class="on"':"")+'>实时对讲'+
-            (modeDotOn("live")?'<span class="seg-dot" title="正在通话中"></span>':"")+'</button>' : "")+
-        (playUsable() ?
-          '<button data-mode="online"'+(S.mode==="online"?' class="on"':"")+'>在线播放'+
-            (modeDotOn("online")?'<span class="seg-dot" title="正在播放中"></span>':"")+'</button>' : "")+
+        /* 「播音对讲」：对讲和在线播放已经合成一页，三个子页签在页内切。
+           这一格**只要有一条路能走就摆**：麦克风拿不到时还有在线播放
+           （见 75-view-live.js 的 liveUsable / playUsable）。明文 http 下两边
+           都没有才整格不摆 —— 那时点进去也没有能用的东西。 */
+        ((liveUsable() || playUsable()) ?
+          '<button data-mode="live"'+(S.mode==="live"?' class="on"':"")+'>播音对讲'+
+            (modeDotOn("live")?'<span class="seg-dot" title="正在通话或播放"></span>':"")+'</button>' : "")+
+        /* 「媒体管理」：原来在「更多功能」里当一张卡片，现在提成常规页签（用户定的）。
+           它做的是对服务器上音频／媒体库的直接读写，和对讲一样是「对终端下手」的活，
+           所以挨着播音对讲摆。 */
+        '<button data-mode="media"'+(S.mode==="media"?' class="on"':"")+'>媒体管理</button>'+
         /* 「更多功能」：装那些一年用不上两回、但不该没有的东西（眼下是终端任务
            反查）。它排在最右边 —— 左边那些是「日常在用的」，这一个装的是「其余」。 */
         '<button data-mode="more"'+(S.mode==="more"?' class="on"':"")+'>更多功能</button>'+
@@ -497,6 +505,8 @@ function goMode(m){
    数据是懒加载的（切过去才拉，见 60-view-tasks.js），所以在这儿补一句 loadTasks()；
    它回来时会自己 renderMain() 一趟，表身就填上了。 */
 function openTasks(){
+  /* 和 goMode 一样：离开「更多功能」就停掉正在响的终端测试。 */
+  if (S.dt.more && S.dt.more.test) moreTestStop(true);
   S.mode = "tasks";
   loadTasks();
   renderAll();
@@ -527,11 +537,11 @@ function renderNavbar(){
   el.innerHTML =
     item("list",  ICON.bell,  "铃声计划")+
     item("exam",  ICON.exam,  "考试模式")+
-    /* 「实时对讲」和顶栏那排页签同一条规矩：拿不到麦克风就不摆（liveUsable）；
-       「在线播放」只要浏览器有 Web Audio 就能放（明文 http 下退到
-       ScriptProcessorNode），所以它一般都在（playUsable）。 */
-    (liveUsable() ? item("live", ICON.phone, "实时对讲") : "")+
-    (playUsable() ? item("online",ICON.play,  "在线播放") : "")+
+    /* 「播音对讲」和顶栏那排页签同一条规矩：两条路都走不通（拿不到麦克风、
+       也没有 Web Audio）才整格不摆。 */
+    ((liveUsable() || playUsable()) ? item("live", ICON.phone, "播音对讲") : "")+
+    /* 「媒体管理」从「更多功能」提上来的常规页。 */
+    item("media", ICON.music, "媒体管理")+
     item("more",  ICON.grid,  "更多功能")+
     /* 设置是底部导航栏的最后一格（用户定的）：和别的页签一样是常规页，
        点开就在这一条上高亮，不再靠顶栏的返回键退出。 */
@@ -675,8 +685,8 @@ function renderMain(){
   if (S.mode==="tasks") return renderTasks();
   if (S.mode==="settings") return renderSettings();
   if (S.mode==="more")     return renderMore();
+  if (S.mode==="media")    return renderMedia();
   if (S.mode==="live")     return renderLive();
-  if (S.mode==="online")   return renderPlayback();
   const vis = railGroups();
   const g = vis.find(x=>Number(x.id)===Number(S.groupId));
   el.classList.add("pane");
@@ -991,12 +1001,14 @@ function mountAreaChips(box, onRemove){
    只读 —— 改区域还是走「编辑」里那个「编辑区域」，免得同一件事有两个入口、
    两个入口还各有各的取消按钮。 */
 function openBellArea(b){
-  openModal({ title:"特例区域", sub:b.name+" · "+hm(b.time), width:"560px",
+  const m = openModal({ title:"特例区域", sub:b.name+" · "+hm(b.time), width:"560px",
     mount(body, foot, mm){
       body.innerHTML = '<div class="area-chips">'+ areaChips(bellArea(b)) +'</div>';
       foot.innerHTML = '<span class="spacer"></span><button class="btn" data-ba-close>关闭</button>';
       foot.querySelector("[data-ba-close]").onclick = ()=> closeModal(mm.id);
     }});
+  /* 这扇窗是来看全区域的：竖屏下胶囊不再收成一行横滑（见 css 的 .area-modal）。 */
+  m.host.querySelector(".modal").classList.add("area-modal");
 }
 
 function visibleBells(){
@@ -1152,7 +1164,7 @@ function renderSelbar(){
     '<span class="bulk-n">'+n+'</span><span class="dimmer">条已选</span>'+
     '<button class="btn btn-icon" data-act="on" title="启用这些铃声" aria-label="启用">'+ICON.checkC+'</button>'+
     '<button class="btn btn-icon" data-act="off" title="停用这些铃声" aria-label="停用">'+ICON.minusC+'</button>'+
-    '<button class="btn btn-icon" data-act="edit" title="批量编辑：改区域 / 改音源 / 改时间 / 恢复默认" aria-label="批量编辑">'+ICON.edit+'</button>'+
+    '<button class="btn btn-icon" data-act="edit" title="批量编辑：改区域 / 改音源 / 改时间 / 恢复默认区域" aria-label="批量编辑">'+ICON.edit+'</button>'+
     '<button class="btn btn-icon btn-danger" data-act="del" title="删除这些铃声" aria-label="删除">'+ICON.del+'</button>';
 }
 function onSelbarClick(e){
@@ -1166,8 +1178,8 @@ function onSelbarClick(e){
     /* 分组存在服务器上（写进铃声名字的尾巴里，见 js/35-groups.js），所以这一项
        和别的批量动作一样要发报文、一样能撤销。 */
     {icon:ICON.copy,    label:"改分组",   sub:"把这些铃声一起归到某个分组",   onPick:()=>openGrpBulk(list)},
-    /* 「恢复默认」不用再弹框问参数，所以它自己就是终点：点完当场做掉 */
-    {icon:ICON.refresh, label:"恢复默认", sub:"区域回到列表默认的那一组",
+    /* 「恢复默认区域」不用再弹框问参数，所以它自己就是终点：点完当场做掉 */
+    {icon:ICON.refresh, label:"恢复默认区域", sub:"区域回到列表默认的那一组",
       onPick:()=>{ list.forEach(x=> applyAreaToBells([x], {t:S.listArea.t.slice(),g:S.listArea.g.slice()}, "恢复默认"));
                    S.sel.clear(); renderRows(); renderSelbar(); }}
   ]);
@@ -1179,7 +1191,7 @@ function onSelbarClick(e){
     list.forEach(x=>{ x.isDone = on?1:0; queueToggle(x, on); });
     S.sel.clear(); renderRows(); renderSelbar(); toast(wroteWord(),"ok"); return;
   }
-  if (act==="del"){ openConfirm("删除 "+list.length+" 条铃声", "删除后该铃声不再执行。此操作会写入服务器，无法在面板内撤销。", ()=>{ list.forEach(queueDelete); S.sel.clear(); renderRows(); renderSelbar(); toast(wroteWord(),"ok"); }); }
+  if (act==="del"){ openConfirm("删除 "+list.length+" 条铃声", "删除后该铃声不再执行，且无法撤销。", ()=>{ list.forEach(queueDelete); S.sel.clear(); renderRows(); renderSelbar(); toast(wroteWord(),"ok"); }); }
 }
 
 /* ══ apply area to bells ════════════════════════════════════════════ */

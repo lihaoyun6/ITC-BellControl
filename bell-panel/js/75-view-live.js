@@ -1,8 +1,13 @@
-/* view-live — 实时对讲 / 在线播放
+/* view-live — 播音对讲（对讲 + 在线播放同一页）
    广播控制台 · 替代厂商后台的打铃配置面板
    //////////////////////////////////////////////////////////////
-   「实时对讲」这一页做的是**拨号对讲**：挑一个终端或分组，说进去，那边出声。
-   两种挑法，顶上那个小页签切换：
+   「播音对讲」这一页顶上那排页签管三块（原来「在线播放」是单独一个页签，
+   合并过来了）：
+
+     · 拨号呼叫 / 直接呼叫 —— 挑一个终端或分组，说进去，那边出声；
+     · 在线播放 —— 挑好区域，把本机的一个音频文件实时推到终端上。
+
+   对讲两种挑法：
 
      拨号呼叫 —— 仿手机拨号盘。号码框上面一行写着这个号码**对得上谁**，
                  下面 3 列 5 行：123 / 456 / 789 / 清空·0·退格，第五行是那三个键
@@ -54,7 +59,7 @@ function liveUsable(){
    会把整页重画一次（renderMain），塞在节点里的东西那一下就冲没了。 */
 function liveState(){
   if (!S.dt.live) S.dt.live = {
-    tab  : "dial",              /* "dial" 拨号呼叫 | "direct" 直接呼叫 */
+    tab  : "dial",              /* "dial" 拨号呼叫 | "direct" 直接呼叫 | "play" 在线播放 */
     num  : "",                  /* 拨号台上敲出来的号码 */
     area : {t:[], g:[]},        /* 直接呼叫选中的点位名／分组名，和别处一个形状 */
     aTab : "term",              /* 选择器正在看哪一页："term" 终端点位 | "group" 分组 */
@@ -194,12 +199,8 @@ function liveConnect(){
         pl.err = "与播放代理的连接已断开";
         playTeardown(false);
       }
-      /* 终端测试也一样：连接没了，本机还在放就只是白响。
-         这条路上**不能再发 hangup** —— 连接刚断，发它等于又去重连一次。 */
-      if (moreTestRunning()){
-        moreTestState().err = "与播放代理的连接已断开";
-        moreTestStop(true, true);
-      }
+      /* 终端测试**不在这儿收**：它走服务器的一键报警任务，和播放代理无关。
+         代理断了，那条试听照样由服务器推给终端。 */
       renderMain();
     };
   });
@@ -446,7 +447,7 @@ function liveChime(name, onFail){
 async function liveCall(){
   const st = liveState();
   if (st.busy || st.phase !== "idle") return;
-  /* 「更多功能 → 终端测试」也占着代理那一条会话，先让它停。 */
+  /* 「更多功能 → 终端测试」正在从同一批喇叭里放报警，先让它停。 */
   if (moreTestRunning()){
     st.err = "正在测试中，先停止测试";
     renderMain();
@@ -663,30 +664,78 @@ function renderProxyBlocked(el, title){
    标题那行钉住，下面那张面板自己滚。键盘那一坨用现成的 .panel，不新写卡片样式。 */
 function renderLive(){
   const el = $("#main"); if (!el) return;
-  if (proxyBlocksMedia()){ renderProxyBlocked(el, "实时对讲"); return; }
+  if (proxyBlocksMedia()){ renderProxyBlocked(el, "播音对讲"); return; }
   const st  = liveState();
   const tgt = liveTarget();
+  const canMic  = liveUsable();
+  const canPlay = playUsable();
+  /* 页签跟着「这一台机器能干什么」走：拿不到麦克风就不摆前两个（见 liveUsable），
+     连 Web Audio 都没有就不摆「在线播放」（见 playUsable）。停在一个现在摆不出来
+     的页签上就退到还能用的那一个。 */
+  if (st.tab === "play" ? !canPlay : !canMic) st.tab = canPlay ? "play" : "dial";
+
+  /* 页签从控件组里提出来，钉在标题那一行的右端（用户定的）—— 它是「这一页看
+     哪一块」，不是那张面板的一部分。也正因为搬出来了，「在线播放」才能挂进来：
+     三个页签一共一个页面。
+     两种摆法只差这一排的画法：竖屏用块状页签（.tabbar，地方紧、要一眼看出是
+     三格），横屏/宽屏用和顶栏导航同一套自绘段控（.seg，和顶栏那排页签一个样）。 */
+  const tabs = [];
+  if (canMic){
+    tabs.push('<button type="button" data-t="dial"'+(st.tab==="dial"?' class="on"':"")+'>拨号呼叫</button>');
+    tabs.push('<button type="button" data-t="direct"'+(st.tab==="direct"?' class="on"':"")+'>直接呼叫</button>');
+  }
+  if (canPlay){
+    tabs.push('<button type="button" data-t="play"'+(st.tab==="play"?' class="on"':"")+'>在线播放</button>');
+  }
+  const tabsHTML = tabs.length > 1
+    ? '<div class="'+(isPortraitNarrow() ? "tabbar live-tabs" : "seg live-seg")+'" id="liveTabs">'+
+        tabs.join("")+'</div>' : "";
+
   el.classList.add("headfix");
   el.innerHTML =
-    '<div class="sec-head">'+
-      '<div class="title-row"><h2 class="serif">实时对讲</h2></div>'+
+    '<div class="sec-head live-head">'+
+      '<div class="title-row live-head">'+
+        '<h2 class="serif">播音对讲</h2>'+
+        (tabsHTML ? '<span class="acts live-tabs-act">'+tabsHTML+'</span>' : "")+
+      '</div>'+
     '</div>'+
-    /* 两个页签**都撑满高度**（css 里 `.is-fill` 那一组），但吃高度的不是同一样：
+    /* 两个对讲页签**都撑满高度**（css 里 `.is-fill` 那一组），但吃高度的不是同一样：
        拨号页是键盘（五行摊开），直接呼叫页是选择器里那张名单（多露几行）。
-       所以拨号页多挂一个 `.is-dial`，那边才有多出来的一组键盘规则。 */
-    '<div class="page-body is-fill'+(st.tab==="dial"?" is-dial":"")+'">'+
-      '<div class="panel"><div class="panel-body">'+
-        '<div class="tabbar" id="liveTabs">'+
-          '<button data-t="dial"'+(st.tab==="dial"?' class="on"':"")+'>拨号呼叫</button>'+
-          '<button data-t="direct"'+(st.tab==="direct"?' class="on"':"")+'>直接呼叫</button>'+
-        '</div>'+
-        liveMicHTML(st)+
-        liveTipHTML(st)+
-        '<div class="dial-wrap">'+
-          (st.tab === "dial" ? liveDialHTML(st, tgt) : liveDirectHTML(st, tgt))+
-        '</div>'+
-      '</div></div>'+
-    '</div>';
+       所以拨号页多挂一个 `.is-dial`，那边才有多出来的一组键盘规则。
+       「在线播放」沿用原来那一页的 .play-page，节点一个没改。 */
+    (st.tab === "play"
+      ? '<div class="page-body play-page">'+
+          playAreaHTML(playState())+
+          playDeckHTML(playState())+
+        '</div>'
+      : '<div class="page-body is-fill'+(st.tab==="dial"?" is-dial":"")+'">'+
+          '<div class="panel"><div class="panel-body">'+
+            liveMicHTML(st)+
+            liveTipHTML(st)+
+            '<div class="dial-wrap">'+
+              (st.tab === "dial" ? liveDialHTML(st, tgt) : liveDirectHTML(st, tgt))+
+            '</div>'+
+          '</div></div>'+
+        '</div>');
+
+  /* 页签的点击不分在哪一页，都在这里接 —— liveBind 只管对讲那两块的内容。 */
+  $$("#liveTabs button", el).forEach(b => b.onclick = ()=>{
+    if (st.tab === b.dataset.t) return;
+    st.tab = b.dataset.t; st.err = "";
+    renderMain();
+  });
+
+  /* 竖屏用块状页签、横屏用段控，画法和类名都不一样：转屏得重画一次。
+     只挂一次 —— 每次 renderLive 都挂会越积越多。 */
+  if (!liveTabsMQ){
+    liveTabsMQ = window.matchMedia("(max-width:980px) and (orientation:portrait)");
+    const onMQ = ()=>{ if (S.mode === "live") renderMain(); };
+    if (liveTabsMQ.addEventListener) liveTabsMQ.addEventListener("change", onMQ);
+    else if (liveTabsMQ.addListener) liveTabsMQ.addListener(onMQ);   /* 老 WebKit */
+  }
+
+  if (st.tab === "play"){ playBind(playState()); return; }
+
   liveBind(st);
   /* 直接呼叫页那三枚键的高度是「借」拨号页的，见 liveActSync。 */
   if (!liveActResize){
@@ -707,6 +756,7 @@ function renderLive(){
 let liveActH = 0;           /* 拨号页实测的动作键高度，0 = 还没量过 */
 let liveActFs = 0;          /* 拨号页实测的动作键字号，0 = 还没量过 */
 let liveActResize = false;  /* 窗口尺寸的监听只挂一次 */
+let liveTabsMQ = null;      /* 转屏判据（页签在标题行／单独一行），监听只挂一次 */
 
 function liveActSync(){
   const st = liveState();
@@ -1017,11 +1067,7 @@ function livePickBind(st, root){
 
 function liveBind(st){
   const el = $("#main"); if (!el) return;
-  $$("#liveTabs button", el).forEach(b => b.onclick = ()=>{
-    if (st.tab === b.dataset.t) return;
-    st.tab = b.dataset.t; st.err = "";
-    renderMain();
-  });
+  /* 页签不在这儿接：它已经搬出控件组，三个页签共用一个处理器（见 renderLive）。 */
   /* 数字键：一律往号码尾巴上接一位。**按 `[data-k]` 认，不按类名排** ——
      同一个 .key 类底下还住着清空、退格和三个动作键，用 `:not()` 一个个往外挑，
      下次再添一枚就又得回来补一笔，漏了就是把它的 dataset 接到号码屁股上。 */
@@ -1567,7 +1613,7 @@ function playReadDraw(st){
 async function playStart(st){
   if (st.busy) return;
   if (st.phase === "connecting") return;
-  /* 「更多功能 → 终端测试」也占着代理那一条会话，先让它停。 */
+  /* 「更多功能 → 终端测试」正在从同一批喇叭里放报警，先让它停。 */
   if (moreTestRunning()){
     st.err = "正在测试中，先停止测试"; renderMain(); return;
   }
@@ -1860,7 +1906,7 @@ function playPaint(){
 function playRafStop(){ if (playRaf){ cancelAnimationFrame(playRaf); playRaf = 0; } }
 /* 播放中才转的那口气。切到别的页时 #main 里没有那些节点，playPaint 返回 false，
    这一口气就自己停了 —— 声音照旧走（音频线程才是这条会话的时钟），
-   人切回来时 renderPlayback 末尾会再把它叫醒。 */
+   人切回来时 renderLive 的 playBind 会再把它叫醒。 */
 function playTick(){
   playRaf = 0;
   if (playState().phase !== "playing") return;
@@ -1881,23 +1927,6 @@ function playClock(s){
    那一档要的是「一屏装下」（每个 .panel-body 都被压成 flex:none），这一页比一屏高，
    让它整页跟着滚就行 —— 底距由 .main-inner.headfix > .page-body 自带的那 80px
    管着（竖屏那一档是 90px）。 */
-function renderPlayback(){
-  const el = $("#main"); if (!el) return;
-  if (proxyBlocksMedia()){ renderProxyBlocked(el, "在线播放"); return; }
-  const st = playState();
-  el.classList.add("headfix");
-  el.innerHTML =
-    '<div class="sec-head">'+
-      '<div class="title-row"><h2 class="serif">在线播放</h2></div>'+
-    '</div>'+
-    /* play-page：横屏时播放器那一栏要吃页面剩下的高度（见 css 那一档）。 */
-    '<div class="page-body play-page">'+
-      playAreaHTML(st)+
-      playDeckHTML(st)+
-    '</div>';
-  playBind(st);
-}
-
 /* 面板一：播放区域。一排可点的胶囊（带 ×，点掉一颗就是把那个终端／分组从这一条里
    去掉），「选择区域」挂在标题栏右端（用户定的版式：这一块只有一处动作，摆到标题
    那一行去，底下就只剩内容本身）。 */
@@ -2247,8 +2276,9 @@ function playBind(st){
 
 /* ══ 跨页的会话胶囊 ═════════════════════════════════════════════════
    通话或播放中切到别的页，顶栏下面挂一枚重点色（accent）胶囊，白字 + 一枚记号，
-   写着「正在通话中」／「正在播放中」（用户定的）。点它回那一页，回到那一页它就没了；
-   再切走它又出现。**这里不记任何状态**：「该不该显示」每次都从当前页和两条会话
+   写着「正在通话中」／「正在播放中」（用户定的）。点它回到「播音对讲」页、并且
+   落在能看见那一项的子页签上；看得见的那一项不挂胶囊，另一项照挂。
+   **这里不记任何状态**：「该不该显示」每次都从当前页、当前子页签和两条会话
    现算，所以「点它回去→消失→再切走→又出现」不用任何记忆就成立。
 
    元素常驻在 index.html 里（顶栏每收一条终端状态就整个重写一遍 innerHTML，
@@ -2263,19 +2293,30 @@ function syncSessionBadge(){
   const lv = S.dt.live, pl = S.dt.play;
   const call = !!(lv && (lv.phase === "calling" || lv.phase === "talking"));
   const cast = !!(pl && (pl.phase === "connecting" || pl.phase === "playing" || pl.phase === "paused"));
-  /* 通话优先。两边本来就互斥（谁的入口都挡着另一个），这只是个次序。 */
-  const owner = call ? "live" : cast ? "online" : "";
-  if (!owner || S.mode === owner || !tb){
+  /* 对讲和在线播放现在是同一页里的两个子页签。胶囊的判据从「在不在那一页」变成
+     「那一项看不看得见」：对讲在拨号/直接呼叫两个子页签里都在（麦克风面板常驻），
+     在线播放只在「在线播放」子页签里。正在看的那一项不挂胶囊，另一项照挂 ——
+     点一下就把人送到该看的那个子页签上。通话优先（两边入口本来就互斥）。 */
+  const st = liveState();
+  const onLive = S.mode === "live";
+  const want = call ? (onLive && st.tab !== "play" ? "" : "call")
+             : cast ? (onLive && st.tab === "play" ? "" : "cast")
+             : "";
+  if (!want || !tb){
     if (!b.hidden){ b.hidden = true; b.innerHTML = ""; b.dataset.k = ""; }
     return;
   }
-  if (b.dataset.k !== owner){
-    b.dataset.k = owner;
-    b.innerHTML = (call ? ICON.mic : ICON.play) +
-      '<span>'+(call ? "正在通话中" : "正在播放中")+'</span>';
-    b.onclick = ()=> goMode(owner);
+  if (b.dataset.k !== want){
+    b.dataset.k = want;
+    b.innerHTML = (want === "call" ? ICON.mic : ICON.play) +
+      '<span>'+(want === "call" ? "正在通话中" : "正在播放中")+'</span>';
+    b.onclick = ()=>{
+      const s = liveState();
+      s.tab = want === "call" ? "dial" : "play";
+      goMode("live");
+    };
   }
   const r = tb.getBoundingClientRect();
-  if (r.bottom) b.style.top = (r.bottom + 8) + "px";
+  if (r.bottom) b.style.top = (r.bottom + 8) + 'px';
   b.hidden = false;
 }

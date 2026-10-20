@@ -7,7 +7,7 @@
   const saved = savedSession();          /* 本机留着没过期的令牌吗（见 10-data.js） */
   if (!saved){ forgetLogin(); renderAll(); return; }   /* 没有 / 已过期 → 停在登录页 */
 
-  /* 记住登录这一趟：5 秒还没连上就作废令牌，回登录页。
+  /* 记住登录这一趟：6 秒还没连上就作废令牌，回登录页。
      计时到探针成功为止 —— 后面 loadAll 再慢也已经算「连上了」。
      超时之后要保证在途的探针 / 静默续登都不能再把会话救回来。 */
   let bootDone = false, bootTimedOut = false;
@@ -22,7 +22,7 @@
     S.conn = "idle"; S.view = undefined;
     renderAll();
     toast("连接超时，请重新登录", "err");
-  }, 5000);
+  }, 6000);
   const bootSettled = ()=>{ bootDone = true; clearTimeout(bootTimer); };
   /* **先把界面画成主界面，再去问服务器。** 这一笔就是「不闪登录页」的全部：
      先画登录页、等结果回来再换成主界面，人就会看见登录页闪一下 —— 而答案其实
@@ -50,12 +50,15 @@
          不兜的话第一帧就抛错，整条启动链子断在这儿）；
        · renderTasks() 在「还没连上」时那句空表话得换成「正在连接…」，不然是句假话。
      定时任务那一页的数据不用管：下面 loadAll() 里有它，回来自己会补画。 */
-  /* 记忆里的页签要**还在**才恢复：从明文 http 打开时「实时对讲」这一页根本
-     摆不出来（拿不到麦克风，见 75-view-live.js 的 liveUsable），恢复它等于
-     把人送进一个没有任何入口的页面 —— 顶栏和导航栏里都找不到那个页签，
-     退不出来。所以这会儿落到「铃声计划」上。「在线播放」这一条只在**连 Web Audio
-     都没有**的浏览器上才会命中 —— 明文 http 下它退到 ScriptProcessorNode 照样能放
-     （见 75-view-live.js 的 playUsable），页签也是摆着的。
+  /* 记忆里的页签要**还在**才恢复：从明文 http 打开、又没有 Web Audio 时，
+     「播音对讲」这一页根本摆不出来（两条路都不通，见 75-view-live.js 的
+     liveUsable / playUsable），恢复它等于把人送进一个没有任何入口的页面 ——
+     顶栏和导航栏里都找不到那个页签，退不出来。所以这会儿落到「铃声计划」上。
+     只有麦克风没有 Web Audio 时，这一页还在（在线播放摆着），但得落在能看的
+     那个子页签上，不能停在上次离开时的拨号台。
+
+     老版本把「在线播放」记成单独一个页签（"online"）：这一版它并进了「播音对讲」，
+     读到时折成 live + play 子页签。
 
      **「定时任务」也落到铃声计划上**（用户定的：它不参与刷新恢复）。它现在不是
      页签了 —— 入口只有侧栏底部那张卡片，而那张卡片只在铃声计划这一页里；刷新
@@ -65,10 +68,17 @@
      **app 里不恢复**（用户定的）：app 没有「刷新」这回事 —— 每次页面加载就是
      一次冷启动（进程退掉再打开、或改完代理重建 WebView）。所以一律回默认的
      铃声计划；上次那个页签的记忆只在浏览器里刷新时用。 */
-  S.mode = IS_APP ? "list" :
-           ((lastMode === "live" && !liveUsable()) ||
-            (lastMode === "online" && !playUsable()) ||
-            lastMode === "tasks") ? "list" : lastMode;
+  if (lastMode === "online"){
+    lastMode = "live";
+    liveState().tab = "play";
+  }
+  if (lastMode === "live" && !liveUsable()){
+    const lv = liveState();
+    if (!playUsable()) lastMode = "list";
+    else if (lv.tab !== "play") lv.tab = "play";
+  }
+  if (lastMode === "tasks") lastMode = "list";
+  S.mode = IS_APP ? "list" : lastMode;
   renderAll();
   /* 拿存着的令牌去问一个**认令牌**的接口，通了就直接进主界面 —— 刷新不用重输密码
      就是这一趟办到的事。

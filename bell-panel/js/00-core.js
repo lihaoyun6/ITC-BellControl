@@ -81,12 +81,26 @@ function openNativeProxySettings(){
   const h = window.webkit && window.webkit.messageHandlers;
   if (h && h.itcProxyOpen) h.itcProxyOpen.postMessage(1);
 }
-function proxyStatusText(){
+/* 「界面缩放」三档（正常 / 放大 / 特大 = 100% / 110% / 120%）。实际缩放是
+   WKWebView 的 viewScale，做在原生那边；当前档位由 App 在文档开始时注入到
+   __ITC_DISPLAY。网页这边只负责摆三枚按钮，点一下把百分比发过去 —— 原生存下
+   并当场生效，不重载页面。 */
+function displayPercent(){
+  const d = window.__ITC_DISPLAY;
+  return d && d.percent ? d.percent : 100;
+}
+function setNativeDisplayScale(percent){
+  const h = window.webkit && window.webkit.messageHandlers;
+  if (h && h.itcDisplayScale) h.itcDisplayScale.postMessage(percent);
+  if (window.__ITC_DISPLAY) window.__ITC_DISPLAY.percent = percent;
+}
+/* 设置页「代理设置」那行副标题：绿点 / 红点表示是否启用，后面只写地址和端口
+   （协议类型不展示）。系统不支持代理、或者还没填地址时只给一句说明、不带点。 */
+function proxyStatusHTML(){
   const p = window.__ITC_PROXY;
   if (!p || !p.available) return "当前系统版本不支持代理设置（需要 iOS 17 及以上）。";
   if (!p.host) return "尚未设置代理服务器。";
-  const kind = p.type === "faketls" ? "FakeTLS" : p.type === "http" ? "HTTP" : "SOCKS5";
-  return (p.enabled ? "已启用" : "未启用") + " · " + kind + " · " + p.host + ":" + p.port;
+  return '<span class="pdot '+(p.enabled ? "on" : "off")+'"></span>'+esc(p.host+":"+p.port);
 }
 /* App 里开着代理时，对讲和在线播放的音频走 UDP，代理带不了 —— 这两页直接换成
    一句说明，别让人按了「呼叫」才失败。网页版没有 __ITC_PROXY，永远为假。 */
@@ -492,7 +506,7 @@ const S = {
   sel    : new Set(),
   tsel   : new Set(),          // 定时任务表里勾中的行（存 taskKey，不是 id）
   view   : undefined,          // undefined | "app"
-  mode   : "list",             // "list" | "tasks" | "exam" | "settings" | "more" | "live" | "online" —— 主区显示哪个视图
+  mode   : "list",             // "list" | "tasks" | "exam" | "settings" | "more" | "live" | "media" —— 主区显示哪个视图
   /* 「铃声计划」页窄到一次只能显示一栏时，现在看的是哪一栏。
      true = 详情（用户点过某条任务），false = 任务列表。两栏并排显示时
      这个值不起作用（CSS 只在 ≤980px 认它），所以不用跟着视口宽度去改它。
@@ -579,6 +593,9 @@ const ICON = {
   copy: svgIcon('<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>'),
   /* trash-2 */
   del : svgIcon('<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+  /* download —— 媒体管理里每个音频行尾那枚「下载」（垃圾桶左边），竖屏上
+     和垃圾桶一起收进「⋯」的小单子里。 */
+  download: svgIcon('<path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'),
   /* ellipsis —— 竖屏上铃声表行尾那枚「⋯」：三个图标（编辑/复制/删除）收进它
      点开的小单子里，见 30-view-list.js 的 openRowMenu。 */
   dots: svgIcon('<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'),
@@ -709,7 +726,10 @@ async function api(method, path, opts){
     res = await fetch(url, {method, headers, signal: opts.signal,
                             body: opts.body!==undefined ? JSON.stringify(opts.body) : undefined});
   }catch(e){
-    const err = new Error("无法连接服务器（浏览器可能拦截了跨域请求，见右下角说明）");
+    /* 调用方自己掐的钟（登录 / 开机探针的 AbortController）：原样交回去，
+       别包成「连不上」—— 那边要靠 name 区分超时。 */
+    if (e && e.name === "AbortError") throw e;
+    const err = new Error("连接服务器失败，请重新尝试");
     err.network = true; throw err;
   }
   let json = null;

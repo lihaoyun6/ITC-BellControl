@@ -119,10 +119,10 @@ function linkStateText(){
    图省事：搜索框是个正在输入的控件，把它整个换掉会当场掐断输入法 —— 打拼音时
    候选框一闪就没了。名册里没有输入中的东西，整块换掉无所谓。
 
-   **刷新 / 添加设备在底栏最右，不在表头**（用户定的）：三个页签加两枚按钮挤在
-   一行里，窄屏上「添加设备」会被顶出框外。底栏本来就要一条给「显示终端IP」开关
-   （左：开关在左、文字在右），两枚按钮正好搬到它右边，各占一头 —— 刷新只留一个
-   图标（它不常按，字留给「添加设备」）。
+   **刷新在右上角，添加设备在底栏最右**（用户定的）：三个页签加两枚按钮挤在
+   一行里，窄屏上「添加设备」会被顶出框外。添加设备留在底栏 —— 底栏本来就要一条
+   给「显示终端IP」开关（左：开关在左、文字在右）。刷新只留一个图标，搬去右上角，
+   和挑音源弹窗里那枚同一尺寸、同一位置（见 20-ui.js 的 addModalRefresh）。
    底栏那一格开关**横竖屏都在**（用户定的）：原先只在竖屏露出来，理由是「宽屏地方
    够，IP 一直摆着，用不着它」—— 可那等于把「想不想看 IP」这件事按屏幕宽度替人
    决定了。现在两档一个样，挡位记在浏览器里，见下面 termShowIp。
@@ -139,7 +139,7 @@ let termListPaint = null;          /* 那张表开着时的重画句柄；框关
 let termShowIp = LS.get("termShowIp", true) !== false;
 
 function openTermList(){
-  if (!S.data.terminals.length){ toast("终端名册还没拿到，等连上服务器再点这一格", "err"); return; }
+  if (!S.data.terminals.length){ toast("数据尚未准备好，请稍后再试", "err"); return; }
   let tab = "online";
   let q = "";                        /* 终端搜索词。只活在这个框里，和 tab 一样每次开都从头来 */
   let sq = "";                       /* 会话搜索词（任务名 / 响应方），和终端那格分开记 */
@@ -160,7 +160,7 @@ function openTermList(){
     mount(b, f, mm){
       b.classList.add("grow-body");     /* 页签钉住，只让下面这份名册自己滚 */
       const subEl = $(".modal-head .sub", mm.host);   /* 副标题里的台数跟着名册走 */
-      /* 底栏：左头是「显示IP」开关，右头是刷新 / 添加设备（表头腾出来的地方）。
+      /* 底栏：左头是「显示IP」开关，右头是添加设备（刷新在右上角，见 addModalRefresh）。
          开关**在左、文字在右** —— .switch 默认排法是文字在前，这里把两段调个个儿。
          竖屏上 IP 和名字挤在一行里，想只看名字的，把这段 IP 收起来；
          默认开着 —— 关掉之后行里连 IP 都不显示，那是反直觉的状态，不该是默认值。 */
@@ -171,10 +171,6 @@ function openTermList(){
           '<span class="track"></span><span class="dimmer">显示IP</span>'+
         '</label>'+
         '<span class="spacer"></span>'+
-        /* 刷新只留图标（用户定的）：底栏左边那格开关占着字，右边再摆一枚带字的按钮，
-           窄屏上「添加设备」就没地方了。它和「新建任务」那一栏底下那颗是同一种键 ——
-           单独一个图标、说法写在 title/aria-label 里。 */
-        '<button class="btn btn-sm btn-quiet btn-icon" data-act="reload" title="刷新" aria-label="刷新">'+ICON.refresh+'</button>'+
         '<button class="btn" data-act="add">'+ICON.plus+' 添加设备</button>'+
         /* 竖屏收掉了右上角的 ×，出口在底栏。宽屏有 ×，不再多摆一枚。 */
         (isNarrow() ? '<button class="btn" data-act="close">关闭</button>' : '');
@@ -246,8 +242,14 @@ function openTermList(){
         if (tab==="sessions") statSendSessions();
         paint();
       });
-      /* 那两枚住在底栏里（f），不在 b 里 —— 它们不参与重画，绑一次就够。 */
-      f.querySelector('[data-act="reload"]').onclick = ()=> reloadTerminals();
+      /* 刷新在右上角，和挑音源弹窗里那枚是同一个控件（addModalRefresh）。 */
+      addModalRefresh(mm.host, async (btn)=>{
+        if (btn.disabled) return;
+        btn.disabled = true;
+        await reloadTerminals();
+        btn.disabled = false;
+      });
+      /* 添加设备住在底栏里（f），不在 b 里 —— 它不参与重画，绑一次就够。 */
       f.querySelector('[data-act="add"]').onclick    = ()=> openDeviceAdd();
       const cls = f.querySelector('[data-act="close"]');
       if (cls) cls.onclick = ()=> closeModal(mm.id);
@@ -627,6 +629,31 @@ function statSend(ws){
     }));
   }catch(e){}
 }
+/* 往这条状态连接上发一条命令（会话停止、试听、试听清单都走它）。
+   没连上就返回 false —— 调用方自己决定是报错还是再等一会儿。 */
+function statSendCmd(actioncode, data){
+  const ws = statWS;
+  if (!ws || ws.readyState !== 1) return false;
+  try{
+    ws.send(JSON.stringify({
+      company:"BL", actioncode:actioncode, token:S.token||"",
+      data:data||{}, result:0, return_message:""
+    }));
+    return true;
+  }catch(e){ return false; }
+}
+/* 等状态连接变成 OPEN，最多等 ms 毫秒。页面刚起来、连接还在握手时点「开始测试」
+   会用到 —— 那一下发不出去，不是「服务器不肯」，不能直接判失败。 */
+async function statWaitOpen(ms){
+  if (statWS && statWS.readyState === 1) return true;
+  if (!statWS) openStatusFeed();
+  const t0 = Date.now();
+  while (Date.now() - t0 < (ms || 2500)){
+    if (statWS && statWS.readyState === 1) return true;
+    await new Promise(r=> setTimeout(r, 100));
+  }
+  return !!(statWS && statWS.readyState === 1);
+}
 function statScheduleRetry(){
   if (statTimer) return;
   const wait = Math.min(30000, 2000 * Math.pow(2, Math.min(statRetry, 4)));
@@ -676,8 +703,20 @@ async function openStatusFeed(){
     } else if (m.actioncode===STAT_ACT.sessStop || m.actioncode==="ls2c_stop_task" ||
                (m.actioncode==="ls2c_push_msg" && ev===STAT_ACT.sessStop)){
       sessChanged = removeSession(dd.TaskID);
+      /* 终端测试在等这一声：会话真停了才去删那条临时报警任务（见 70-view-more）。 */
+      if (typeof moreTestStopped === "function") moreTestStopped(dd.TaskID);
     }
     if (sessChanged && termListPaint){ try{ termListPaint(); }catch(err){} }
+    /* 终端测试的两条应答：试听命令的结果、当前试听会话清单。它们不带终端状态，
+       处理完就到此为止，别掉进下面那条「不是状态推送就 return」的闸。 */
+    if (m.actioncode === "ls2c_try_listen_task"){
+      if (typeof moreTestTryResult === "function") moreTestTryResult(m.result);
+      return;
+    }
+    if (m.actioncode === "ls2c_get_listen_task_status"){
+      if (typeof moreTestListenInfo === "function") moreTestListenInfo(dd.ListenTaskInfo || []);
+      return;
+    }
     if (m.actioncode!==STAT_ACT.ack && m.actioncode!==STAT_ACT.push &&
         !(m.actioncode==="ls2c_push_msg" && ev===STAT_ACT.push)) return;
     const d = dd;
