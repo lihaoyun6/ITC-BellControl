@@ -554,7 +554,7 @@ function renderMedia(){
                         '<input class="input" id="mmQ" placeholder="搜索音频文件" value="'+esc(m.q)+'" spellcheck="false" autocomplete="off">'+
                       '</span>'+
                     '</span>'+
-                    '<button class="btn btn-sm mm-up" id="mmUpload">'+ICON.plus+' 上传音频</button>'+
+                    '<button class="btn btn-sm btn-primary mm-up" id="mmUpload">'+ICON.plus+' 上传音频</button>'+
                   '</span>'+
                   '<span class="hd-seg" id="mmBulk" hidden></span>'+
                 '</span>'+
@@ -666,7 +666,7 @@ function renderMedia(){
           /* 两枚按钮跟着页签露：音频页只能上传，媒体库页只能新建 —— 同时摆着
              既挤，也容易对着「媒体库」页点「上传音频」却不知道传进哪个库。 */
           '<button class="btn btn-sm" id="mmNewGrp" hidden>'+ICON.plus+' 新建媒体库</button>'+
-          '<button class="btn btn-sm" id="mmUpload" hidden>'+ICON.plus+' 上传音频</button>'+
+          '<button class="btn btn-sm btn-primary" id="mmUpload" hidden>'+ICON.plus+' 上传音频</button>'+
         '</span>'+
       '</div>'+
       '<div class="mm-bar">'+
@@ -719,8 +719,9 @@ function renderMedia(){
     /* 竖屏选中音频之后：搜索框和库下拉锁住，顶栏那枚上传键原地变成「删除已选」。 */
     if (m.tab === "file"){
       up.innerHTML = n ? ICON.del+" 删除已选" : ICON.plus+" 上传音频";
-      /* 上传是普通色按钮（用户定的）：这一页的主色留给真正「主操作」的地方，
-         上传只是媒体页里的一个日常动作。选中音频时那枚仍旧变红（删除）。 */
+      /* 上传用重点色（用户定的，和宽屏那一枚一致）。选中音频之后这枚变成
+         「删除已选」、再挂上 btn-danger —— 两条规则里 danger 在后，红框红字
+         压得住重点色；取消勾选后摘掉 danger，它自己回到重点色。 */
       up.classList.toggle("btn-danger", n > 0);
     }
     $("#mmQ").disabled = n > 0;
