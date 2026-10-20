@@ -1169,9 +1169,18 @@ button.badge-btn{font-family:inherit;font-size:11px;line-height:normal;border:1p
 table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
 table.tbl th{
   text-align:left;font-size:11px;font-weight:700;letter-spacing:.09em;color:var(--fg-3);text-transform:uppercase;
-  padding:9px 12px;position:sticky;top:0;background:var(--surface);z-index:1;white-space:nowrap;
+  padding:9px 12px;position:sticky;top:-1px;background:var(--surface);z-index:1;white-space:nowrap;
   border-bottom:1px solid var(--border);
 }
+/* 上面那个 `top:-1px`（用户报的「列表滚上去之后，标题栏底下那 1px 里能看见
+   一排文字像素」）：钉住的题头本该严丝合缝地贴住滚动区顶边，可滚动区的高度是
+   flex 分出来的、常带小数（界面缩放 110% / 120% 时更是如此），Safari 把题头
+   这一层按设备像素对齐之后，顶边会落在滚动区顶边下面一点点，留下一条 1px 的
+   缝 —— 表身从那儿透出来。把题头往上提 1px，让它的底色先探进滚动区外面那 1px
+   （overflow 会裁掉），顶边就没有缝了。`top` 只在题头**真的钉住**时才起作用，
+   没滚到那条线时它在文档流里的位置一个像素都不动；钉住之后整行（连字）跟着
+   高 1px，肉眼看不出来，换来的是那排透出来的文字没了。
+   只改这一条：所有带 sticky 题头的表（铃声、定时任务、反查、考试那几张）都用它。 */
 table.tbl td{padding:8px 12px;vertical-align:middle}
 /* ── 表格分隔线：只有表头下面那一根 ──────────────────────────────────
    用户定的：竖线一根都不要；行与行、列与列靠隔行换底和留白分开，
@@ -1202,10 +1211,10 @@ table.tbl tbody tr:nth-child(even){background:var(--row-alt)}
 table.tbl-more{table-layout:fixed}
 table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tbl-more .c-time{width:76px}
-.tbl-more .c-name{width:24%}
-.tbl-more .c-src{width:108px}
+.tbl-more .c-name{width:32%}
+.tbl-more .c-src{width:92px}
 .tbl-more .c-media{width:26%}
-.tbl-more .c-period{width:26%}
+.tbl-more .c-period{width:22%}
 /* 窄屏（≤980px，和文件末尾那一档同一个断点）五个列名摆不开。竖屏仍然**定宽**
    （列宽钉死，别让浏览器按内容乱分），但两个改动：
    1. 允许换行、不再省略号截断 —— 竖屏没有 hover，title 里的全文谁也 hover 不出来，
@@ -1216,9 +1225,10 @@ table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
    最长的字（「[初中日常]」55px、「周二到周五」58px）分别要 69px 和 72px；
    而「名称」最长的字（「晚自习第一节上课」92px）要 106px 才能排一行 ——
    400px 的机器上表宽 366px，扣掉时刻 76px，剩下的 290px 分给
-   来源 106 + 周期 102 + 名称 82（上一轮是 112 + 108 + 70，再上一轮 107 + 95 + 88）。
-   两列原来留白偏多、名称偏紧，用户让各收 6px、12px 全给名称：收完 106/102 仍远在
-   69/72 之上，一个字都截不掉，只是把多余的留白挪过去。
+   来源 92 + 周期 92 + 名称 106。
+   来源、周期两列用户后来都让收窄过（来源 106 → 92；周期 102 → 92；宽屏
+   来源 108 → 92px、名称 24% → 32%、周期 26% → 22%），省下的全归名称。
+   收完 92/92 仍在 69/72 的实测下限之上，一个字都截不掉。
    **改这两个数之前先看这条**：这两列用户来回调过好几轮（我收狠到 72/72、再收到
    86/84、96/90、104/100，他都嫌窄），他要的是两列**留白充足**，不是越窄越好；
    这次是他自己开口收的，别顺着往前推。
@@ -1226,8 +1236,8 @@ table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:980px){
   table.tbl-more td{overflow:visible;text-overflow:clip;white-space:normal}
   .tbl-more .c-time{width:76px}
-  .tbl-more .c-src{width:106px}
-  .tbl-more .c-period{width:102px}
+  .tbl-more .c-src{width:92px}
+  .tbl-more .c-period{width:92px}
   .tbl-more .c-name{width:auto}
   /* 竖屏再省一列：「音源」整列不显示。四列里就数它最长、也最不影响判断
      （要认的是哪条铃声、什么周期），去掉它剩下四列才排得开。
@@ -1334,6 +1344,17 @@ table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 子页标题行里那枚返回键：宽屏才有（窄屏顶栏已经有一枚 #tbBack）。 */
 .more-back{display:none}
 @media (min-width:981px){.more-back{display:inline-flex}}
+/* 子页标题行最右边那枚动作键（任务反查的「重置查询」、终端测试的「停止测试」）。
+   margin-left:auto 把它顶到行尾；窄到放不下时跟着 .title-row 换行，仍靠右。
+   **标题行本身得先铺满整条 .sec-head**：.title-row 是内容宽的 flex 盒子，
+   只有 h2 那么长，auto 外边距在它里面顶到头也还在标题右边，到不了行尾。 */
+.sec-head > .title-row:has(> .more-head-act){flex:1 1 auto;min-width:0}
+/* 这枚键**不能比标题的行盒高**：标题 22px、行高 1.55，行盒 34.1px；.btn 默认
+   （13px 字、行高 1.55、上下 7px 内边距、1px 边框）算出来 36.15px。行高一变，
+   .title-row 的居中就把标题往下推约 1px —— 用户报的「点开始查询标题栏顶上多
+   出 1px、界面跳一下」就是这个。把上下内边距收到 9px、行高压到 1：13+18+2
+   = 33px，低于标题行盒，标题纹丝不动。 */
+.sec-head .title-row > .more-head-act{margin-left:auto;flex:none;line-height:1;padding-top:9px;padding-bottom:9px}
 /* 终端测试那两格条件：竖屏上下摞，横屏（含手机横持）并排一行。
    不用 .grid2 —— 它在 ≤980px 一律收成一列，手机横屏也会被收掉。 */
 .more-test-fields{display:grid;grid-template-columns:1fr;gap:14px}
@@ -1346,14 +1367,15 @@ table.tbl-more td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .more-btns .hint{margin-right:auto}
 /* 结果／状态面板里什么都没有时那一句。 */
 .more-empty{padding:28px 16px}
-/* 终端测试下面那份「分组 + 终端」两层状态。整块自己滚（和 .tbl-wrap 在
-   .panel.grow 里的角色一样，只是这里装的不是表）。 */
-.more-tstat{flex:1;min-height:0;overflow-y:auto;padding:12px 14px}
-.tstat-grp{border:1px solid var(--border);border-radius:var(--r-sm);
-  background:var(--surface);overflow:hidden}
+/* 终端测试下面那份「分组 + 终端」名单，装在「实时状态」那只控件组里。
+   整块自己滚（和 .tbl-wrap 在 .panel.grow 里的角色一样，只是这里装的不是表）。
+   用户定的：组里**不再嵌套** —— 分组名和终端行直接铺开，每组不再套一只
+   带边框的卡片；没选任何分组/终端时整只组不摆（见 moreTestStatBoxHTML）。
+   左右不留内边距：行里的 11px 由 .pick-row 自己给，组名跟着它走。 */
+.more-tstat{flex:1;min-height:0;overflow-y:auto;padding:14px 0 0}
 .tstat-grp + .tstat-grp{margin-top:12px}
-.tstat-head{display:flex;align-items:baseline;gap:8px;padding:8px 12px;
-  border-bottom:1px solid var(--border);background:var(--panel-head-bg)}
+.tstat-head{display:flex;align-items:baseline;gap:8px;padding:0 11px 6px;
+  border-bottom:1px solid var(--border)}
 .tstat-head .n{min-width:0;font-weight:600;font-size:13px;color:var(--panel-title);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tstat-head .c{margin-left:auto;flex:none;font-size:11px;color:var(--fg-3);

@@ -65,11 +65,11 @@ function renderTasks(){
         '</span>'+
       '</div>'+
       /* tbl-tasks 这个类只给窄屏用：≤980px 时收掉「播放时长」那一列
-         （见 css/app.css 末尾）。列序：勾选 / 时间 / 名称 / 执行周期 /
+         （见 css/app.css 末尾）。列序：勾选 / 时间 / 名称 / 周期 /
          播放时长 / 详情 / 状态 / 操作。 */
       '<div class="tbl-wrap"><table class="tbl tbl-tasks"><thead><tr>'+
         '<th style="width:34px"><input type="checkbox" id="tkSelAll"></th>'+
-        '<th class="c-time">时间</th><th>名称</th><th>执行周期</th><th>播放时长</th>'+
+        '<th class="c-time">时间</th><th>名称</th><th>周期</th><th>播放时长</th>'+
         '<th class="c-detail">详情</th>'+
         /* 「详情」和「状态」、行尾那一格的宽度都在 CSS 里，见 .tbl-tasks 的
            .c-time / .c-detail / .c-sw / .c-act —— 竖屏上要各收一档，
@@ -301,15 +301,15 @@ function tkBulkShift(list){
     }});
 }
 
-/* 表里「执行周期」只写两种：指定日期 / 按周重复。每天、周几、具体哪几天都是
-   「这条怎么排」的细节 —— 一句话说不完，挂进 title 和「详情」里。
-   面板只建得出这两种（timeType 0 / 3）。服务器上还可能有厂商前端建的
-   「按天重复」「按日期区间」这类任务，面板原样保留、不改写：那两种落回
-   taskWhen 的原文，写成「按周重复」等于撒谎。 */
+/* 表里「周期」一列只写两种：日期 / 按周（用户定的，列名也缩到「周期」）。
+   每天、周几、具体哪几天都是「这条怎么排」的细节 —— 一句话说不完，
+   挂进 title 和「详情」里。面板只建得出这两种（timeType 0 / 3）。服务器上
+   还可能有厂商前端建的「按天重复」「按日期区间」这类任务，面板原样保留、
+   不改写：那两种落回 taskWhen 的原文，写成「按周」等于撒谎。 */
 function taskWhenKind(t){
   const ty = Number(t.timeType);
-  if (ty === 3) return "指定日期";
-  if (ty === 0) return "按周重复";
+  if (ty === 3) return "日期";
+  if (ty === 0) return "按周";
   return taskWhen(t);
 }
 
@@ -328,7 +328,7 @@ function taskRowHTML(t){
        建好任务之后就几乎不再动，不值得每行都占一行高度；要看就点「详情」
        那个圈 i（openTaskInfo 里两个都在）。 */
     '<td><div class="nm">'+esc(t.name||"(未命名)")+'</div></td>'+
-    /* 「执行周期」表里只写两种：指定日期 / 按周重复（见 taskWhenKind）。
+    /* 「周期」表里只写两种：日期 / 按周（见 taskWhenKind）。
        原来那一格写「周二到周五」「10-13 10-14 10-15 等 8 天」，一列长文本把
        名称挤没了；具体哪几天、哪几个日期挂在 title 上，点开「详情」也看得全。
        这一格和「播放时长」一样是次级文字（不加粗、压一档灰）。 */

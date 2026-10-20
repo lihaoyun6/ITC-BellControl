@@ -339,8 +339,16 @@ function moreResultsBoxHTML(st){
 /* 条数那一行。用户定的位置：就摆在「查询结果」旁边当副标题。
    moreAskedText —— 这一趟问的是什么（哪天、哪些终端）。表本身回答不了这个，
    而这张表是会被截图发出去的，回头得看得出是哪天的哪几个点。 */
-const moreCountText = st => "共 "+st.hits.length+" 条，按时刻排序";
-const moreAskedText = st => st.date + " · " + moreAreaText(st.area);
+const moreCountText = st => "共 "+st.hits.length+" 条";
+/* 副标题里「选了哪些」那一截：只选了一个终端/分组就写它的名字，超过一个
+   统一写「多个终端」—— 一串名字会把副标题撑成两行（用户定的）。
+   条件选择框里照旧用 moreAreaText 铺全名。 */
+const moreAskedAreaText = a => {
+  const terms = (a && a.t) || [], grps = (a && a.g) || [];
+  if (terms.length + grps.length > 1) return "多个终端";
+  return terms[0] || grps[0] || "未选终端";
+};
+const moreAskedText = st => st.date + " · " + moreAskedAreaText(st.area);
 /* 一条都没查到时的那句话。**这不是「交代」**（已查几张列表、跳过几张……那些
    全删了），它是这一趟查询的**答案**：这一天不响。 */
 const MORE_EMPTY = "这一天没有会执行的铃声或定时任务";
@@ -376,13 +384,16 @@ function moreGo(tab){
 function moreBackHome(){ moreGo("home"); }
 
 /* 子页共用的标题行。返回键只在宽屏出现（窄屏顶栏已经有一枚 #tbBack，
-   见 30-view-list.js 的 showBack）。 */
-function moreHeadHTML(title){
+   见 30-view-list.js 的 showBack）。
+   act 是可选的一枚动作键（「重置查询」/「停止测试」），塞在标题行最右边 ——
+   .more-head-act 的 margin-left:auto 把它顶过去（见 app.css）。 */
+function moreHeadHTML(title, act){
   return '<div class="sec-head">'+
     '<div class="title-row">'+
       '<button class="btn btn-icon more-back" id="moreBack" type="button" '+
         'title="返回更多功能" aria-label="返回更多功能">'+ICON.chevL+'</button>'+
       '<h2 class="serif">'+esc(title)+'</h2>'+
+      (act || "")+
     '</div>'+
   '</div>';
 }
@@ -1092,9 +1103,18 @@ function uploadMediaFile(gid, file, onProgress, retried){
 function renderMoreLookup(el, st){
   el.classList.add("fill");
   const chosen = moreAreaChosen(st.area);
+  /* 收起条件**只在竖屏里做**（用户定的）：竖屏位置窄，点过「开始查询」就把
+     整只「查询条件」组收起来，页面上只留结果，标题栏最右边换成「重置查询」；
+     按它清掉这一趟查询，条件和按钮原样回来。查询没走完之前那枚重置键置灰。
+     横屏/宽屏不做任何特殊适配 —— 条件一直在上面，结果在下面。 */
+  const started = isPortraitNarrow() && !!(st.busy || st.done);
 
   el.innerHTML =
-    moreHeadHTML("任务反查")+
+    moreHeadHTML("任务反查", started
+      ? '<button class="btn more-head-act" id="moreClear" type="button"'+
+          (st.busy?' disabled':'')+'>重置查询</button>'
+      : "")+
+    (started ? "" :
     '<div class="panel">'+
       '<div class="panel-head"><h3>查询条件</h3>'+
         '<span class="sub">选一天和一批点位，看它们那天会执行什么</span></div>'+
@@ -1118,21 +1138,26 @@ function renderMoreLookup(el, st){
         '<div class="more-btns">'+
           /* 裸 .btn = 白底 + 实边框，和全项目那些「取消」按钮一个样。
              **别写成 btn-quiet** —— 那个是隐形款（透明底、透明边框），
-             搁在「开始查询」左边看着像一行注释，不像能点的东西。 */
-          '<button class="btn" id="moreClear">重置查询</button>'+
+             搁在「开始查询」左边看着像一行注释，不像能点的东西。
+             没选终端/分组时没什么可重置的，按钮跟着置灰（用户定的）。 */
+          '<button class="btn" id="moreClear"'+(chosen?'':' disabled')+'>重置查询</button>'+
           '<button class="btn btn-primary" id="moreRun"'+(st.busy?' disabled':'')+'>'+
             (st.busy?'查询中…':'开始查询')+'</button>'+
         '</div>'+
       '</div>'+
-    '</div>'+
+    '</div>')+
     moreLookupResultHTML(st);
 
   bindMoreHead(el);
   const q = s => el.querySelector(s);
-  q("#moreDate").onclick = ev => openDatePicker(ev.currentTarget, st.date, day=>{
+  /* 条件收起来之后 #moreDate / #moreArea / #moreRun / 条件里那枚重置都不在
+     页面上，逐个判空再绑；标题栏那枚 #moreClear 一直在，清查询走同一条路。 */
+  const dateBtn = q("#moreDate");
+  if (dateBtn) dateBtn.onclick = ev => openDatePicker(ev.currentTarget, st.date, day=>{
     st.date = day; moreInvalidate(); renderMain();
   });
-  q("#moreArea").onclick = ()=>{
+  const areaBtn = q("#moreArea");
+  if (areaBtn) areaBtn.onclick = ()=>{
     /* 先把当前的选择拷进 S.dt.area 当种子（选择器是从那儿读的），回调里再拷回来。
        **必须立刻拷回来** —— 那个全局的 S.dt.area 是别处「编辑区域」共用的草稿区，
        留着不收拾会被下一个开选择器的人当成初值。 */
@@ -1142,10 +1167,12 @@ function renderMoreLookup(el, st){
       moreInvalidate(); renderMain();
     });
   };
-  q("#moreRun").onclick = ()=> runMoreQuery();
+  const runBtn = q("#moreRun");
+  if (runBtn) runBtn.onclick = ()=> runMoreQuery();
   /* 重置 = 回到刚进这一页的样子：日期回今天、终端清空、结果收掉。
      S.dt.area 也顺手清掉 —— 它是选择器的共用草稿区，上面 #moreArea 往里写过种子。 */
-  q("#moreClear").onclick = ()=>{
+  const clrBtn = q("#moreClear");
+  if (clrBtn) clrBtn.onclick = ()=>{
     st.date = todayISO();
     st.area = {t:[], g:[]};
     S.dt.area = {t:[], g:[]};
@@ -1155,8 +1182,9 @@ function renderMoreLookup(el, st){
 function moreLookupResultHTML(st){
   if (st.busy)
     return '<div class="panel grow"><div class="hint more-empty">正在查询…</div></div>';
-  if (!st.done)
-    return '<div class="panel grow"><div class="hint more-empty">选好日期和点位，点「开始查询」</div></div>';
+  /* 还没查过就**不摆结果组**（用户定的）：条件那张卡底下空着，不再挂一只
+     「选好日期和点位，点开始查询」的空面板。点了开始查询之后才出现这个组。 */
+  if (!st.done) return "";
   if (!st.hits.length)
     return '<div class="panel grow"><div class="hint more-empty">'+esc(MORE_EMPTY)+'</div></div>';
   return moreResultsBoxHTML(st);
@@ -1167,60 +1195,87 @@ function renderMoreTest(el, st){
   el.classList.add("fill");
   const chosen = moreAreaChosen(st.area);
   const idle = st.phase === "idle";
+  /* 收起条件**只在竖屏里做**（用户定的）：测试期间页面上只留实时状态，
+     标题栏最右边换成「停止测试」；回到 idle（停下、播完、出错）条件原样回来。
+     横屏/宽屏不做任何特殊适配 —— 条件组一直在上面，状态组在下面，
+     开始/停止那枚键就留在条件组的按钮排里（和改之前一样）。 */
+  const collapse = isPortraitNarrow() && !idle;
 
   el.innerHTML =
-    moreHeadHTML("终端测试")+
+    moreHeadHTML("终端测试", collapse
+      ? '<button class="btn btn-danger more-head-act" id="mtStopHead" type="button">停止测试</button>'
+      : "")+
+    (collapse ? "" :
     '<div class="panel">'+
       '<div class="panel-head"><h3>测试条件</h3>'+
-        '<span class="sub">选一个音源和一批分组，播放一次</span></div>'+
+        '<span class="sub">选一个音源和一批终端，播放一次</span></div>'+
       '<div class="panel-body">'+
         '<div class="more-test-fields">'+
           '<div class="field"><label>音源</label>'+
             '<button type="button" class="select-btn" id="mtMedia" title="从媒体库里选一个音频文件">'+
               '<span class="v'+(st.media?"":" ph")+'">'+esc(st.media || "选择音源...")+'</span>'+
               '<span class="chev">'+ICON.music+'</span></button></div>'+
-          '<div class="field"><label>分组</label>'+
-            '<button type="button" class="select-btn" id="mtArea" title="选分组，可多选">'+
+          '<div class="field"><label>终端 / 分组</label>'+
+            '<button type="button" class="select-btn" id="mtArea" title="选终端或分组，可多选">'+
               '<span class="v'+(chosen?"":" ph")+'">'+esc(moreAreaText(st.area))+'</span>'+
               '<span class="chev">'+ICON.chevD+'</span></button></div>'+
         '</div>'+
         '<div class="more-btns">'+
           '<span class="hint" id="mtMsg">'+esc(moreTestMsg(st))+'</span>'+
-          '<button class="btn" id="mtReset"'+(idle?' disabled':'')+'>重置测试</button>'+
+          /* 重置只在「手上有东西可重置」时能点：一个音源或一批终端都没选，
+             按下它什么也做不了；正在测试时也收掉，免得和「停止测试」抢着点
+             （用户定的：只有这两档不能点）。 */
+          '<button class="btn" id="mtReset"'+
+            ((st.media || chosen) && idle ? '' : ' disabled')+'>重置测试</button>'+
           (idle
             ? '<button class="btn btn-primary" id="mtRun"'+
                 (st.media && chosen ? '' : ' disabled')+'>开始测试</button>'
             : '<button class="btn btn-danger" id="mtRun">停止测试</button>')+
         '</div>'+
       '</div>'+
-    '</div>'+
-    moreTestStatBoxHTML(st);
+    '</div>')+
+    moreTestStatBoxHTML();
 
   bindMoreHead(el);
   const q = s => el.querySelector(s);
-  q("#mtMedia").onclick = ()=>{
-    /* 换音源就是换条件：正在响的先停掉。停了要当场重画 —— 选择器取消时
-       回调不会来，不重画的话页面上还挂着「停止测试」。 */
-    if (!idle){ moreTestStop(true); renderMain(); }
+  /* 竖屏收起条件组之后下面的节点都不在页面上，逐个判空再绑
+     （横屏测试中条件组照旧在，这两格也照旧能点 —— 点了先停当前的再选）。 */
+  const mediaBtn = q("#mtMedia");
+  if (mediaBtn) mediaBtn.onclick = ()=>{
+    if (moreTestState().phase !== "idle"){ moreTestStop(true); renderMain(); }
     openMediaPicker(st.media ? [st.media] : [], [], r=>{
       const n = (r && r.media && r.media[0]) || "";
       if (n !== st.media){ st.media = n; st.err = ""; }
       renderMain();
     }, {filesOnly:true, title:"选择音源", sub:"一个音频文件"});
   };
-  q("#mtArea").onclick = ()=>{
-    if (!idle){ moreTestStop(true); renderMain(); }
+  const areaBtn = q("#mtArea");
+  if (areaBtn) areaBtn.onclick = ()=>{
+    if (moreTestState().phase !== "idle"){ moreTestStop(true); renderMain(); }
     S.dt.area = {t:(st.area.t||[]).slice(), g:(st.area.g||[]).slice()};
     openAreaEditor("pick", null, a=>{
       st.area = {t:(a.t||[]).slice(), g:(a.g||[]).slice()};
       st.err = ""; renderMain();
     });
   };
-  q("#mtRun").onclick = ()=>{
+  const runBtn = q("#mtRun");
+  if (runBtn) runBtn.onclick = ()=>{
     if (moreTestState().phase === "idle") moreTestStart();
     else moreTestStop();
   };
-  q("#mtReset").onclick = ()=> moreTestStop();
+  /* 重置 = 把两格选择器都清空（用户定的）。S.dt.area 顺带清掉 ——
+     它是选择器的共用草稿区，留着上一次的种子，下次打开选择器会以为还选着。 */
+  const resetBtn = q("#mtReset");
+  if (resetBtn) resetBtn.onclick = ()=>{
+    st.media = "";
+    st.area = {t:[], g:[]};
+    S.dt.area = {t:[], g:[]};
+    st.err = "";
+    renderMain();
+  };
+  /* 标题栏那枚停止键：和原来条件组里的停止走同一句。 */
+  const stopBtn = q("#mtStopHead");
+  if (stopBtn) stopBtn.onclick = ()=> moreTestStop();
 }
 
 function moreTestMsg(st){
@@ -1249,6 +1304,7 @@ function moreTestBlocks(){
   if (rest.length) blocks.push({name: blocks.length ? "单独选择" : "已选终端", terms:rest, group:false});
   return blocks;
 }
+/* 名单里一共几台终端（按 id 去重：同一个终端被两个分组带着只算一台）。 */
 function moreTestAllTerms(){
   const seen = new Set();
   const out = [];
@@ -1271,8 +1327,9 @@ function moreTestTermState(name){
   return STAT_TEXT[s] + extra;
 }
 function moreTestStatRowsHTML(blocks){
-  if (!blocks.length)
-    return '<div class="hint more-empty">尚未选择任何终端/分组</div>';
+  /* 什么都没选就**整块留空**（用户定的）：不摆一句「尚未选择…」的说明，
+     下面的地方空着就是「还没选」。 */
+  if (!blocks.length) return "";
   return blocks.map(b=>{
     const on = b.terms.filter(moreTestOn).length;
     return '<div class="tstat-grp">'+
@@ -1292,35 +1349,42 @@ function moreTestStatRowsHTML(blocks){
     '</div>';
   }).join("");
 }
-function moreTestStatBoxHTML(st){
-  const blocks = moreTestBlocks();
-  const terms  = moreTestAllTerms();
-  const on = terms.filter(moreTestOn).length;
+/* 组标题右边那截：几台终端 · 几个分组 · 在线几台（用户定的顺序）。
+   终端按 id 去重 —— 同一个终端被两个分组带着，只算一台。 */
+function moreTestSumText(){
+  const terms = moreTestAllTerms();
+  const groups = ((moreTestState().area || {}).g || []).length;
+  return terms.length+" 台终端 · "+groups+" 个分组 · 在线 "+
+    terms.filter(moreTestOn).length;
+}
+/* 实时状态装在「实时状态」这只控件组里（用户定的），组里**不再嵌套**：
+   分组名和终端行直接铺在这只面板里，不再给每组套一只带边框的卡片。
+   没选任何分组/终端时**整只组都不摆**（用户定的）；选了才出现。 */
+function moreTestStatBoxHTML(){
+  if (!moreAreaChosen(moreTestState().area)) return "";
   return '<div class="panel grow">'+
     '<div class="panel-head"><h3>实时状态</h3>'+
-      '<span class="sub" id="mtSum">'+esc(moreTestSumText(blocks, terms, on))+'</span></div>'+
-    '<div class="more-tstat" id="mtStat">'+moreTestStatRowsHTML(blocks)+'</div>'+
+      '<span class="sub" id="mtSum">'+esc(moreTestSumText())+'</span></div>'+
+    '<div class="more-tstat" id="mtStat">'+
+      moreTestStatRowsHTML(moreTestBlocks())+'</div>'+
   '</div>';
-}
-function moreTestSumText(blocks, terms, on){
-  return (moreTestState().area.g||[]).length+" 个分组 · "+terms.length+" 台终端 · 在线 "+on;
 }
 /* 状态推送一到就重画这块。只换状态区，不动上面的表单和按钮 ——
    重画整页会把正要看的状态列表滚动位置弹回顶上。 */
 function moreTestPaintStat(){
   const box = $("#mtStat"); if (!box) return;
   const top = box.scrollTop;
-  const blocks = moreTestBlocks();
-  const terms  = moreTestAllTerms();
-  const on = terms.filter(moreTestOn).length;
-  box.innerHTML = moreTestStatRowsHTML(blocks);
+  box.innerHTML = moreTestStatRowsHTML(moreTestBlocks());
   box.scrollTop = top;
   const sum = $("#mtSum");
-  if (sum) sum.textContent = moreTestSumText(blocks, terms, on);
+  if (sum) sum.textContent = moreTestSumText();
 }
 /* 常驻一条，不在页面上的时候一句话都不做。 */
 statusHooks.push(function(){
   if (S.mode !== "more" || !S.dt.more || S.dt.more.tab !== "test") return;
+  /* 先看这一趟试听是不是已经播完（它可能当场 renderMain 回默认布局）。 */
+  moreTestWatchEnd();
+  if (S.dt.more.test.phase === "idle") return;
   moreTestPaintStat();
 });
 
@@ -1380,6 +1444,8 @@ async function moreTestStart(){
   const gen = ++st.gen;
   st.err = ""; st.phase = "creating"; st.count = ids.length;
   st.miss = 0; st.serverTaskId = null;
+  /* 这一趟在终端状态里认出来的会话号（见 moreTestWatchEnd）。 */
+  st.playTaskIds = [];
   renderMain();
 
   let r;
@@ -1475,6 +1541,36 @@ function moreTestListenInfo(list){
   if (st.phase === "playing") moreTestFinish();
 }
 
+/* 从终端状态判断这一趟试听是不是已经播完（用户定的：播完自动停止、回默认布局）。
+   刚点下去那几拍终端还没忙起来，什么都记不到；一旦看到选中的终端在忙，就把那几条
+   会话号记下来；之后选中的终端都不再跑这些会话、服务器那份会话清单里也没了，
+   就收尾。
+   两条线都断了才算 —— 一边是状态推送里每台终端的当前任务，一边是会话清单
+   （task_stop 会把那条摘掉）。任一还挂着就不动。 */
+function moreTestWatchEnd(){
+  const st = S.dt.more && S.dt.more.test;
+  if (!st || (st.phase !== "starting" && st.phase !== "playing")) return;
+  const terms = moreTestAllTerms();
+  if (!terms.length) return;
+
+  /* 忙着的终端把当前会话号交出来（可能一台一条，都记着）。 */
+  terms.forEach(t=>{
+    const ti = S.termTask[t.name];
+    if (ti && ti.TaskID != null &&
+        !st.playTaskIds.some(x=> String(x) === String(ti.TaskID)))
+      st.playTaskIds.push(ti.TaskID);
+  });
+  if (!st.playTaskIds.length) return;          /* 还没响起来，不认识这条路 */
+
+  const mine = x => st.playTaskIds.some(id => String(id) === String(x));
+  const running = terms.some(t=>{
+    const ti = S.termTask[t.name];
+    return ti && ti.TaskID != null && mine(ti.TaskID);
+  });
+  const listed = (S.sessions||[]).some(s=> mine(s.TaskID));
+  if (!running && !listed) moreTestFinish();
+}
+
 /* 试听命令的应答（ls2c_try_listen_task）。200 就是收了；其余都是没起来。 */
 function moreTestTryResult(res){
   const st = S.dt.more && S.dt.more.test;
@@ -1485,13 +1581,21 @@ function moreTestTryResult(res){
   renderMain();
 }
 
-/* 会话停止确认（ls2c_stop_task）。确认了才删临时任务 —— 任务还在试听时
-   服务器可能不接受删除。 */
+/* 会话停止确认（ls2c_stop_task / task_stop）。确认了才删临时任务 —— 任务还在
+   试听时服务器可能不接受删除。不是用户按停、而是会话自己停掉的，也走这里：
+   那就是播完了，当场收尾回默认布局（用户要的自动停止）。 */
 function moreTestStopped(taskId){
   const st = S.dt.more && S.dt.more.test;
-  if (!st || !st.cleanupId) return;
-  if (st.serverTaskId == null || String(st.serverTaskId) !== String(taskId)) return;
-  moreTestFlushCleanup();
+  if (!st) return;
+  if (st.cleanupId){
+    if (st.serverTaskId == null || String(st.serverTaskId) !== String(taskId)) return;
+    moreTestFlushCleanup();
+    return;
+  }
+  if (st.phase === "idle") return;
+  const mine = (st.playTaskIds||[]).some(x=> String(x) === String(taskId)) ||
+               (st.serverTaskId != null && String(st.serverTaskId) === String(taskId));
+  if (mine) moreTestFinish();
 }
 
 /* 播完 / 等不到状态时收尾：不发送停止指令（会话已经没了），只删临时任务。 */
@@ -1503,6 +1607,7 @@ function moreTestFinish(){
   moreTestClearTimers(st);
   const id = st.taskId;
   st.taskId = null; st.serverTaskId = null; st.miss = 0;
+  st.playTaskIds = [];
   if (id != null) moreTestDeleteTask(id, false);
   renderMain();
 }
